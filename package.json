@@ -1,0 +1,36 @@
+{
+	"name": "codexcli",
+	"version": "1.0.0",
+	"bin": {
+		"ccli": "dist/index.js"
+	},
+	"files": [
+		"dist",
+		"bin",
+		"README.md",
+		"LICENSE"
+	],
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "tsc && mkdir -p dist/data && cp -r data/* dist/data/",
+		"start": "node dist/index.js",
+		"dev": "NODE_ENV=development ts-node src/index.ts",
+		"watch": "NODE_ENV=development nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"description": "",
+	"devDependencies": {
+		"@types/node": "^22.13.8",
+		"nodemon": "^3.1.9",
+		"ts-node": "^10.9.2",
+		"typescript": "^5.8.2"
+	},
+	"dependencies": {
+		"chalk": "^4.1.2",
+		"clipboardy": "^2.3.0",
+		"commander": "^13.1.0",
+		"ora": "^8.2.0"
+	}
+}
