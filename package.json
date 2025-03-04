@@ -13,9 +13,11 @@
 	],
 	"main": "dist/index.js",
 	"scripts": {
-		"build": "tsc && mkdir -p ~/.codexcli && cp -r dist/* ~/.codexcli/",
+		"build": "tsc && node scripts/copyBuild.js",
 		"start": "node dist/index.js",
-		"dev": "NODE_ENV=development ts-node src/index.ts"
+		"dev": "NODE_ENV=development ts-node src/index.ts",
+		"install-local": "npm run build && npm link",
+		"prepublish": "npm run build"
 	},
 	"keywords": [
 		"cli",

@@ -17,8 +17,47 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 
 ## Installation
 
+### Prerequisites
+
+Ensure npm's global binaries are in your PATH by adding the following to your shell profile (`.bashrc`, `.zshrc`, or equivalent):
+
 ```bash
-npm install -g codexcli
+# Add npm global bin to PATH
+export PATH="$(npm config get prefix)/bin:$PATH"
+```
+
+### Install from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/seabearDEV/codexCLI.git
+
+# Navigate to project directory 
+cd codexCLI
+
+# Install dependencies
+npm install
+
+# Build the package
+npm run build
+
+# Install globally on your system
+npm install -g .
+```
+
+### Verifying Installation
+
+```bash
+# After installation, run:
+
+ccli --version
+```
+
+If the command is not found, verfiy that npm's global bin directory is in your PATH:
+
+```bash
+echo $PATH | grep -o "$(npm config get prefix)/bin"
+
 ```
 
 After installation, you can use the ccli command to interact with CodexCLI.

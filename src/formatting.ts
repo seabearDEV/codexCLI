@@ -6,28 +6,29 @@
  * It uses the chalk library for terminal styling.
  */
 import chalk from 'chalk';
-import { getDataFilePath } from './utils/paths';
-import { getAliasFilePath } from './utils/paths';
-import { getAliasesForPath } from './alias';
+import { getDataFilePath, getAliasFilePath } from './utils/paths';
 import { isColorEnabled } from './config';
 
 // Helper function to use chalk only when colors are enabled
 export const color = {
-  cyan: (text: string) => isColorEnabled() ? chalk.cyan(text) : text,
-  green: (text: string) => isColorEnabled() ? chalk.green(text) : text,
-  yellow: (text: string) => isColorEnabled() ? chalk.yellow(text) : text,
-  red: (text: string) => isColorEnabled() ? chalk.red(text) : text,
-  blue: (text: string) => isColorEnabled() ? chalk.blue(text) : text,
-  magenta: (text: string) => isColorEnabled() ? chalk.magenta(text) : text,
-  gray: (text: string) => isColorEnabled() ? chalk.gray(text) : text,
-  white: (text: string) => isColorEnabled() ? chalk.white(text) : text,
-  italic: (text: string) => isColorEnabled() ? chalk.italic(text) : text,
-  bold: {
-    cyan: (text: string) => isColorEnabled() ? chalk.bold.cyan(text) : text,
-    green: (text: string) => isColorEnabled() ? chalk.bold.green(text) : text,
-    yellow: (text: string) => isColorEnabled() ? chalk.bold.yellow(text) : text,
-    blue: (text: string) => isColorEnabled() ? chalk.bold.blue(text) : text,
-    magenta: (text: string) => isColorEnabled() ? chalk.bold.magenta(text) : text,
+  cyan: (text: string): string => isColorEnabled() ? chalk.cyan(text) : text,
+  green: (text: string): string => isColorEnabled() ? chalk.green(text) : text,
+  yellow: (text: string): string => isColorEnabled() ? chalk.yellow(text) : text,
+  red: (text: string): string => isColorEnabled() ? chalk.red(text) : text,
+  blue: (text: string): string => isColorEnabled() ? chalk.blue(text) : text,
+  magenta: (text: string): string => isColorEnabled() ? chalk.magenta(text) : text,
+  gray: (text: string): string => isColorEnabled() ? chalk.gray(text) : text,
+  white: (text: string): string => isColorEnabled() ? chalk.white(text) : text,
+  italic: (text: string): string => isColorEnabled() ? chalk.italic(text) : text,
+  // Add a general bold function
+  bold: (text: string): string => isColorEnabled() ? chalk.bold(text) : text,
+  // Keep the specific color bold functions as an object
+  boldColors: {
+    cyan: (text: string): string => isColorEnabled() ? chalk.bold.cyan(text) : text,
+    green: (text: string): string => isColorEnabled() ? chalk.bold.green(text) : text,
+    yellow: (text: string): string => isColorEnabled() ? chalk.bold.yellow(text) : text,
+    blue: (text: string): string => isColorEnabled() ? chalk.bold.blue(text) : text,
+    magenta: (text: string): string => isColorEnabled() ? chalk.bold.magenta(text) : text,
   }
 };
 
@@ -43,29 +44,37 @@ export function formatOutput(data: any): void {
 }
 
 /**
- * Display key-value pairs with colored keys based on nesting level
- * 
- * Uses different colors for each level of a nested key (separated by dots)
- * to improve readability in hierarchical data
- * 
- * @param {string} key - The key to format (may contain dots for nesting)
- * @param {string} value - The value to display
+ * Format and display a key-value pair with color
  */
-export function formatKeyValue(key: string, value: string): void {
-  const parts = key.split('.');
-  const colors = [chalk.cyan, chalk.yellow, chalk.green, chalk.magenta, chalk.blue];
-  let coloredKey = '';
+export function formatKeyValue(key: string, value: any): void {
+  // Check if colors are enabled from config
+  const colorize = isColorEnabled();
   
-  parts.forEach((part, index) => {
-    const colorFn = colors[index % colors.length];
-    coloredKey += colorFn(part);
-    
-    if (index < parts.length - 1) {
-      coloredKey += chalk.white('.');
-    }
-  });
+  // Format the key with colors if enabled
+  const formattedKey = colorize ? colorizePathByLevels(key) : key;
   
-  console.log(`${coloredKey}: ${value}`);
+  // Format and print
+  console.log(`${formattedKey}: ${value}`);
+}
+
+/**
+ * Colorize path segments with alternating colors
+ */
+function colorizePathByLevels(path: string): string {
+  // If colors are disabled, return plain path
+  if (!isColorEnabled()) {
+    return path;
+  }
+  
+  const colors = [color.cyan, color.yellow, color.green, color.magenta, color.blue];
+  const parts = path.split('.');
+  
+  return parts
+    .map((part, index) => {
+      const colorFn = colors[index % colors.length];
+      return colorFn(part);
+    })
+    .join('.');
 }
 
 /**
@@ -76,7 +85,7 @@ export function formatKeyValue(key: string, value: string): void {
  * Uses color coding to improve readability and visual appeal.
  */
 export function showHelp(): void {
-  const color = chalk;
+  // Remove direct chalk usage and use our color helper instead
   
   console.log();
   console.log('┌───────────────────────────────────────────┐');
@@ -99,12 +108,12 @@ export function showHelp(): void {
   console.log('  examples                              Initialize with example data');
   console.log('  help                                  Show this help message');
   
-  console.log('\n' + color.bold.magenta('OPTIONS:'));
+  console.log('\n' + color.boldColors.magenta('OPTIONS:'));
   console.log(`  ${color.yellow('--tree')}     Display data in a hierarchical tree structure`);
   console.log(`  ${color.yellow('--raw')}      Output raw values without formatting (for scripting)`);
   console.log(`  ${color.yellow('--debug')}    Enable debug output for troubleshooting\n`);
   
-  console.log(color.bold.magenta('EXAMPLES:'));
+  console.log(color.boldColors.magenta('EXAMPLES:'));
   console.log(`  ${color.yellow('ccli')} ${color.green('add')} ${color.cyan('server.ip')} 192.168.1.100`);
   console.log(`  ${color.yellow('ccli')} ${color.green('get')}                          ${color.gray('# Show all entries')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server.ip')}`);
@@ -130,38 +139,33 @@ export function showHelp(): void {
   console.log(`  ${color.yellow('ccli')} ${color.green('config')} ${color.yellow('--list')}           ${color.gray('# List available settings')}\n`);
   
   const isDev = process.env.NODE_ENV === 'development';
-  console.log(color.bold.magenta('DATA STORAGE:'));
+  console.log(color.boldColors.magenta('DATA STORAGE:'));
   console.log(`  ${isDev ? '[DEV] ' : ''}Entries are stored in:       ${getDataFilePath()}`);
   console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}\n`);
 }
 
 /**
- * Displays an object in a tree-like structure
+ * Display data in a tree format
  */
-export function displayTree(
-  obj: any,
-  prefix: string = '',
-  currentPath: string = ''
-): void {
-  if (prefix === '') console.log();
+export function displayTree(data: object, prefix: string = ''): void {
+  // Use color only if enabled
+  const colorEnabled = isColorEnabled();
   
-  Object.keys(obj).forEach((key, index) => {
-    const newPath = currentPath ? `${currentPath}.${key}` : key;
-    const isLastEntry = index === Object.keys(obj).length - 1;
-    const aliases = getAliasesForPath(newPath);
-    const aliasDisplay = aliases.length > 0 ? color.blue(` (${aliases.join(', ')})`) : '';
-    const branch = isLastEntry ? '└── ' : '├── ';
-    const value = obj[key];
-    const isObject = typeof value === 'object' && value !== null;
-    const keyDisplay = isObject ? color.bold.green(key) : color.green(key);
+  Object.entries(data).forEach(([key, value], index, array) => {
+    const isLast = index === array.length - 1;
+    const connector = isLast ? '└── ' : '├── ';
+    const fullPrefix = prefix + connector;
     
-    console.log(`${prefix}${branch}${keyDisplay}${aliasDisplay}`);
+    // Apply colors conditionally
+    const displayKey = colorEnabled ? color.cyan(key) : key;
     
-    if (isObject) {
-      displayTree(value, prefix + (isLastEntry ? '    ' : '│   '), newPath);
+    if (typeof value === 'object' && value !== null) {
+      console.log(`${fullPrefix}${displayKey}`);
+      const childPrefix = prefix + (isLast ? ' '.repeat(4) : '│   ');
+      displayTree(value, childPrefix);
     } else {
-      const valueDisplay = value === null ? color.italic('null') : value.toString();
-      console.log(`${prefix}${isLastEntry ? '    ' : '│   '}└── ${valueDisplay}`);
+      const displayValue = colorEnabled ? color.white(value) : value;
+      console.log(`${fullPrefix}${displayKey}: ${displayValue}`);
     }
   });
 }

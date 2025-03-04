@@ -6,7 +6,7 @@
  * that the storage directory exists before attempting file operations.
  */
 import fs from 'fs';
-import chalk from 'chalk';
+import { color } from './formatting';
 // Import the path utility instead of defining a duplicate function
 import { getDataFilePath } from './utils/paths';
 
@@ -27,9 +27,9 @@ export function handleOperation<T>(operation: () => T, errorMessage: string): T 
  */
 export function handleError(message: string, error: any): void {
   if (process.env.DEBUG) {
-    console.error(`${chalk.red(message)}: `, error);
+    console.error(`${color.red(message)}: `, error);
   } else {
-    console.error(chalk.red(message));
+    console.error(color.red(message));
   }
 }
 

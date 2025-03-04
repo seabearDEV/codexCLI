@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { showHelp } from './formatting';
 import { addEntry, getEntry, removeEntry, searchEntries, initializeExampleData, exportData, importData, resetData, handleConfig } from './commands';
 import { setAlias, removeAlias, resolveKey, loadAliases } from './alias';
-import chalk from 'chalk';
+import { color } from './formatting';
 
 // Initialize the main command object
 const codexCLI = new Command();
@@ -117,7 +117,7 @@ codexCLI
           return console.error('Both alias and path are required for set action');
         }
         setAlias(alias, path);
-        console.log(`Alias '${chalk.green(alias)}' now points to '${chalk.cyan(path)}'`);
+        console.log(`Alias '${color.green(alias)}' now points to '${color.cyan(path)}'`);
       },
       get: () => {
         // If no alias name provided, show all aliases
@@ -126,9 +126,9 @@ codexCLI
           if (Object.keys(allAliases).length === 0) {
             return console.log('No aliases defined');
           }
-          console.log(chalk.bold('Defined aliases:'));
+          console.log(color.bold('Defined aliases:'));
           Object.entries(allAliases).forEach(([alias, targetPath]) => {
-            console.log(`${chalk.green(alias.padEnd(15))} ${chalk.gray('→')} ${chalk.cyan(targetPath)}`);
+            console.log(`${color.green(alias.padEnd(15))} ${color.gray('→')} ${color.cyan(targetPath)}`);
           });
           return;
         }
@@ -136,15 +136,15 @@ codexCLI
         // If alias name provided, show that specific alias
         const aliases = loadAliases();
         console.log(aliases[alias] 
-          ? `Alias '${chalk.green(alias)}' points to '${chalk.cyan(aliases[alias])}'` 
-          : `Alias '${chalk.yellow(alias)}' not found`);
+          ? `Alias '${color.green(alias)}' points to '${color.cyan(aliases[alias])}'` 
+          : `Alias '${color.yellow(alias)}' not found`);
       },
       remove: () => {
         if (!alias) return console.error('Alias name is required');
         
         console.log(removeAlias(alias)
-          ? `Alias '${chalk.green(alias)}' removed`
-          : `Alias '${chalk.yellow(alias)}' not found`);
+          ? `Alias '${color.green(alias)}' removed`
+          : `Alias '${color.yellow(alias)}' not found`);
       }
     };
     

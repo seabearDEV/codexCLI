@@ -8,12 +8,17 @@
 import { loadData, saveData, handleError } from './storage';
 import { setNestedValue, getNestedValue, removeNestedValue, flattenObject } from './utils';
 import { formatKeyValue, displayTree } from './formatting';
-import { getAliasesForPath } from './alias';
-import chalk from 'chalk';
+import { color } from './formatting';
 import fs from 'fs';
-import { getDataDirectory, ensureDataDirectoryExists } from './utils/paths';
+import { 
+  getDataDirectory, 
+  ensureDataDirectoryExists, 
+  getDataFilePath, 
+  getAliasFilePath, 
+  getConfigFilePath 
+} from './utils/paths';
 import path from 'path';
-import { loadAliases, saveAliases } from './alias';
+import { loadAliases, saveAliases, getAliasesForPath } from './alias';
 import { loadConfig, getConfigSetting, setConfigSetting } from './config';
 
 /**
@@ -21,7 +26,7 @@ import { loadConfig, getConfigSetting, setConfigSetting } from './config';
  * @param {string} message - The success message to display
  */
 function printSuccess(message: string): void {
-  console.log(chalk.green('✓ ') + message);
+  console.log(color.green('✓ ') + message);
 }
 
 /**
@@ -29,7 +34,7 @@ function printSuccess(message: string): void {
  * @param {string} message - The warning message to display
  */
 function printWarning(message: string): void {
-  console.log(chalk.yellow('⚠ ') + message);
+  console.log(color.yellow('⚠ ') + message);
 }
 
 /**
@@ -41,7 +46,7 @@ function displayEntries(entries: Record<string, string>): void {
     const aliases = getAliasesForPath(key);
     
     if (aliases.length > 0) {
-      console.log(`${colorizedPath} ${chalk.blue('(' + aliases[0] + ')')} ${value}`);
+      console.log(`${colorizedPath} ${color.blue('(' + aliases[0] + ')')} ${value}`);
     } else {
       console.log(`${colorizedPath} ${value}`);
     }
@@ -52,7 +57,7 @@ function displayEntries(entries: Record<string, string>): void {
  * Colorize path segments with alternating colors
  */
 function colorizePathByLevels(path: string): string {
-  const colors = [chalk.cyan, chalk.yellow, chalk.green, chalk.magenta, chalk.blue];
+  const colors = [color.cyan, color.yellow, color.green, color.magenta, color.blue];
   const parts = path.split('.');
   
   return parts.map((part, index) => {
@@ -327,32 +332,36 @@ export function searchEntries(searchTerm: string, options: any = {}): void {
  */
 export function initializeExampleData(force: boolean = false): void {
   try {
-    // Get paths from utilities to ensure consistency
-    const dataDir = path.join(getDataDirectory(), 'data');
-    // Create the data subdirectory if it doesn't exist
+    // Use the utility functions directly for consistency
+    const dataDir = getDataDirectory();
+    // Create the data directory if it doesn't exist
     fs.mkdirSync(dataDir, { recursive: true });
-    const dataFilePath = path.join(dataDir, 'data.json');
-    const aliasFilePath = path.join(dataDir, 'aliases.json');
-    
+    const dataFilePath = getDataFilePath();
+    const aliasFilePath = getAliasFilePath();
+    const configFilePath = getConfigFilePath();
+
     console.log('Initializing example data...');
     console.log(`Data directory: ${dataDir}`);
     console.log(`Data file path: ${dataFilePath}`);
     console.log(`Alias file path: ${aliasFilePath}`);
-    
+    console.log(`Config file path: ${configFilePath}`);
+
     // Check if files already exist
     const dataExists = fs.existsSync(dataFilePath);
     const aliasesExist = fs.existsSync(aliasFilePath);
+    const configExists = fs.existsSync(configFilePath);
     
     // Handle existing files
-    if (dataExists || aliasesExist) {
+    if (dataExists || aliasesExist || configExists) {
       if (!force) {
-        console.log(chalk.yellow('\n⚠ Data or alias files already exist.'));
-        console.log(`Data file (${dataFilePath}): ${dataExists ? chalk.green('exists') : chalk.red('missing')}`);
-        console.log(`Aliases file (${aliasFilePath}): ${aliasesExist ? chalk.green('exists') : chalk.red('missing')}`);
+        console.log(color.yellow('\n⚠ Data or alias files already exist.'));
+        console.log(`Data file (${dataFilePath}): ${dataExists ? color.green('exists') : color.red('missing')}`);
+        console.log(`Aliases file (${aliasFilePath}): ${aliasesExist ? color.green('exists') : color.red('missing')}`);
+        console.log(`Config file (${configFilePath}): ${configExists ? color.green('exists') : color.red('missing')}`);
         console.log('\nUse --force to overwrite existing files.');
         return;
       }
-      console.log(chalk.yellow('\n⚠ Force flag detected. Overwriting existing files...'));
+      console.log(color.yellow('\n⚠ Force flag detected. Overwriting existing files...'));
     }
     
     // Create both files or neither file
@@ -424,28 +433,37 @@ export function initializeExampleData(force: boolean = false): void {
       "allservers": "server"
     };
     
+    // Add default config with only the required options
+    const exampleConfig = {
+      "colors": true,
+      "indentSize": 2,
+      "theme": "default"
+    };
+    
     try {
-      // Write both files in sequence
+      // Write all three files in sequence
       fs.writeFileSync(dataFilePath, JSON.stringify(exampleData, null, 2), 'utf8');
       fs.writeFileSync(aliasFilePath, JSON.stringify(exampleAliases, null, 2), 'utf8');
+      fs.writeFileSync(configFilePath, JSON.stringify(exampleConfig, null, 2), 'utf8');
       
-      console.log(chalk.green('✓ ') + `Data file created: ${dataFilePath}`);
-      console.log(chalk.green('✓ ') + `Aliases file created: ${aliasFilePath}`);
+      console.log(color.green('✓ ') + `Data file created: ${dataFilePath}`);
+      console.log(color.green('✓ ') + `Aliases file created: ${aliasFilePath}`);
+      console.log(color.green('✓ ') + `Config file created: ${configFilePath}`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(chalk.red(`Failed to write files: ${errorMessage}`));
+      console.error(color.red(`Failed to write files: ${errorMessage}`));
       return;
     }
     
-    console.log(chalk.green('\n✨ Example data successfully initialized!\n'));
+    console.log(color.green('\n✨ Example data successfully initialized!\n'));
     
     // Show command examples
-    console.log(chalk.bold('Try these commands:'));
-    console.log(`  ${chalk.yellow('ccli')} ${chalk.green('get')} ${chalk.yellow('--tree')}`);
-    console.log(`  ${chalk.yellow('ccli')} ${chalk.green('get')} ${chalk.cyan('prodip')}`);
-    console.log(`  ${chalk.yellow('ccli')} ${chalk.green('alias')} ${chalk.green('get')}\n`);
+    console.log(color.bold('Try these commands:'));
+    console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.yellow('--tree')}`);
+    console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('prodip')}`);
+    console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.green('get')}\n`);
   } catch (error) {
-    console.error(chalk.red('\n❌ Error initializing example data:'));
+    console.error(color.red('\n❌ Error initializing example data:'));
     console.error(String(error));
     
     console.log('\nDetail:');
@@ -475,16 +493,16 @@ export function exportData(type: string, options: any): void {
     if (type === 'data' || type === 'all') {
       const outputFile = options.output || path.join(defaultDir, `codexcli-data-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(loadData(), null, indent), 'utf8');
-      console.log(chalk.green('✓ ') + `Data exported to: ${chalk.cyan(outputFile)}`);
+      console.log(color.green('✓ ') + `Data exported to: ${color.cyan(outputFile)}`);
     }
     
     if (type === 'aliases' || type === 'all') {
       const outputFile = options.output || path.join(defaultDir, `codexcli-aliases-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), 'utf8');
-      console.log(chalk.green('✓ ') + `Aliases exported to: ${chalk.cyan(outputFile)}`);
+      console.log(color.green('✓ ') + `Aliases exported to: ${color.cyan(outputFile)}`);
     }
   } catch (error) {
-    console.error(chalk.red('Error exporting data:'), error instanceof Error ? error.message : String(error));
+    console.error(color.red('Error exporting data:'), error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -505,18 +523,18 @@ export function importData(type: string, file: string, options: any): void {
     
     // Check if file exists
     if (!fs.existsSync(file)) {
-      console.error(chalk.red(`Import file not found: ${file}`));
+      console.error(color.red(`Import file not found: ${file}`));
       return;
     }
     
     // Confirm before overwriting unless --force is used
     if (!options.force) {
-      console.log(chalk.yellow(`⚠ This will ${options.merge ? 'merge' : 'replace'} your ${type} file.`));
-      console.log(chalk.yellow(`To proceed without confirmation, use the --force flag.`));
+      console.log(color.yellow(`⚠ This will ${options.merge ? 'merge' : 'replace'} your ${type} file.`));
+      console.log(color.yellow(`To proceed without confirmation, use the --force flag.`));
       
       // In a real CLI, you'd prompt for confirmation here
       // For this implementation, we'll just warn and continue
-      console.log(chalk.yellow(`Continuing with import...`));
+      console.log(color.yellow(`Continuing with import...`));
     }
     
     // Import data
@@ -532,7 +550,7 @@ export function importData(type: string, file: string, options: any): void {
       
       // Save the data
       saveData(newData);
-      console.log(chalk.green('✓ ') + `Data ${options.merge ? 'merged' : 'imported'} successfully`);
+      console.log(color.green('✓ ') + `Data ${options.merge ? 'merged' : 'imported'} successfully`);
     }
     
     if (type === 'aliases' || type === 'all') {
@@ -545,14 +563,14 @@ export function importData(type: string, file: string, options: any): void {
       
       // Save the aliases
       saveAliases(newAliases);
-      console.log(chalk.green('✓ ') + `Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
+      console.log(color.green('✓ ') + `Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(chalk.red('Error importing data:'), errorMessage);
+    console.error(color.red('Error importing data:'), errorMessage);
     
     if (error instanceof SyntaxError) {
-      console.error(chalk.red('The import file contains invalid JSON.'));
+      console.error(color.red('The import file contains invalid JSON.'));
     }
   }
 }
@@ -573,28 +591,28 @@ export function resetData(type: string, options: any): void {
     
     // Confirm before resetting unless --force is used
     if (!options.force) {
-      console.log(chalk.yellow(`⚠ This will reset your ${type} to an empty state.`));
-      console.log(chalk.yellow(`To proceed without confirmation, use the --force flag.`));
+      console.log(color.yellow(`⚠ This will reset your ${type} to an empty state.`));
+      console.log(color.yellow(`To proceed without confirmation, use the --force flag.`));
       
       // In a real CLI, you'd prompt for confirmation here
       // For this implementation, we'll just warn and continue
-      console.log(chalk.yellow(`Continuing with reset...`));
+      console.log(color.yellow(`Continuing with reset...`));
     }
     
     // Reset data
     if (type === 'data' || type === 'all') {
       saveData({});
-      console.log(chalk.green('✓ ') + `Data has been reset to an empty state`);
+      console.log(color.green('✓ ') + `Data has been reset to an empty state`);
     }
     
     // Reset aliases
     if (type === 'aliases' || type === 'all') {
       saveAliases({});
-      console.log(chalk.green('✓ ') + `Aliases have been reset to an empty state`);
+      console.log(color.green('✓ ') + `Aliases have been reset to an empty state`);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error(chalk.red('Error resetting data:'), errorMessage);
+    console.error(color.red('Error resetting data:'), errorMessage);
   }
 }
 
@@ -634,11 +652,11 @@ function isObject(item: any): boolean {
 export function handleConfig(setting?: string, value?: string, options?: any) {
   // Handle the --list option
   if (options && options.list) {
-    console.log(chalk.bold('Available Configuration Settings:'));
+    console.log(color.bold('Available Configuration Settings:'));
     console.log('─'.repeat(40));
-    console.log(`${chalk.green('colors'.padEnd(15))}: Enable/disable colored output (true/false)`);
-    console.log(`${chalk.green('theme'.padEnd(15))}: UI theme (default/dark/light)`);
-    console.log(`${chalk.green('editor'.padEnd(15))}: Default editor for editing entries`);
+    console.log(`${color.green('colors'.padEnd(15))}: Enable/disable colored output (true/false)`);
+    console.log(`${color.green('theme'.padEnd(15))}: UI theme (default/dark/light)`);
+    console.log(`${color.green('editor'.padEnd(15))}: Default editor for editing entries`);
     return;
   }
 
@@ -646,11 +664,11 @@ export function handleConfig(setting?: string, value?: string, options?: any) {
   if (!setting) {
     const config = loadConfig();
     
-    console.log(chalk.bold('Current Configuration:'));
+    console.log(color.bold('Current Configuration:'));
     console.log('─'.repeat(25));
     
     for (const [key, val] of Object.entries(config)) {
-      console.log(`${chalk.green(key.padEnd(15))}: ${val}`);
+      console.log(`${color.green(key.padEnd(15))}: ${val}`);
     }
     
     console.log('\nUse `ccli config --help` to see available options');
@@ -661,14 +679,49 @@ export function handleConfig(setting?: string, value?: string, options?: any) {
   if (setting && !value) {
     const currentValue = getConfigSetting(setting);
     if (currentValue !== undefined) {
-      console.log(`${chalk.green(setting)}: ${currentValue}`);
+      console.log(`${color.green(setting)}: ${currentValue}`);
     } else {
-      console.error(`Setting '${chalk.yellow(setting)}' does not exist`);
+      console.error(`Setting '${color.yellow(setting)}' does not exist`);
     }
     return;
   }
   
   // If both setting and value provided, update the setting
   setConfigSetting(setting, value);
-  console.log(`Updated ${chalk.green(setting)} to: ${value}`);
+  console.log(`Updated ${color.green(setting)} to: ${value}`);
+}
+
+/**
+ * Set a configuration value
+ * 
+ * @param {string} setting - The setting name
+ * @param {string} value - The value to set
+ */
+export function configSet(setting: string, value: string): void {
+  try {
+    const currentValue = getConfigSetting(setting);
+    
+    console.log(`Changing ${setting} from ${currentValue} to ${value}`);
+    
+    // Parse value based on setting type
+    let parsedValue: any = value;
+    
+    if (setting === 'colors') {
+      // Handle boolean conversion
+      parsedValue = value.toLowerCase() === 'true' || value === '1';
+    } else if (setting === 'indentSize') {
+      // Handle number conversion
+      parsedValue = parseInt(value, 10);
+      if (isNaN(parsedValue)) {
+        console.error('Error: indentSize must be a number');
+        return;
+      }
+    }
+    
+    // Set the config with the parsed value
+    setConfigSetting(setting, parsedValue);
+    console.log(`${setting} set to ${parsedValue}`);
+  } catch (error) {
+    console.error(`Error setting config ${setting}: ${error}`);
+  }
 }

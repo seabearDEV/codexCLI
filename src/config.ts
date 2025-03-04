@@ -4,107 +4,93 @@
 import fs from 'fs';
 import { getConfigFilePath, ensureDataDirectoryExists } from './utils/paths';
 
-// Available settings and their default values
-const DEFAULT_CONFIG = {
-  colorEnabled: true,
-  indentSize: 2,
-  defaultFormat: 'pretty'
+// Define the type for configuration
+export interface Config {
+  colors: boolean;
+  theme: string;
+  // Remove indentSize
+}
+
+// Default configuration
+const defaultConfig: Config = {
+  colors: true,
+  theme: 'default'
+  // Remove indentSize
 };
 
-type Config = typeof DEFAULT_CONFIG;
-
-/**
- * Load configuration settings
- */
+// Load configuration
 export function loadConfig(): Config {
   try {
     const configPath = getConfigFilePath();
-    
     if (!fs.existsSync(configPath)) {
-      return { ...DEFAULT_CONFIG };
+      // Create with default values if it doesn't exist
+      saveConfig(defaultConfig);
+      return defaultConfig;
     }
     
-    const configData = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     
-    if (!configData.trim()) {
-      return { ...DEFAULT_CONFIG };
-    }
-    
-    return { ...DEFAULT_CONFIG, ...JSON.parse(configData) };
+    // Ensure all required fields exist (handles migrating from old config)
+    return {
+      colors: config.colors ?? defaultConfig.colors,
+      theme: config.theme ?? defaultConfig.theme
+    };
   } catch (error) {
-    console.error('Error loading configuration:', 
-      error instanceof Error ? error.message : String(error));
-    return { ...DEFAULT_CONFIG };
+    console.error('Error loading configuration:', error);
+    return defaultConfig;
   }
 }
 
-/**
- * Save configuration settings
- */
-export function saveConfig(config: Partial<Config>): boolean {
+// Save configuration
+export function saveConfig(config: Config): void {
   try {
-    const configPath = getConfigFilePath();
     ensureDataDirectoryExists();
-    
-    // Merge with existing config if any
-    const existingConfig = loadConfig();
-    const newConfig = { ...existingConfig, ...config };
-    
-    fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf8');
-    return true;
+    fs.writeFileSync(getConfigFilePath(), JSON.stringify(config, null, 2), 'utf8');
   } catch (error) {
-    console.error('Error saving configuration:', 
-      error instanceof Error ? error.message : String(error));
-    return false;
+    console.error('Error saving configuration:', error);
   }
 }
 
-/**
- * Get a specific configuration setting
- */
-export function getConfigSetting(setting: string): any {
+// Get a specific configuration setting
+export function getConfigSetting(key: string): any {
   const config = loadConfig();
-  return config[setting as keyof Config];
+  if (key === 'colors' || key === 'theme') {
+    return config[key as keyof Config];
+  }
+  console.error(`Unknown configuration key: ${key}`);
+  return null;
 }
 
-/**
- * Set a configuration setting
- */
-export function setConfigSetting(setting: string, value: any): boolean {
+// Set a specific configuration setting
+export function setConfigSetting(key: string, value: any): void {
   const config = loadConfig();
-  
-  if (!(setting in config)) {
-    console.error(`Unknown configuration setting: ${setting}`);
-    console.log('Available settings:');
-    Object.keys(DEFAULT_CONFIG).forEach(key => {
-      console.log(`  ${key}`);
-    });
-    return false;
-  }
-  
-  // Convert value to appropriate type
-  const currentValue = config[setting as keyof Config];
-  
-  let typedValue: any;
-  if (typeof currentValue === 'boolean') {
-    typedValue = value === 'true' || value === true;
-  } else if (typeof currentValue === 'number') {
-    typedValue = Number(value);
+  if (key === 'colors' || key === 'theme') {
+    // Type validation
+    if (key === 'colors' && typeof value !== 'boolean') {
+      value = value === 'true';
+    }
+    // Set the value with proper type assertion
+    (config as any)[key] = value;
+    saveConfig(config);
   } else {
-    typedValue = value;
+    console.error(`Unknown configuration key: ${key}`);
   }
-  
-  // Update the setting
-  const updatedConfig = { 
-    [setting]: typedValue 
-  };
-  
-  return saveConfig(updatedConfig);
+}
+
+// Display current configuration
+export function displayConfig(): void {
+  const config = loadConfig();
+  console.log('Current Configuration:');
+  console.log('─────────────────────────');
+  Object.entries(config).forEach(([key, value]) => {
+    console.log(`${key.padEnd(12)} : ${value}`);
+  });
 }
 
 /**
  * Check if colors are enabled in configuration
  */
 export function isColorEnabled(): boolean {
-  return getConfigSetting('colorEnabled') !== false;
+  const config = loadConfig(); // Force reload each time
+  return config.colors !== false;
 }

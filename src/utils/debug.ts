@@ -5,7 +5,7 @@
  * that only activates when the DEBUG environment variable is set to 'true'.
  * Uses gray coloring to visually distinguish debug output from normal application output.
  */
-import chalk from 'chalk';
+import { color } from '../formatting';
 
 /**
  * Conditionally log debug information
@@ -19,7 +19,7 @@ import chalk from 'chalk';
  */
 export function debug(message: string, data?: any): void {
   if (process.env.DEBUG === 'true') {
-    console.log(chalk.gray(`[DEBUG] ${message}`));
-    if (data) console.log(chalk.gray(JSON.stringify(data, null, 2)));
+    console.log(color.gray(`[DEBUG] ${message}`));
+    if (data) console.log(color.gray(JSON.stringify(data, null, 2)));
   }
 }
