@@ -205,7 +205,8 @@ codexCLI
   .description('Reset data or aliases to empty state')
   .option('-f, --force', 'Skip confirmation')
   .action((type: string, options: { force?: boolean }) => {
-    commands.resetData(type, options.force);
+    // Fix: Pass the entire options object instead of just options.force
+    commands.resetData(type, options);
   });
 
   // Show help command
