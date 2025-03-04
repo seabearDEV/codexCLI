@@ -1,228 +1,199 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import * as commands from './commands'; 
+import { setAlias, removeAlias, loadAliases } from './alias';
 import { showHelp } from './formatting';
-import { addEntry, getEntry, removeEntry, searchEntries, initializeExampleData, exportData, importData, resetData, handleConfig } from './commands';
-import { setAlias, removeAlias, resolveKey, loadAliases } from './alias';
-import { color } from './formatting';
+import { version } from '../package.json';
 
-// Initialize the main command object
+// Initialize the CLI
 const codexCLI = new Command();
+codexCLI.version(version);
+codexCLI.description('A CLI tool for storing and retrieving code snippets, commands, and knowledge');
 
-codexCLI
-  .version('1.0.0')
-  .description('CodexCLI - Command Line Information Store');
-
-// Global options
-codexCLI
-  .option('--debug', 'Enable debug output')
-  .hook('preAction', (thisCommand) => {
-    if (thisCommand.opts().debug) {
-      process.env.DEBUG = 'true';
-    }
-  });
-
-// Add entry
+// Add command
 codexCLI
   .command('add <key> <value...>')
   .description('Add or update an entry')
-  .action((key, valueArray) => {
-    const resolvedKey = resolveKey(key);
-    const value = valueArray.join(' ');
-    addEntry(resolvedKey, value);
+  .action((key: string, valueArray: string[]) => {
+    commands.addEntry(key, valueArray.join(' '));
   });
 
-// Get entry or entries
+// Get command
 codexCLI
   .command('get [key]')
   .description('Retrieve entries or specific data')
-  .option('--raw', 'Output raw value without formatting')
-  .option('--tree', 'Display hierarchical data in a tree structure')
-  .action((key, options) => {
-    const resolvedKey = key ? resolveKey(key) : undefined;
-    getEntry(resolvedKey, options);
+  .option('-f, --format <format>', 'Output format (json, yaml, text)')
+  .action((key: string | undefined, options: { format?: string }) => {
+    commands.getEntry(key, options);
   });
 
-// Search entries
+// Find command
 codexCLI
   .command('find <term>')
   .description('Find entries by key or value')
-  .option('--tree', 'Display hierarchical data in a tree structure')
-  .action((term, options) => {
-    searchEntries(term, options);
+  .option('-k, --keys-only', 'Only search in keys')
+  .option('-v, --values-only', 'Only search in values')
+  .action((term: string, options: { keysOnly?: boolean, valuesOnly?: boolean }) => {
+    commands.searchEntries(term, {
+      keysOnly: options.keysOnly,
+      valuesOnly: options.valuesOnly,
+    });
   });
 
-/**
- * Command: remove
- * Deletes an entry from storage
- * @param {string} key - The identifier of the entry to remove
- */
+// Remove command
 codexCLI
   .command('remove <key>')
   .description('Remove an entry')
-  .action((key) => {
-    const resolvedKey = resolveKey(key);
-    removeEntry(resolvedKey);
+  .action((key: string) => {
+    commands.removeEntry(key);
   });
 
-/**
- * Command: config
- * View or change configuration settings
- */
-codexCLI
-  .command('config [setting] [value]')
-  .description('View or change configuration settings')
-  .option('--list', 'List all available settings and their current values')
-  .addHelpText('after', `
-  Available settings:
-    colors       - Enable/disable colored output (true/false)
-    theme        - Set UI theme (default/dark/light)
-    editor       - Default editor for editing entries
+// Alias management commands
+const aliasCommand = codexCLI
+  .command('alias')
+  .description('Manage command aliases');
+
+aliasCommand
+  .command('add <name> <command...>')
+  .description('Add a new command alias')
+  .action((name: string, commandArray: string[]) => {
+    // Use directly imported function instead of through commands
+    setAlias(name, commandArray.join(' '));
+  });
+
+aliasCommand
+  .command('remove <name>')
+  .description('Remove an alias')
+  .action((name: string) => {
+    // Use directly imported function
+    removeAlias(name);
+  });
+
+aliasCommand
+  .command('list')
+  .description('List all aliases')
+  .action(() => {
+    // Use directly imported function
+    const aliases = loadAliases();
+    console.log('Aliases:');
+    Object.entries(aliases).forEach(([alias, path]) => {
+      console.log(`  ${alias} -> ${path}`);
+    });
+  });
+
+aliasCommand
+  .command('run <name> [args...]')
+  .description('Run an alias with optional arguments')
+  .action((name: string, args: string[]) => {
+    // Use directly imported function
+    const aliases = loadAliases();
+    const aliasValue = aliases[name];
     
-  Examples:
-    $ ccli config                  # View all current configuration
-    $ ccli config colors           # View current 'colors' setting
-    $ ccli config colors false     # Disable colored output
-    $ ccli config --list           # List all available settings
-  `)
-  .action((setting, value, options) => {
-    handleConfig(setting, value, options);
+    if (!aliasValue) {
+      console.error(`Alias '${name}' not found`);
+      return;
+    }
+    
+    // Get the command and replace args placeholders
+    let command = aliasValue;
+    if (args.length > 0) {
+      // Replace $1, $2, etc. with args
+      args.forEach((arg, index) => {
+        command = command.replace(`$${index + 1}`, arg);
+      });
+    }
+    
+    console.log(`Running command: ${command}`);
+    // In a real implementation, you'd execute this command
+    // But for now, just show what would be executed
   });
 
-/**
- * Command: help
- * Displays custom formatted help information
- */
+// Configuration commands
+const configCommand = codexCLI
+  .command('config')
+  .description('Manage configuration settings')
+  .action(() => {
+    // Show all config settings when just "ccli config" is run
+    // This essentially does the same as "ccli config get" with no arguments
+    commands.handleConfig();
+  });
+
+// Keep the subcommands as they are
+configCommand
+  .command('set <key> <value>')
+  .description('Set a configuration value')
+  .action((key: string, value: string) => {
+    commands.configSet(key, value);
+  });
+
+configCommand
+  .command('get [key]')
+  .description('Get configuration values')
+  .action((key?: string) => {
+    commands.handleConfig(key);
+  });
+
+// List command
+codexCLI
+  .command('list')
+  .description('List all entries')
+  .option('-k, --keys-only', 'Only show keys')
+  .option('-f, --format <format>', 'Output format (json, yaml, text)')
+  .action((options: { keysOnly?: boolean, format?: string }) => {
+    commands.getEntry(undefined, options);
+  });
+
+// Examples command
+codexCLI
+  .command('examples')
+  .description('Initialize with example data files')
+  .option('-f, --force', 'Force overwrite if examples already exist')
+  .action((options: { force?: boolean }) => {
+    commands.initializeExampleData(options.force);
+  });
+
+// Export command
+codexCLI
+  .command('export <type>')
+  .description('Export data or aliases to a file')
+  .option('-f, --format <format>', 'Output format (json, yaml)')
+  .option('-o, --output <file>', 'Output file path')
+  .action((type: string, options: { format?: string, output?: string }) => {
+    commands.exportData(type, options);
+  });
+
+// Import command
+codexCLI
+  .command('import <type> <file>')
+  .description('Import data or aliases from a file')
+  .option('-f, --format <format>', 'Format of input file')
+  .action((type: string, file: string, options: { format?: string }) => {
+    commands.importData(type, file, options);
+  });
+
+// Reset command
+codexCLI
+  .command('reset <type>')
+  .description('Reset data or aliases to empty state')
+  .option('-f, --force', 'Skip confirmation')
+  .action((type: string, options: { force?: boolean }) => {
+    commands.resetData(type, options.force);
+  });
+
+  // Show help command
 codexCLI
   .command('help')
-  .description('Display help information')
+  .description('Show detailed help information')
   .action(() => {
     showHelp();
   });
 
-/**
- * Command: alias
- * Manages aliases for paths
- */
-codexCLI
-  .command('alias')
-  .description('Manage aliases for paths')
-  .argument('<action>', 'Action to perform: set, get, remove')
-  .argument('[alias]', 'Alias name')
-  .argument('[path]', 'Path for the alias (required for set action)')
-  .action((action, alias, path) => {
-    const actions = {
-      set: () => {
-        if (!alias || !path) {
-          return console.error('Both alias and path are required for set action');
-        }
-        setAlias(alias, path);
-        console.log(`Alias '${color.green(alias)}' now points to '${color.cyan(path)}'`);
-      },
-      get: () => {
-        // If no alias name provided, show all aliases
-        if (!alias) {
-          const allAliases = loadAliases();
-          if (Object.keys(allAliases).length === 0) {
-            return console.log('No aliases defined');
-          }
-          console.log(color.bold('Defined aliases:'));
-          Object.entries(allAliases).forEach(([alias, targetPath]) => {
-            console.log(`${color.green(alias.padEnd(15))} ${color.gray('→')} ${color.cyan(targetPath)}`);
-          });
-          return;
-        }
-        
-        // If alias name provided, show that specific alias
-        const aliases = loadAliases();
-        console.log(aliases[alias] 
-          ? `Alias '${color.green(alias)}' points to '${color.cyan(aliases[alias])}'` 
-          : `Alias '${color.yellow(alias)}' not found`);
-      },
-      remove: () => {
-        if (!alias) return console.error('Alias name is required');
-        
-        console.log(removeAlias(alias)
-          ? `Alias '${color.green(alias)}' removed`
-          : `Alias '${color.yellow(alias)}' not found`);
-      }
-    };
-    
-    const handler = actions[action as keyof typeof actions];
-    if (handler) {
-      handler();
-    } else {
-      console.error(`Unknown action: ${action}`);
-      console.log('Valid actions: set, get, remove');
-    }
-  });
-
-/**
- * Command: examples
- * Initializes the data directory with example data files
- */
-codexCLI
-  .command('examples')
-  .description('Initialize with example data files')
-  .option('--force', 'Overwrite existing data files')
-  .action((options) => {
-    initializeExampleData(options.force);
-  });
-
-/**
- * Command: export
- * Exports data to a file
- */
-codexCLI
-  .command('export <type>')
-  .description('Export data or aliases to a file')
-  .option('-o, --output <file>', 'Output file path (defaults to current directory)')
-  .option('--pretty', 'Format JSON with indentation for readability', true)
-  .action((type, options) => {
-    exportData(type, options);
-  });
-
-/**
- * Command: import
- * Imports data from a file
- */
-codexCLI
-  .command('import <type>')
-  .description('Import data or aliases from a file')
-  .argument('<file>', 'File to import')
-  .option('--merge', 'Merge with existing data instead of replacing', false)
-  .option('--force', 'Overwrite without confirmation', false)
-  .action((type, file, options) => {
-    importData(type, file, options);
-  });
-
-/**
- * Command: reset
- * Resets data or aliases to empty state
- */
-codexCLI
-  .command('reset <type>')
-  .description('Reset data or aliases to empty state')
-  .option('--force', 'Reset without confirmation', false)
-  .action((type, options) => {
-    resetData(type, options);
-  });
-
-/**
- * Error handler for invalid commands
- * Displays error message, shows help, and exits with error code
- */
-codexCLI.on('command:*', () => {
-  console.error('Invalid command: %s\n', codexCLI.args.join(' '));
-  showHelp();
-  process.exit(1);
-});
-
-/**
- * Default behavior: show help when no command is provided
- */
+// Check if any command was specified
 if (process.argv.length <= 2) {
+  // When no command is provided, show our custom help instead of Commander's default
   showHelp();
 } else {
+  // Otherwise parse as normal
   codexCLI.parse(process.argv);
 }

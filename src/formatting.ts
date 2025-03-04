@@ -6,8 +6,22 @@
  * It uses the chalk library for terminal styling.
  */
 import chalk from 'chalk';
-import { getDataFilePath, getAliasFilePath } from './utils/paths';
-import { isColorEnabled } from './config';
+import { getDataFilePath, getAliasFilePath, getConfigFilePath } from './utils/paths';
+import { loadConfig } from './config';
+
+// Add this if you have a `formatting.ts` file with color functions
+let colorConfigCache: boolean | null = null;
+let lastConfigCheck = 0;
+
+export function isColorEnabled(): boolean {
+  const now = Date.now();
+  // Only reload config every 5 seconds at most
+  if (colorConfigCache === null || now - lastConfigCheck > 5000) {
+    colorConfigCache = loadConfig().colors !== false;
+    lastConfigCheck = now;
+  }
+  return colorConfigCache;
+}
 
 // Helper function to use chalk only when colors are enabled
 export const color = {
@@ -141,7 +155,8 @@ export function showHelp(): void {
   const isDev = process.env.NODE_ENV === 'development';
   console.log(color.boldColors.magenta('DATA STORAGE:'));
   console.log(`  ${isDev ? '[DEV] ' : ''}Entries are stored in:       ${getDataFilePath()}`);
-  console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}\n`);
+  console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}`);
+  console.log(`  ${isDev ? '[DEV] ' : ''}Config is stored in:         ${getConfigFilePath()}\n`);
 }
 
 /**
@@ -175,5 +190,6 @@ export function displayTree(data: object, prefix: string = ''): void {
  */
 export function printSystemInfo(isDev = false): void {
   console.log(`  ${isDev ? '[DEV] ' : ''}Data is stored in:          ${getDataFilePath()}`);
-  console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}\n`);
+  console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}`);
+  console.log(`  ${isDev ? '[DEV] ' : ''}Config is stored in:         ${getConfigFilePath()}\n`);
 }

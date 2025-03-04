@@ -118,8 +118,19 @@ export function removeNestedValue(obj: CodexData, path: string): boolean {
  * @param {string} prefix - Optional prefix for nested keys (used for recursion)
  * @returns {Record<string, string>} Flattened key-value pairs
  */
+// Memoize flattenObject for repeated calls on same data
+const flattenCache = new Map<string, Record<string, any>>();
+
 export function flattenObject(obj: Record<string, any>, parentKey: string = ''): Record<string, any> {
-  return Object.keys(obj).reduce((acc, key) => {
+  // Create a cache key from the object and parent key
+  const cacheKey = parentKey + JSON.stringify(obj);
+  
+  // Check if result is already in cache
+  if (flattenCache.has(cacheKey)) {
+    return flattenCache.get(cacheKey)!;
+  }
+  
+  const result = Object.keys(obj).reduce((acc, key) => {
     const newKey = parentKey ? `${parentKey}.${key}` : key;
     
     if (typeof obj[key] === 'object' && obj[key] !== null) {
@@ -130,4 +141,16 @@ export function flattenObject(obj: Record<string, any>, parentKey: string = ''):
     
     return acc;
   }, {} as Record<string, any>);
+  
+  // Store result in cache (limit cache size to prevent memory issues)
+  if (flattenCache.size > 100) {
+    // Remove oldest entry - fix the potential undefined issue
+    const firstKeyIterator = flattenCache.keys().next();
+    if (!firstKeyIterator.done && firstKeyIterator.value !== undefined) {
+      flattenCache.delete(firstKeyIterator.value);
+    }
+  }
+  flattenCache.set(cacheKey, result);
+  
+  return result;
 }

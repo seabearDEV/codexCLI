@@ -18,13 +18,20 @@ export function isDev(): boolean {
          Boolean(process.env.npm_lifecycle_script && process.env.npm_lifecycle_script.includes('ts-node'));
 }
 
+// Add caching for path resolution
+let dataDirectoryCache: string | null = null;
+let dataFilePathCache: string | null = null;
+
 /**
  * Get the directory where data files should be stored
  */
 export function getDataDirectory(): string {
-  return isDev() 
-    ? path.join(path.resolve(__dirname, '..', '..'), 'data')
-    : path.join(os.homedir(), '.codexcli');
+  if (dataDirectoryCache === null) {
+    dataDirectoryCache = isDev() 
+      ? path.join(path.resolve(__dirname, '..', '..'), 'data')
+      : path.join(os.homedir(), '.codexcli');
+  }
+  return dataDirectoryCache;
 }
 
 /**
@@ -49,7 +56,10 @@ export function ensureDataDirectoryExists(): string {
  * @returns {string} Path to the data.json file
  */
 export function getDataFilePath(): string {
-  return path.join(getDataDirectory(), 'data.json');
+  if (dataFilePathCache === null) {
+    dataFilePathCache = path.join(getDataDirectory(), 'data.json');
+  }
+  return dataFilePathCache;
 }
 
 /**

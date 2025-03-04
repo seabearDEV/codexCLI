@@ -23,13 +23,32 @@ export function handleOperation<T>(operation: () => T, errorMessage: string): T 
 }
 
 /**
- * Standard error handler
+ * Handle operation with consistent error handling and default value
  */
-export function handleError(message: string, error: any): void {
+export function safeOperation<T>(operation: () => T, 
+                               errorMessage: string, 
+                               defaultValue: T): T {
+  try {
+    return operation();
+  } catch (error) {
+    handleError(errorMessage, error);
+    return defaultValue;
+  }
+}
+
+/**
+ * Consistent error handling with improved context
+ */
+export function handleError(message: string, error: any, context?: string): void {
+  const contextPrefix = context ? `[${context}] ` : '';
+  
   if (process.env.DEBUG) {
-    console.error(`${color.red(message)}: `, error);
+    console.error(`${color.red(contextPrefix + message)}: `, error);
+    if (error instanceof Error && error.stack) {
+      console.error(color.gray(error.stack));
+    }
   } else {
-    console.error(color.red(message));
+    console.error(color.red(contextPrefix + message));
   }
 }
 
@@ -68,4 +87,17 @@ export function saveData(data: Record<string, any>): void {
     fs.writeFileSync(filePath, content, 'utf8');
     return true;
   }, `Failed to save data to ${filePath}`);
+}
+
+/**
+ * Perform an operation with the loaded data and save the data afterwards
+ * 
+ * @param {function} operation - The operation to perform with the data
+ * @returns {any} The result of the operation
+ */
+export function withData<T>(operation: (data: Record<string, any>) => T): T {
+  const data = loadData();
+  const result = operation(data);
+  saveData(data);
+  return result;
 }

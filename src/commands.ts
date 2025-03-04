@@ -725,3 +725,30 @@ export function configSet(setting: string, value: string): void {
     console.error(`Error setting config ${setting}: ${error}`);
   }
 }
+
+// Add this interface to understand what's available
+export interface Commands {
+  addEntry: (key: string, value: string) => void;
+  getEntry: (key: string | undefined, options?: any) => void;
+  // What is the actual name for findEntries?
+  findEntries?: (term: string, options: any) => void;
+  find?: (term: string, options: any) => void;
+  removeEntry: (key: string) => void;
+  
+  // Alias functions
+  addAlias?: (name: string, command: string) => void;
+  removeAlias?: (name: string) => void;
+  listAliases?: () => void;
+  runAlias?: (name: string, args: string[]) => void;
+  
+  // Config functions
+  setConfig?: (key: string, value: string) => void;
+  getConfig?: (key?: string) => void;
+  
+  // Other functions
+  listEntries?: (options: any) => void;
+  setupExamples?: (force?: boolean) => void;
+  exportData: (type: string, options: any) => void;
+  importData: (type: string, file: string, options: any) => void;
+  resetData: (type: string, force?: boolean) => void;
+}

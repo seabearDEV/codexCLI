@@ -90,7 +90,14 @@ export function displayConfig(): void {
 /**
  * Check if colors are enabled in configuration
  */
+let colorEnabledCache: boolean | null = null;
+let lastConfigCheck = 0;
+
 export function isColorEnabled(): boolean {
-  const config = loadConfig(); // Force reload each time
-  return config.colors !== false;
+  const now = Date.now();
+  if (colorEnabledCache === null || now - lastConfigCheck > 5000) {
+    colorEnabledCache = loadConfig().colors !== false;
+    lastConfigCheck = now;
+  }
+  return colorEnabledCache;
 }
