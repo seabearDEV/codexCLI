@@ -29,10 +29,10 @@ export const color = {
   green: (text: string): string => isColorEnabled() ? chalk.green(text) : text,
   yellow: (text: string): string => isColorEnabled() ? chalk.yellow(text) : text,
   red: (text: string): string => isColorEnabled() ? chalk.red(text) : text,
-  blue: (text: string): string => isColorEnabled() ? chalk.blue(text) : text,
+  blue: (text: string): string => isColorEnabled() ? chalk.blueBright(text) : text,
   magenta: (text: string): string => isColorEnabled() ? chalk.magenta(text) : text,
   gray: (text: string): string => isColorEnabled() ? chalk.gray(text) : text,
-  white: (text: string): string => isColorEnabled() ? chalk.white(text) : text,
+  white: (text: string): string => isColorEnabled() ? chalk.whiteBright(text) : text,
   italic: (text: string): string => isColorEnabled() ? chalk.italic(text) : text,
   // Add a general bold function
   bold: (text: string): string => isColorEnabled() ? chalk.bold(text) : text,
@@ -41,7 +41,7 @@ export const color = {
     cyan: (text: string): string => isColorEnabled() ? chalk.bold.cyan(text) : text,
     green: (text: string): string => isColorEnabled() ? chalk.bold.green(text) : text,
     yellow: (text: string): string => isColorEnabled() ? chalk.bold.yellow(text) : text,
-    blue: (text: string): string => isColorEnabled() ? chalk.bold.blue(text) : text,
+    blue: (text: string): string => isColorEnabled() ? chalk.bold.blueBright(text) : text,
     magenta: (text: string): string => isColorEnabled() ? chalk.bold.magenta(text) : text,
   }
 };

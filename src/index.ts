@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import * as commands from './commands'; 
 import { setAlias, removeAlias, loadAliases } from './alias';
-import { showHelp } from './formatting';
+import { showHelp, color } from './formatting';
 import { version } from '../package.json';
 
 // Initialize the CLI
@@ -24,7 +24,9 @@ codexCLI
   .command('get [key]')
   .description('Retrieve entries or specific data')
   .option('-f, --format <format>', 'Output format (json, yaml, text)')
-  .action((key: string | undefined, options: { format?: string }) => {
+  .option('-t, --tree', 'Display data in a hierarchical tree structure')  // Add this line
+  .option('-r, --raw', 'Output raw values without formatting')          // Also add this option
+  .action((key: string | undefined, options: { format?: string, tree?: boolean, raw?: boolean }) => {
     commands.getEntry(key, options);
   });
 
@@ -71,42 +73,67 @@ aliasCommand
   });
 
 aliasCommand
-  .command('list')
-  .description('List all aliases')
-  .action(() => {
+  .command('get [name]')
+  .description('List all aliases or get a specific alias')
+  .option('-t, --tree', 'Display data in a hierarchical tree structure')
+  .option('-f, --format <format>', 'Output format (json, yaml, text)')
+  .action((name: string, options: { tree?: boolean, format?: string }) => {
     // Use directly imported function
     const aliases = loadAliases();
-    console.log('Aliases:');
-    Object.entries(aliases).forEach(([alias, path]) => {
-      console.log(`  ${alias} -> ${path}`);
-    });
-  });
-
-aliasCommand
-  .command('run <name> [args...]')
-  .description('Run an alias with optional arguments')
-  .action((name: string, args: string[]) => {
-    // Use directly imported function
-    const aliases = loadAliases();
-    const aliasValue = aliases[name];
     
-    if (!aliasValue) {
-      console.error(`Alias '${name}' not found`);
+    // Add tree view support
+    if (options.tree) {
+      console.log('\n' + color.boldColors.magenta('Aliases (Tree View):'));
+      
+      if (Object.keys(aliases).length === 0) {
+        console.log(color.gray('  No aliases found.'));
+      } else {
+        // If a specific name was provided, only show that alias
+        if (name) {
+          const aliasValue = aliases[name];
+          
+          if (!aliasValue) {
+            console.error(color.red(`Alias '${name}' not found`));
+            return;
+          }
+          
+          // Display just this alias in tree format
+          const singleAlias = { [name]: aliasValue };
+          displayAliasesAsTree(singleAlias);
+        } else {
+          // Display all aliases in tree format
+          displayAliasesAsTree(aliases);
+        }
+      }
+      console.log();
       return;
     }
     
-    // Get the command and replace args placeholders
-    let command = aliasValue;
-    if (args.length > 0) {
-      // Replace $1, $2, etc. with args
-      args.forEach((arg, index) => {
-        command = command.replace(`$${index + 1}`, arg);
-      });
+    // Non-tree view (original code)
+    if (!name) {
+      // When no name provided, list all aliases
+      console.log('\n' + color.boldColors.magenta('Aliases:'));
+      
+      if (Object.keys(aliases).length === 0) {
+        console.log(color.gray('  No aliases found. Add one with "ccli alias add <name> <command>"'));
+      } else {
+        Object.entries(aliases).forEach(([alias, path]) => {
+          console.log(`  ${color.cyan(alias)} -> ${color.green(path)}`);
+        });
+      }
+      console.log();
+      return;
     }
     
-    console.log(`Running command: ${command}`);
-    // In a real implementation, you'd execute this command
-    // But for now, just show what would be executed
+    // Show specific alias
+    const aliasValue = aliases[name];
+    
+    if (!aliasValue) {
+      console.error(color.red(`Alias '${name}' not found`));
+      return;
+    }
+    
+    console.log(`\n${color.cyan(name)} -> ${color.green(aliasValue)}\n`);
   });
 
 // Configuration commands
@@ -196,4 +223,15 @@ if (process.argv.length <= 2) {
 } else {
   // Otherwise parse as normal
   codexCLI.parse(process.argv);
+}
+
+// Add this helper function in your file
+function displayAliasesAsTree(aliases: Record<string, string>): void {
+  console.log('');
+  console.log('└── Aliases');
+  Object.entries(aliases).forEach(([aliasName, aliasValue], index, array) => {
+    const isLast = index === array.length - 1;
+    const prefix = isLast ? '    └── ' : '    ├── ';
+    console.log(`${prefix}${color.cyan(aliasName)}: ${color.green(aliasValue)}`);
+  });
 }
