@@ -1,6 +1,6 @@
 # CodexCLI
 
-A command-line information store that allows you to save and retrieve hierarchical data with ease.
+A command-line information store for quick reference of frequently used data.
 
 ## Overview
 
@@ -18,11 +18,7 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 ## Installation
 
 ```bash
-# Install globally
 npm install -g codexcli
-
-# Or install locally
-npm install codexcli
 ```
 
 After installation, you can use the ccli command to interact with CodexCLI.
@@ -32,20 +28,26 @@ After installation, you can use the ccli command to interact with CodexCLI.
 ### Basic Commands
 
 ```bash
-# Add an entry
+# Add a simple entry
+ccli add mykey "my value"
+
+# Add a nested entry
 ccli add server.production.ip 192.168.1.100
 
-# Retrieve an entry
+# Get a specific entry
 ccli get server.production.ip
 
-# List all entries
-ccli list
+# Get all entries in a namespace
+ccli get server
 
-# List entries under a specific path
-ccli list server
+# Get all entries
+ccli get
 
-# Find entries containing a term
-ccli find production
+# Display as a tree structure
+ccli get server --tree
+
+# Search by key or value
+ccli find 192.168.1
 
 # Remove an entry
 ccli remove server.production.ip
@@ -60,16 +62,13 @@ Aliases provide shortcuts to frequently used paths:
 
 ```bash
 # Create an alias
-ccli alias set prodip server.production.ip
+ccli alias set prod-ip server.production.ip
 
-# Use an alias
-ccli get prodip
+# Use the alias
+ccli get prod-ip
 
-# List all aliases
-ccli alias list
-
-# Remove an alias
-ccli alias remove prodip
+# View all aliases
+ccli alias get
 ```
 
 ### Display Options
@@ -79,7 +78,6 @@ ccli alias remove prodip
 ccli get server.production.ip --raw
 
 # Display hierarchical data as a tree (aliases are shown in parentheses)
-ccli list server --tree
 ccli get server --tree
 ccli find production --tree
 ```
@@ -122,26 +120,26 @@ ccli reset data --force
 ccli reset aliases --force
 ```
 
-## Data Storage
+### Data Storage
 
-- **Development Mode**: Data is stored in the `data` directory within the project
+- **Development Mode**: Data is stored in the data directory within the project
 - **Production Mode**: Data is stored in `~/.codexcli` in your home directory
 
 Data directories and files are only created when needed (when adding data, importing data, or running the examples command).
 
-## Example Usage Scenarios
+### Example Usage Scenarios
 
-### Server Management
+#### Server Management
 
 ```bash
 ccli add server.production.ip 192.168.1.100
 ccli add server.production.user admin
 ccli add server.staging.ip 192.168.1.200
 ccli add server.staging.user testuser
-ccli list server
+ccli get server
 ```
 
-### Personal Information
+#### Personal Information
 
 ```bash
 ccli add personal.contact.email john@example.com

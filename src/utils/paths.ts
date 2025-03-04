@@ -34,17 +34,14 @@ export function getDataDirectory(): string {
  * @returns {string} Path to the data directory
  */
 export function ensureDataDirectoryExists(): string {
-  const dataDir = getDataDirectory();
-  
+  const dataDir = path.join(getDataDirectory(), 'data');
+
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
-  
+
   return dataDir;
 }
-
-// Alias for backward compatibility
-export const getDataDir = getDataDirectory;
 
 /**
  * Returns the path to the data file without ensuring it exists
@@ -52,7 +49,8 @@ export const getDataDir = getDataDirectory;
  * @returns {string} Path to the data.json file
  */
 export function getDataFilePath(): string {
-  return path.join(getDataDirectory(), 'data.json');
+  // Change to include 'data' subdirectory
+  return path.join(getDataDirectory(), 'data', 'data.json');
 }
 
 /**
@@ -91,7 +89,8 @@ export function ensureDataFileExists(): string {
  * @returns {string} Path to the aliases.json file
  */
 export function getAliasFilePath(): string {
-  return path.join(getDataDirectory(), 'aliases.json');
+  // Change to include 'data' subdirectory
+  return path.join(getDataDirectory(), 'data', 'aliases.json');
 }
 
 /**
@@ -100,5 +99,6 @@ export function getAliasFilePath(): string {
  * @returns {string} Absolute path to the JSON config file
  */
 export function getConfigFilePath(): string {
-  return path.join(getDataDirectory(), 'config.json');
+  // Change to include 'data' subdirectory
+  return path.join(getDataDirectory(), 'data', 'config.json');
 }

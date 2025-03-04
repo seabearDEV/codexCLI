@@ -6,8 +6,8 @@
  * It uses the chalk library for terminal styling.
  */
 import chalk from 'chalk';
-import { getDataFilePath, isDev } from './utils/paths';
-import path from 'path';
+import { getDataFilePath } from './utils/paths';
+import { getAliasFilePath } from './utils/paths';
 import { getAliasesForPath } from './alias';
 import { isColorEnabled } from './config';
 
@@ -52,37 +52,19 @@ export function formatOutput(data: any): void {
  * @param {string} value - The value to display
  */
 export function formatKeyValue(key: string, value: string): void {
-  // Split the key by dots to get levels
   const parts = key.split('.');
-  
-  // Color palette for different levels
-  const colors = [
-    color.cyan,     // Level 0 (base keys)
-    color.green,    // Level 1
-    color.yellow,   // Level 2
-    color.magenta,  // Level 3
-    color.blue,     // Level 4
-    color.red       // Level 5 and beyond
-  ];
-  
-  // Start building the colored string
+  const colors = [chalk.cyan, chalk.yellow, chalk.green, chalk.magenta, chalk.blue];
   let coloredKey = '';
   
-  // Apply color to each part based on its level
   parts.forEach((part, index) => {
-    // Choose color based on level (use last color for deeper levels)
-    const colorFn = colors[Math.min(index, colors.length - 1)];
-    
-    // Add the part with appropriate color
+    const colorFn = colors[index % colors.length];
     coloredKey += colorFn(part);
     
-    // Add dot separator if not the last part
     if (index < parts.length - 1) {
-      coloredKey += color.white('.');
+      coloredKey += chalk.white('.');
     }
   });
   
-  // Display the full colored key with its value
   console.log(`${coloredKey}: ${value}`);
 }
 
@@ -94,6 +76,8 @@ export function formatKeyValue(key: string, value: string): void {
  * Uses color coding to improve readability and visual appeal.
  */
 export function showHelp(): void {
+  const color = chalk;
+  
   console.log();
   console.log('┌───────────────────────────────────────────┐');
   console.log('│ CodexCLI - Command Line Information Store │');
@@ -104,8 +88,7 @@ export function showHelp(): void {
   console.log();
   console.log('COMMANDS:');
   console.log('  add        <key> <value>              Add or update an entry');
-  console.log('  get        <key>                      Retrieve an entry');
-  console.log('  list       [path]                     List all entries or entries under specified path');
+  console.log('  get        [key]                      Retrieve entries or specific data');
   console.log('  find       <term>                     Find entries by key or value');
   console.log('  remove     <key>                      Remove an entry');
   console.log('  alias      <action> [name] [path]     Manage aliases for paths');
@@ -115,53 +98,41 @@ export function showHelp(): void {
   console.log('  reset      <type>                     Reset data or aliases to empty state');
   console.log('  examples                              Initialize with example data');
   console.log('  help                                  Show this help message');
-
-  // Rest of the function remains the same
   
-  // Options section - NEW
   console.log('\n' + color.bold.magenta('OPTIONS:'));
   console.log(`  ${color.yellow('--tree')}     Display data in a hierarchical tree structure`);
   console.log(`  ${color.yellow('--raw')}      Output raw values without formatting (for scripting)`);
   console.log(`  ${color.yellow('--debug')}    Enable debug output for troubleshooting\n`);
   
-  // Examples section
   console.log(color.bold.magenta('EXAMPLES:'));
   console.log(`  ${color.yellow('ccli')} ${color.green('add')} ${color.cyan('server.ip')} 192.168.1.100`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('get')}                          ${color.gray('# Show all entries')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server.ip')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('list')} ${color.cyan('server')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('list')} ${color.cyan('--tree')}             ${color.gray('# Display all data as a tree')}`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server')}`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.yellow('--tree')}                  ${color.gray('# Display all data as a tree')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('find')} 192.168.1.100\n`);
   
-  // Alias examples
   console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('set myalias server.production.ip')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('myalias')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('list')}`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('get')}                 ${color.gray('# List all aliases')}`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('get myalias')}         ${color.gray('# Show specific alias')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('remove myalias')}\n`);
   
-  // Tree view example - NEW
-  console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server')} ${color.yellow('--tree')}    ${color.gray('# Display server info as a tree')}\n`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server')} ${color.yellow('--tree')}    ${color.gray('# Display server info as a tree')}`);
   
-  // Example data initialization - NEW
   console.log(`  ${color.yellow('ccli')} ${color.green('examples')} ${color.yellow('--force')}     ${color.gray('# Initialize with example data')}`);
-  
-  // Add examples for the new commands
   console.log(`  ${color.yellow('ccli')} ${color.green('export')} ${color.cyan('data')} ${color.yellow('-o')} backup.json       ${color.gray('# Export data to a file')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('import')} ${color.cyan('all')} backup.json ${color.yellow('--merge')}   ${color.gray('# Import and merge data')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('reset')} ${color.cyan('aliases')} ${color.yellow('--force')}            ${color.gray('# Reset aliases to empty state')}\n`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('reset')} ${color.cyan('aliases')} ${color.yellow('--force')}            ${color.gray('# Reset aliases to empty state')}`);
   
-  // Config examples - NEW
   console.log(`  ${color.yellow('ccli')} ${color.green('config')}                  ${color.gray('# View all current settings')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('config')} ${color.cyan('colors false')}     ${color.gray('# Disable colored output')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('config')} ${color.cyan('--list')}           ${color.gray('# List available settings')}\n`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('config')} ${color.yellow('--list')}           ${color.gray('# List available settings')}\n`);
   
-  // Data file location section
-  const DATA_FILE = getDataFilePath();
-  const ALIAS_FILE = path.join(path.dirname(DATA_FILE), 'aliases.json');
-  const envLabel = isDev() ? color.yellow('[DEV] ') : '';
-  
+  const isDev = process.env.NODE_ENV === 'development';
   console.log(color.bold.magenta('DATA STORAGE:'));
-  console.log(`  ${envLabel}${color.white('Entries are stored in:      ')} ${color.cyan(DATA_FILE)}`);
-  console.log(`  ${envLabel}${color.white('Aliases are stored in:      ')} ${color.cyan(ALIAS_FILE)}\n`);
+  console.log(`  ${isDev ? '[DEV] ' : ''}Entries are stored in:       ${getDataFilePath()}`);
+  console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}\n`);
 }
 
 /**
@@ -193,4 +164,12 @@ export function displayTree(
       console.log(`${prefix}${isLastEntry ? '    ' : '│   '}└── ${valueDisplay}`);
     }
   });
+}
+
+/**
+ * Print system information
+ */
+export function printSystemInfo(isDev = false): void {
+  console.log(`  ${isDev ? '[DEV] ' : ''}Data is stored in:          ${getDataFilePath()}`);
+  console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}\n`);
 }

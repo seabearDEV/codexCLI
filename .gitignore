@@ -131,3 +131,7 @@ dist
 
 # Exclude MacOS directories and files
 .DS_Store
+
+# Application specific directories and files
+dist/
+data

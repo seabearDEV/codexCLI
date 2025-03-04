@@ -11,7 +11,7 @@ import { formatKeyValue, displayTree } from './formatting';
 import { getAliasesForPath } from './alias';
 import chalk from 'chalk';
 import fs from 'fs';
-import { getDataFilePath, getDataDirectory, ensureDataDirectoryExists } from './utils/paths';
+import { getDataDirectory, ensureDataDirectoryExists } from './utils/paths';
 import path from 'path';
 import { loadAliases, saveAliases } from './alias';
 import { loadConfig, getConfigSetting, setConfigSetting } from './config';
@@ -30,6 +30,35 @@ function printSuccess(message: string): void {
  */
 function printWarning(message: string): void {
   console.log(chalk.yellow('⚠ ') + message);
+}
+
+/**
+ * Display entries with colorized paths and alias indicators
+ */
+function displayEntries(entries: Record<string, string>): void {
+  Object.entries(entries).forEach(([key, value]) => {
+    const colorizedPath = colorizePathByLevels(key);
+    const aliases = getAliasesForPath(key);
+    
+    if (aliases.length > 0) {
+      console.log(`${colorizedPath} ${chalk.blue('(' + aliases[0] + ')')} ${value}`);
+    } else {
+      console.log(`${colorizedPath} ${value}`);
+    }
+  });
+}
+
+/**
+ * Colorize path segments with alternating colors
+ */
+function colorizePathByLevels(path: string): string {
+  const colors = [chalk.cyan, chalk.yellow, chalk.green, chalk.magenta, chalk.blue];
+  const parts = path.split('.');
+  
+  return parts.map((part, index) => {
+    const colorFn = colors[index % colors.length];
+    return colorFn(part);
+  }).join('.');
 }
 
 /**
@@ -60,15 +89,34 @@ export function addEntry(key: string, value: any): void {
 }
 
 /**
- * Retrieves and displays a data entry by its key
+ * Retrieves and displays a data entry or entries
  * Supports nested access via dot notation and different output formats
+ * When no key is provided, it displays all entries
  * 
- * @param {string} key - The key to look up
+ * @param {string} [key] - The optional key to look up
  * @param {Object} options - Display options (e.g., {raw: true} for unformatted output)
  */
-export function getEntry(key: string, options: any = {}): void {
+export function getEntry(key?: string, options: any = {}): void {
   const data = loadData();
   
+  // If no key is provided, show all entries
+  if (!key) {
+    if (Object.keys(data).length === 0) {
+      console.log('No entries found.');
+      return;
+    }
+    
+    // Handle tree display for all entries
+    if (options.tree) {
+      displayTree(data);
+      return;
+    }
+    
+    displayEntries(flattenObject(data));
+    return;
+  }
+  
+  // Handle specific key lookup
   let value;
   if (key.includes('.')) {
     value = getNestedValue(data, key);
@@ -76,161 +124,113 @@ export function getEntry(key: string, options: any = {}): void {
     value = data[key];
   }
   
+  // Check if the value exists
   if (value === undefined) {
+    // Before reporting "not found", check if there are any entries under this path
+    const prefix = key + '.';
+    const flatData = flattenObject(data);
+    
+    const childEntries = Object.keys(flatData)
+      .filter(k => k.startsWith(prefix));
+    
+    if (childEntries.length > 0) {
+      // This is a parent path with children, so display them
+      if (options.tree) {
+        // Reconstruct the object for tree display
+        const subtree: Record<string, any> = {};
+        
+        // Find the common parts of the path
+        const parts = key.split('.');
+        
+        // Build the subtree structure
+        let target: Record<string, any> = subtree;
+        for (let i = 0; i < parts.length - 1; i++) {
+          target[parts[i]] = {};
+          target = target[parts[i]];
+        }
+        
+        // Set the last part of the path to the unflattened object
+        target[parts[parts.length - 1]] = unflattenObject(
+          Object.fromEntries(
+            childEntries.map(k => [k.substring(prefix.length), flatData[k]])
+          )
+        );
+        
+        displayTree(subtree);
+        return;
+      }
+      
+      // Display child entries in flat format
+      const filteredEntries: Record<string, string> = {};
+      childEntries.forEach(k => filteredEntries[k] = flatData[k]);
+      displayEntries(filteredEntries);
+      return;
+    }
+    
+    // If we reach here, the entry truly doesn't exist
     console.error(`Entry '${key}' not found`);
+    return;
+  }
+  
+  // Handle object value display (subtree)
+  if (typeof value === 'object' && value !== null) {
+    // For tree display
+    if (options.tree) {
+      displayTree({ [key]: value });
+      return;
+    }
+    
+    // For flat display
+    const filteredEntries = flattenObject({ [key]: value });
+    
+    if (Object.keys(filteredEntries).length === 0) {
+      console.log(`No entries found under '${key}'.`);
+      return;
+    }
+    
+    // Transform keys to include full path
+    const entries: Record<string, string> = {};
+    Object.entries(filteredEntries).forEach(([entryKey, entryValue]) => {
+      const fullPath = key + '.' + entryKey.replace(/^[^.]+\./, '');
+      entries[fullPath] = entryValue as string;
+    });
+    
+    displayEntries(entries);
     return;
   }
   
   // Raw output for scripting
   if (options.raw) {
-    if (typeof value === 'object' && value !== null) {
-      console.log(JSON.stringify(value));
-    } else {
-      console.log(value);
-    }
-    return;
-  }
-  
-  // Tree display for objects when tree option is set
-  if (options.tree && typeof value === 'object' && value !== null) {
-    displayTree({ [key]: value });
-    return;
-  }
-  
-  // Existing formatted output
-  if (typeof value === 'object' && value !== null) {
-    const flatObj = flattenObject({ [key]: value }, '');
-    Object.entries(flatObj).forEach(([k, v]) => {
-      formatKeyValue(k, v);
-    });
-  } else {
     console.log(value);
+    return;
   }
-}
-
-/**
- * Applies different colors to each level of a path
- * @param {string} path - The dot-separated path to colorize
- * @returns {string} - The colorized path
- */
-function colorizePathByLevels(path: string): string {
-  const colors = [chalk.cyan, chalk.yellow, chalk.green, chalk.magenta, chalk.blue];
-  const parts = path.split('.');
   
-  // Apply a different color to each path segment
-  return parts.map((part, index) => {
-    const colorFn = colors[index % colors.length];
-    return colorFn(part);
-  }).join('.');
+  // Simple value display
+  console.log(value);
 }
 
 /**
- * Lists all entries in storage with optional path filtering
- * Displays entries in a formatted, hierarchical view
- * 
- * @param {string} [path] - Optional path prefix to filter displayed entries
- * @param {Object} [options] - Display options (e.g., {tree: true} for tree view)
+ * Helper function to convert a flattened object back to nested structure
+ * @param {Object} flatObj - Flattened object with dot notation keys
+ * @returns {Object} - Nested object structure
  */
-export function listEntries(path?: string, options: any = {}): void {
-  try {
-    const data = loadData();
+function unflattenObject(flatObj: {[key: string]: any}): Record<string, any> {
+  const result: Record<string, any> = {};
+  
+  Object.keys(flatObj).forEach(key => {
+    const parts = key.split('.');
+    let current = result;
     
-    // Debug log to verify options
-    if (process.env.DEBUG === 'true') {
-      console.log('Options received:', options);
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i];
+      current[part] = current[part] || {};
+      current = current[part];
     }
     
-    if (Object.keys(data).length === 0) {
-      console.log('No entries found.');
-      return;
-    }
-    
-    // Handle tree display if option is set
-    if (options.tree === true) {
-      if (process.env.DEBUG === 'true') {
-        console.log('Tree display enabled');
-      }
-      
-      if (path) {
-        // For a specific path, create a sub-object with just that branch
-        const pathParts = path.split('.');
-        let current: any = data;
-        
-        // Navigate to the requested path
-        for (let i = 0; i < pathParts.length; i++) {
-          const part = pathParts[i];
-          if (current[part] === undefined) {
-            console.log(`Path '${path}' not found.`);
-            return;
-          }
-          current = current[part];
-        }
-        
-        // Display just this subtree
-        displayTree({ [path]: current });
-      } else {
-        // Display the complete tree
-        displayTree(data);
-      }
-      return;
-    }
-    
-    // Normal flat display (existing code)
-    const flattenedData = flattenObject(data);
-    let entriesToDisplay: Record<string, string> = flattenedData;
-    
-    if (path) {
-      // Filter by path prefix
-      const filteredEntries: Record<string, string> = {};
-      const prefix = path + '.';
-      
-      // Include exact match
-      if (flattenedData[path] !== undefined) {
-        filteredEntries[path] = flattenedData[path];
-      }
-      
-      // Include all children
-      Object.entries(flattenedData).forEach(([key, value]) => {
-        if (key.startsWith(prefix)) {
-          filteredEntries[key] = value;
-        }
-      });
-      
-      if (Object.keys(filteredEntries).length === 0) {
-        console.log(`No entries found under '${path}'.`);
-        return;
-      }
-      
-      // Use the filtered entries instead of all entries
-      entriesToDisplay = filteredEntries;
-    }
-
-    // Format and display entries, now with aliases
-    Object.entries(entriesToDisplay).forEach(([key, value]) => {
-      // Don't add the path prefix again - the key already includes it
-      const fullPath = key;
-      
-      // Find aliases that point to this path
-      const aliases = getAliasesForPath(fullPath);
-      
-      // Format the value as needed
-      const displayValue = typeof value === 'object' 
-        ? chalk.gray('[Object]') 
-        : value.toString();
-      
-      // Apply different colors to each level of the path
-      const colorizedPath = colorizePathByLevels(fullPath);
-      
-      // Display with the format: path (alias) content
-      if (aliases.length > 0) {
-        console.log(`${colorizedPath} ${chalk.blue('(' + aliases[0] + ')')} ${displayValue}`);
-      } else {
-        console.log(`${colorizedPath} ${displayValue}`);
-      }
-    });
-  } catch (error) {
-    handleError('Error listing entries:', error);
-  }
+    current[parts[parts.length - 1]] = flatObj[key];
+  });
+  
+  return result;
 }
 
 /**
@@ -328,8 +328,10 @@ export function searchEntries(searchTerm: string, options: any = {}): void {
 export function initializeExampleData(force: boolean = false): void {
   try {
     // Get paths from utilities to ensure consistency
-    const dataDir = getDataDirectory();
-    const dataFilePath = getDataFilePath();
+    const dataDir = path.join(getDataDirectory(), 'data');
+    // Create the data subdirectory if it doesn't exist
+    fs.mkdirSync(dataDir, { recursive: true });
+    const dataFilePath = path.join(dataDir, 'data.json');
     const aliasFilePath = path.join(dataDir, 'aliases.json');
     
     console.log('Initializing example data...');
@@ -439,9 +441,9 @@ export function initializeExampleData(force: boolean = false): void {
     
     // Show command examples
     console.log(chalk.bold('Try these commands:'));
-    console.log(`  ${chalk.yellow('ccli')} ${chalk.green('list')} ${chalk.yellow('--tree')}`);
+    console.log(`  ${chalk.yellow('ccli')} ${chalk.green('get')} ${chalk.yellow('--tree')}`);
     console.log(`  ${chalk.yellow('ccli')} ${chalk.green('get')} ${chalk.cyan('prodip')}`);
-    console.log(`  ${chalk.yellow('ccli')} ${chalk.green('alias')} ${chalk.green('list')}\n`);
+    console.log(`  ${chalk.yellow('ccli')} ${chalk.green('alias')} ${chalk.green('get')}\n`);
   } catch (error) {
     console.error(chalk.red('\n❌ Error initializing example data:'));
     console.error(String(error));

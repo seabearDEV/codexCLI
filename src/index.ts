@@ -1,32 +1,19 @@
 #!/usr/bin/env node
 
-/**
- * Main entry point for CodexCLI application
- * 
- * This file sets up the command-line interface using Commander.js,
- * defines all available commands and their behaviors, and handles execution flow.
- */
-import { Command } from 'commander';  // Command line arguments parser
+import { Command } from 'commander';
 import { showHelp } from './formatting';
-import { addEntry, getEntry, listEntries, removeEntry, searchEntries, initializeExampleData, exportData, importData, resetData, handleConfig } from './commands';
+import { addEntry, getEntry, removeEntry, searchEntries, initializeExampleData, exportData, importData, resetData, handleConfig } from './commands';
 import { setAlias, removeAlias, resolveKey, loadAliases } from './alias';
 import chalk from 'chalk';
 
 // Initialize the main command object
 const codexCLI = new Command();
 
-/**
- * Basic CLI configuration
- * Sets version and description shown in help output
- */
 codexCLI
   .version('1.0.0')
   .description('CodexCLI - Command Line Information Store');
 
-/**
- * Global CLI options
- * --debug: Enables verbose logging for troubleshooting
- */
+// Global options
 codexCLI
   .option('--debug', 'Enable debug output')
   .hook('preAction', (thisCommand) => {
@@ -35,12 +22,7 @@ codexCLI
     }
   });
 
-/**
- * Command: add
- * Stores a new entry or updates an existing one in the database
- * @param {string} key - Unique identifier for the entry
- * @param {string[]} value - Array of strings that will be joined into a single value
- */
+// Add entry
 codexCLI
   .command('add <key> <value...>')
   .description('Add or update an entry')
@@ -50,44 +32,18 @@ codexCLI
     addEntry(resolvedKey, value);
   });
 
-/**
- * Command: get
- * Retrieves and displays a stored entry by its key
- * @param {string} key - The identifier to look up
- * @param {object} options - Command options (--raw for unformatted output)
- */
+// Get entry or entries
 codexCLI
-  .command('get <key>')
-  .description('Retrieve an entry')
+  .command('get [key]')
+  .description('Retrieve entries or specific data')
   .option('--raw', 'Output raw value without formatting')
   .option('--tree', 'Display hierarchical data in a tree structure')
   .action((key, options) => {
-    const resolvedKey = resolveKey(key);
+    const resolvedKey = key ? resolveKey(key) : undefined;
     getEntry(resolvedKey, options);
   });
 
-/**
- * Command: list
- * Displays all stored entries, optionally filtered by path
- * @param {string} [path] - Optional path to filter entries
- */
-codexCLI
-  .command('list [path]')
-  .description('List all entries or entries under specified path')
-  .option('--tree', 'Display hierarchical data in a tree structure')
-  .action((path, options) => {
-    // Debug log to verify option parsing
-    if (process.env.DEBUG === 'true') {
-      console.log('Command options:', options);
-    }
-    listEntries(path, options);
-  });
-
-/**
- * Command: find
- * Searches entries by key or value containing the search term
- * @param {string} term - Search term to look for in keys and values
- */
+// Search entries
 codexCLI
   .command('find <term>')
   .description('Find entries by key or value')
@@ -151,7 +107,7 @@ codexCLI
 codexCLI
   .command('alias')
   .description('Manage aliases for paths')
-  .argument('<action>', 'Action to perform: set, get, list, remove')
+  .argument('<action>', 'Action to perform: set, get, remove')
   .argument('[alias]', 'Alias name')
   .argument('[path]', 'Path for the alias (required for set action)')
   .action((action, alias, path) => {
@@ -164,22 +120,24 @@ codexCLI
         console.log(`Alias '${chalk.green(alias)}' now points to '${chalk.cyan(path)}'`);
       },
       get: () => {
-        if (!alias) return console.error('Alias name is required');
+        // If no alias name provided, show all aliases
+        if (!alias) {
+          const allAliases = loadAliases();
+          if (Object.keys(allAliases).length === 0) {
+            return console.log('No aliases defined');
+          }
+          console.log(chalk.bold('Defined aliases:'));
+          Object.entries(allAliases).forEach(([alias, targetPath]) => {
+            console.log(`${chalk.green(alias.padEnd(15))} ${chalk.gray('→')} ${chalk.cyan(targetPath)}`);
+          });
+          return;
+        }
         
+        // If alias name provided, show that specific alias
         const aliases = loadAliases();
         console.log(aliases[alias] 
           ? `Alias '${chalk.green(alias)}' points to '${chalk.cyan(aliases[alias])}'` 
           : `Alias '${chalk.yellow(alias)}' not found`);
-      },
-      list: () => {
-        const allAliases = loadAliases();
-        if (Object.keys(allAliases).length === 0) {
-          return console.log('No aliases defined');
-        }
-        console.log(chalk.bold('Defined aliases:'));
-        Object.entries(allAliases).forEach(([alias, targetPath]) => {
-          console.log(`${chalk.green(alias.padEnd(15))} ${chalk.gray('→')} ${chalk.cyan(targetPath)}`);
-        });
       },
       remove: () => {
         if (!alias) return console.error('Alias name is required');
@@ -195,7 +153,7 @@ codexCLI
       handler();
     } else {
       console.error(`Unknown action: ${action}`);
-      console.log('Valid actions: set, get, list, remove');
+      console.log('Valid actions: set, get, remove');
     }
   });
 

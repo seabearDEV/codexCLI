@@ -12,7 +12,7 @@
 	],
 	"main": "dist/index.js",
 	"scripts": {
-		"build": "tsc && mkdir -p dist/data && cp -r data/* dist/data/",
+		"build": "tsc && mkdir -p ~/.codexcli && cp -r dist/* ~/.codexcli/",
 		"start": "node dist/index.js",
 		"dev": "NODE_ENV=development ts-node src/index.ts",
 		"watch": "NODE_ENV=development nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts"

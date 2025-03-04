@@ -15,10 +15,7 @@
  * @property {boolean} [raw] - When true, outputs data without formatting
  * @property {any} [key: string] - Additional arbitrary options
  */
-export interface CommandOptions {
-  raw?: boolean;
-  [key: string]: any;
-}
+export type CommandOptions = Record<string, any> & { raw?: boolean; tree?: boolean; debug?: boolean };
 
 /**
  * Data structure for CodexCLI storage
@@ -30,6 +27,5 @@ export interface CommandOptions {
  * 
  * @property {string | CodexData} [key: string] - Either terminal string values or nested objects
  */
-export interface CodexData {
-  [key: string]: string | CodexData;
-}
+export type CodexValue = string | { [key: string]: CodexValue };
+export type CodexData = Record<string, CodexValue>;

@@ -44,19 +44,8 @@ export function setNestedValue(obj: CodexData, path: string, value: string): voi
  * @param {string} path - Dot-notation path to the desired value
  * @returns {string | undefined} The value if found, undefined otherwise
  */
-export function getNestedValue(obj: CodexData, path: string): string | undefined {
-  const keys = path.split('.');
-  let current: any = obj;
-  
-  // Navigate through the object hierarchy
-  for (const key of keys) {
-    if (current[key] === undefined) {
-      return undefined;
-    }
-    current = current[key];
-  }
-  
-  return typeof current === 'string' ? current : undefined;
+export function getNestedValue(obj: Record<string, any>, path: string): any {
+  return path.split('.').reduce((o, p) => o?.[p], obj);
 }
 
 /**
@@ -115,14 +104,6 @@ export function removeNestedValue(obj: CodexData, path: string): boolean {
 }
 
 /**
- * Memoization cache for expensive operations
- * 
- * Improves performance by storing results of previous function calls.
- * Used to avoid redundant computation when flattening large objects.
- */
-const memoizedResults = new Map<string, Record<string, string>>();
-
-/**
  * Flattens nested objects for display
  * 
  * Converts a hierarchical object structure into a flat key-value map,
@@ -137,27 +118,16 @@ const memoizedResults = new Map<string, Record<string, string>>();
  * @param {string} prefix - Optional prefix for nested keys (used for recursion)
  * @returns {Record<string, string>} Flattened key-value pairs
  */
-export function flattenObject(obj: CodexData, prefix = ''): Record<string, string> {
-  // Check memoization cache first
-  const cacheKey = prefix + JSON.stringify(obj);
-  if (memoizedResults.has(cacheKey)) {
-    return memoizedResults.get(cacheKey)!;
-  }
-  
-  const result = Object.keys(obj).reduce((acc: Record<string, string>, key: string) => {
-    const pre = prefix.length ? `${prefix}.` : '';
+export function flattenObject(obj: Record<string, any>, parentKey: string = ''): Record<string, any> {
+  return Object.keys(obj).reduce((acc, key) => {
+    const newKey = parentKey ? `${parentKey}.${key}` : key;
     
     if (typeof obj[key] === 'object' && obj[key] !== null) {
-      Object.assign(acc, flattenObject(obj[key] as CodexData, `${pre}${key}`));
+      Object.assign(acc, flattenObject(obj[key], newKey));
     } else {
-      acc[`${pre}${key}`] = obj[key] as string;
+      acc[newKey] = obj[key];
     }
     
     return acc;
-  }, {});
-  
-  // Store in cache
-  memoizedResults.set(cacheKey, result);
-  
-  return result;
+  }, {} as Record<string, any>);
 }

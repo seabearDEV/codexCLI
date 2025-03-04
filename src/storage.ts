@@ -5,39 +5,50 @@
  * and writing to the JSON storage file. It provides error handling and ensures
  * that the storage directory exists before attempting file operations.
  */
-import * as fs from 'fs';
-import { getDataFilePath } from './utils/paths';
-import { CodexData } from './types';
+import fs from 'fs';
 import chalk from 'chalk';
+// Import the path utility instead of defining a duplicate function
+import { getDataFilePath } from './utils/paths';
 
 /**
- * Path to the JSON data file
- * Retrieved from utility function to ensure consistent location across the application
+ * Handle operation with consistent error handling
  */
-const DATA_FILE = getDataFilePath();
-
-// Note: Directory creation and data file initialization is handled by utils/paths
+export function handleOperation<T>(operation: () => T, errorMessage: string): T | null {
+  try {
+    return operation();
+  } catch (error) {
+    handleError(errorMessage, error);
+    return null;
+  }
+}
 
 /**
- * Load data from JSON file
+ * Standard error handler
+ */
+export function handleError(message: string, error: any): void {
+  if (process.env.DEBUG) {
+    console.error(`${chalk.red(message)}: `, error);
+  } else {
+    console.error(chalk.red(message));
+  }
+}
+
+/**
+ * Load data from storage
  * 
  * @returns {object} The parsed JSON data
  */
-export function loadData(): any {
-  try {
-    const dataPath = getDataFilePath();
-    
-    // If file doesn't exist, return empty object without creating file
-    if (!fs.existsSync(dataPath)) {
-      return {};
-    }
-    
-    const data = fs.readFileSync(dataPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    handleError('Error loading data:', error);
+export function loadData(): Record<string, any> {
+  const filePath = getDataFilePath();
+  
+  if (!fs.existsSync(filePath)) {
     return {};
   }
+  
+  return handleOperation(() => {
+    const content = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(content);
+  }, `Failed to load data from ${filePath}`) || {};
 }
 
 /**
@@ -49,21 +60,12 @@ export function loadData(): any {
  * @param {CodexData} data - The data object to save
  * @throws Will call handleError if file writing fails
  */
-export function saveData(data: CodexData): void {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
-  } catch (error) {
-    handleError('Error writing data file:', error);
-  }
-}
-
-/**
- * Standardized error handling
- */
-export function handleError(message: string, error?: unknown): void {
-  console.error(chalk.red('ERROR: ') + message);
-  if (error) {
-    console.error(chalk.red('Details: ') + (error instanceof Error ? error.message : String(error)));
-  }
-  process.exit(1);
+export function saveData(data: Record<string, any>): void {
+  const filePath = getDataFilePath();
+  
+  handleOperation(() => {
+    const content = JSON.stringify(data, null, 2);
+    fs.writeFileSync(filePath, content, 'utf8');
+    return true;
+  }, `Failed to save data to ${filePath}`);
 }
