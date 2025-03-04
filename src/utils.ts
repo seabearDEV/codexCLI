@@ -45,7 +45,8 @@ export function setNestedValue(obj: CodexData, path: string, value: string): voi
  * @returns {string | undefined} The value if found, undefined otherwise
  */
 export function getNestedValue(obj: Record<string, any>, path: string): any {
-  return path.split('.').reduce((o, p) => o?.[p], obj);
+  if (!path) return obj;
+  return path.split('.').reduce((o, p) => (o ? o[p] : undefined), obj);
 }
 
 /**
@@ -153,4 +154,24 @@ export function flattenObject(obj: Record<string, any>, parentKey: string = ''):
   flattenCache.set(cacheKey, result);
   
   return result;
+}
+
+/**
+ * Sets a value in a nested object using a dot-notation path
+ * 
+ * @param obj The object to modify
+ * @param path Dot-notation path to the value
+ * @param value The value to set
+ */
+export function nestedSetValue(obj: Record<string, any>, path: string, value: any): void {
+  const parts = path.split('.');
+  let current = obj;
+  
+  for (let i = 0; i < parts.length - 1; i++) {
+    const key = parts[i];
+    current[key] = current[key] || {};
+    current = current[key];
+  }
+  
+  current[parts[parts.length - 1]] = value;
 }

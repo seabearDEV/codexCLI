@@ -295,7 +295,7 @@ export function searchEntries(searchTerm: string, options: any = {}): void {
   Object.entries(flattenedData).forEach(([key, value]) => {
     if (
       key.toLowerCase().includes(lcSearchTerm) || 
-      value.toLowerCase().includes(lcSearchTerm)
+      (typeof value === 'string' && value.toLowerCase().includes(lcSearchTerm))
     ) {
       matches[key] = value;
     }
