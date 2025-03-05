@@ -3,12 +3,12 @@ import { setNestedValue, getNestedValue, removeNestedValue, flattenObject } from
 import { formatKeyValue, displayTree } from './formatting';
 import { color } from './formatting';
 import fs from 'fs';
-import { 
-  getDataDirectory, 
-  ensureDataDirectoryExists, 
-  getDataFilePath, 
-  getAliasFilePath, 
-  getConfigFilePath 
+import {
+  getDataDirectory,
+  ensureDataDirectoryExists,
+  getDataFilePath,
+  getAliasFilePath,
+  getConfigFilePath
 } from './utils/paths';
 import path from 'path';
 import { loadAliases, saveAliases, getAliasesForPath } from './alias';
@@ -29,7 +29,7 @@ function displayEntries(entries: Record<string, string>): void {
   Object.entries(entries).forEach(([key, value]) => {
     const colorizedPath = colorizePathByLevels(key);
     const aliases = getAliasesForPath(key);
-    
+
     if (aliases.length > 0) {
       console.log(`${colorizedPath} ${color.blue('(' + aliases[0] + ')')} ${value}`);
     } else {
@@ -42,7 +42,7 @@ function displayEntries(entries: Record<string, string>): void {
 function colorizePathByLevels(path: string): string {
   const colors = [color.cyan, color.yellow, color.green, color.magenta, color.blue];
   const parts = path.split('.');
-  
+
   return parts.map((part, index) => {
     const colorFn = colors[index % colors.length];
     return colorFn(part);
@@ -55,14 +55,14 @@ export function addEntry(key: string, value: any): void {
     // Ensure the directory exists before trying to add data
     ensureDataDirectoryExists();
     const data = loadData();
-    
+
     // Handle nested paths with dot notation
     if (key.includes('.')) {
       setNestedValue(data, key, value);
     } else {
       data[key] = value;
     }
-    
+
     saveData(data);
     console.log(`Entry '${key}' added successfully.`);
   } catch (error) {
@@ -73,7 +73,7 @@ export function addEntry(key: string, value: any): void {
 // Retrieves and displays a data entry or entries
 export function getEntry(key?: string, options: any = {}): void {
   const data = loadData();
-  
+
   // If no key is provided, show all entries
   if (!key) {
     if (Object.keys(data).length === 0) {
@@ -92,7 +92,7 @@ export function getEntry(key?: string, options: any = {}): void {
     displayEntries(flattenObject(data));
     return;
   }
-  
+
   // Handle specific key lookup
   let value;
   if (key.includes('.')) {
@@ -100,55 +100,55 @@ export function getEntry(key?: string, options: any = {}): void {
   } else {
     value = data[key];
   }
-  
+
   // Check if the value exists
   if (value === undefined) {
     // Before reporting "not found", check if there are any entries under this path
     const prefix = key + '.';
     const flatData = flattenObject(data);
-    
+
     const childEntries = Object.keys(flatData)
       .filter(k => k.startsWith(prefix));
-    
+
     if (childEntries.length > 0) {
       // This is a parent path with children, so display them
       if (options.tree) {
         // Reconstruct the object for tree display
         const subtree: Record<string, any> = {};
-        
+
         // Find the common parts of the path
         const parts = key.split('.');
-        
+
         // Build the subtree structure
         let target: Record<string, any> = subtree;
         for (let i = 0; i < parts.length - 1; i++) {
           target[parts[i]] = {};
           target = target[parts[i]];
         }
-        
+
         // Set the last part of the path to the unflattened object
         target[parts[parts.length - 1]] = unflattenObject(
           Object.fromEntries(
             childEntries.map(k => [k.substring(prefix.length), flatData[k]])
           )
         );
-        
+
         displayTree(subtree);
         return;
       }
-      
+
       // Display child entries in flat format
       const filteredEntries: Record<string, string> = {};
       childEntries.forEach(k => filteredEntries[k] = flatData[k]);
       displayEntries(filteredEntries);
       return;
     }
-    
+
     // If we reach here, the entry truly doesn't exist
     console.error(`Entry '${key}' not found`);
     return;
   }
-  
+
   // Handle object value display (subtree)
   if (typeof value === 'object' && value !== null) {
     // For tree display
@@ -156,53 +156,53 @@ export function getEntry(key?: string, options: any = {}): void {
       displayTree({ [key]: value });
       return;
     }
-    
+
     // For flat display
     const filteredEntries = flattenObject({ [key]: value });
-    
+
     if (Object.keys(filteredEntries).length === 0) {
       console.log(`No entries found under '${key}'.`);
       return;
     }
-    
+
     // Transform keys to include full path
     const entries: Record<string, string> = {};
     Object.entries(filteredEntries).forEach(([entryKey, entryValue]) => {
       const fullPath = key + '.' + entryKey.replace(/^[^.]+\./, '');
       entries[fullPath] = entryValue as string;
     });
-    
+
     displayEntries(entries);
     return;
   }
-  
+
   // Raw output for scripting
   if (options.raw) {
     console.log(value);
     return;
   }
-  
+
   // Simple value display
   console.log(value);
 }
 
 // Convert a flattened object back to nested structure
-function unflattenObject(flatObj: {[key: string]: any}): Record<string, any> {
+function unflattenObject(flatObj: { [key: string]: any }): Record<string, any> {
   const result: Record<string, any> = {};
-  
+
   Object.keys(flatObj).forEach(key => {
     const parts = key.split('.');
     let current = result;
-    
+
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i];
       current[part] = current[part] || {};
       current = current[part];
     }
-    
+
     current[parts[parts.length - 1]] = flatObj[key];
   });
-  
+
   return result;
 }
 
@@ -210,7 +210,7 @@ function unflattenObject(flatObj: {[key: string]: any}): Record<string, any> {
 export function removeEntry(key: string): void {
   const data = loadData();
   let removed = false;
-  
+
   // Handle nested paths
   if (key.includes('.')) {
     removed = removeNestedValue(data, key);
@@ -220,12 +220,12 @@ export function removeEntry(key: string): void {
       removed = true;
     }
   }
-  
+
   if (!removed) {
     printWarning(`Entry '${key}' not found.`);
     return;
   }
-  
+
   try {
     saveData(data);
     printSuccess(`Entry '${key}' removed successfully.`);
@@ -237,49 +237,93 @@ export function removeEntry(key: string): void {
 // Searches for entries by key or value
 export function searchEntries(searchTerm: string, options: any = {}): void {
   const data = loadData();
-  
-  if (Object.keys(data).length === 0) {
+
+  if (Object.keys(data).length === 0 && !options.aliasesOnly) {
     console.log('No entries to search in.');
     return;
   }
-  
+
   // Flatten nested objects for searching
   const flattenedData = flattenObject(data);
-  const matches: Record<string, string> = {};
+  const dataMatches: Record<string, any> = {};
+  const aliasMatches: Record<string, string> = {};
   const lcSearchTerm = searchTerm.toLowerCase();
-  
-  // Search in both keys and values
-  Object.entries(flattenedData).forEach(([key, value]) => {
-    if (
-      key.toLowerCase().includes(lcSearchTerm) || 
-      (typeof value === 'string' && value.toLowerCase().includes(lcSearchTerm))
-    ) {
-      matches[key] = value;
-    }
-  });
-  
-  if (Object.keys(matches).length === 0) {
+
+  // Search in data entries if not aliasesOnly
+  if (!options.aliasesOnly) {
+    Object.entries(flattenedData).forEach(([key, value]) => {
+      const keyMatches = key.toLowerCase().includes(lcSearchTerm);
+      const valueMatches = typeof value === 'string' && value.toLowerCase().includes(lcSearchTerm);
+
+      if (
+        (!options.keysOnly && !options.valuesOnly && (keyMatches || valueMatches)) ||
+        (options.keysOnly && keyMatches) ||
+        (options.valuesOnly && valueMatches)
+      ) {
+        dataMatches[key] = value;
+      }
+    });
+  }
+
+  // Search in aliases if not entriesOnly
+  if (!options.entriesOnly) {
+    const aliases = loadAliases();
+    Object.entries(aliases).forEach(([aliasName, targetPath]) => {
+      const nameMatches = aliasName.toLowerCase().includes(lcSearchTerm);
+      const pathMatches = String(targetPath).toLowerCase().includes(lcSearchTerm);
+
+      if (
+        (!options.keysOnly && !options.valuesOnly && (nameMatches || pathMatches)) ||
+        (options.keysOnly && nameMatches) ||
+        (options.valuesOnly && pathMatches)
+      ) {
+        aliasMatches[aliasName] = String(targetPath);
+      }
+    });
+  }
+
+  const hasDataMatches = Object.keys(dataMatches).length > 0;
+  const hasAliasMatches = Object.keys(aliasMatches).length > 0;
+
+  if (!hasDataMatches && !hasAliasMatches) {
     console.log(`No matches found for '${searchTerm}'.`);
     return;
   }
-  
-  console.log(`Found ${Object.keys(matches).length} matches for '${searchTerm}':`);
-  
-  // Use tree display if requested
-  if (options?.tree) {
-    // Create an object with just the matching entries
-    const matchesObj = {};
-    Object.keys(matches).forEach(key => {
-      setNestedValue(matchesObj, key, matches[key]);
-    });
-    displayTree(matchesObj);
-    return;
+
+  const totalMatches = Object.keys(dataMatches).length + Object.keys(aliasMatches).length;
+  console.log(`Found ${totalMatches} matches for '${searchTerm}':`);
+
+  // Display data matches if any
+  if (hasDataMatches) {
+    if (hasAliasMatches) {
+      console.log('\nData entries:');
+    }
+
+    // Use tree display if requested
+    if (options?.tree) {
+      const matchesObj = {};
+      Object.keys(dataMatches).forEach(key => {
+        setNestedValue(matchesObj, key, dataMatches[key]);
+      });
+      displayTree(matchesObj);
+    } else {
+      // Default display with color-coded keys
+      Object.entries(dataMatches).forEach(([key, value]) => {
+        formatKeyValue(key, value);
+      });
+    }
   }
-  
-  // Default display with color-coded keys
-  Object.entries(matches).forEach(([key, value]) => {
-    formatKeyValue(key, value);
-  });
+
+  // Display alias matches if any
+  if (hasAliasMatches) {
+    if (hasDataMatches) {
+      console.log('\nAliases:');
+    }
+
+    Object.entries(aliasMatches).forEach(([aliasName, targetPath]) => {
+      console.log(`${color.cyan(aliasName)} ${color.gray('->')} ${color.yellow(targetPath)}`);
+    });
+  }
 }
 
 // Initializes data storage with example data
@@ -303,7 +347,7 @@ export function initializeExampleData(force: boolean = false): void {
     const dataExists = fs.existsSync(dataFilePath);
     const aliasesExist = fs.existsSync(aliasFilePath);
     const configExists = fs.existsSync(configFilePath);
-    
+
     // Handle existing files
     if (dataExists || aliasesExist || configExists) {
       if (!force) {
@@ -316,11 +360,11 @@ export function initializeExampleData(force: boolean = false): void {
       }
       console.log(color.yellow('\n⚠ Force flag detected. Overwriting existing files...'));
     }
-    
+
     // Create both files or neither file
     // Ensure data directory exists
     ensureDataDirectoryExists();
-    
+
     // Example data and aliases (unchanged)
     const exampleData = {
       "snippets": {
@@ -371,7 +415,7 @@ export function initializeExampleData(force: boolean = false): void {
         }
       }
     };
-    
+
     const exampleAliases = {
       "prodip": "server.production.ip",
       "produser": "server.production.user",
@@ -385,20 +429,20 @@ export function initializeExampleData(force: boolean = false): void {
       "allsnippets": "snippets",
       "allservers": "server"
     };
-    
+
     // Add default config with only the required options
     const exampleConfig = {
       "colors": true,
       "indentSize": 2,
       "theme": "default"
     };
-    
+
     try {
       // Write all three files in sequence
       fs.writeFileSync(dataFilePath, JSON.stringify(exampleData, null, 2), 'utf8');
       fs.writeFileSync(aliasFilePath, JSON.stringify(exampleAliases, null, 2), 'utf8');
       fs.writeFileSync(configFilePath, JSON.stringify(exampleConfig, null, 2), 'utf8');
-      
+
       console.log(color.green('✓ ') + `Data file created: ${dataFilePath}`);
       console.log(color.green('✓ ') + `Aliases file created: ${aliasFilePath}`);
       console.log(color.green('✓ ') + `Config file created: ${configFilePath}`);
@@ -407,9 +451,9 @@ export function initializeExampleData(force: boolean = false): void {
       console.error(color.red(`Failed to write files: ${errorMessage}`));
       return;
     }
-    
+
     console.log(color.green('\n✨ Example data successfully initialized!\n'));
-    
+
     // Show command examples
     console.log(color.bold('Try these commands:'));
     console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.yellow('--tree')}`);
@@ -418,7 +462,7 @@ export function initializeExampleData(force: boolean = false): void {
   } catch (error) {
     console.error(color.red('\n❌ Error initializing example data:'));
     console.error(String(error));
-    
+
     console.log('\nDetail:');
     if (error instanceof Error) {
       console.log(`  Message: ${error.message}`);
@@ -436,17 +480,17 @@ export function exportData(type: string, options: any): void {
       console.error(`Invalid type: ${type}. Must be 'data', 'aliases', or 'all'`);
       return;
     }
-    
+
     const defaultDir = process.cwd();
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const indent = options.pretty ? 2 : 0;
-    
+
     if (type === 'data' || type === 'all') {
       const outputFile = options.output || path.join(defaultDir, `codexcli-data-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(loadData(), null, indent), 'utf8');
       console.log(color.green('✓ ') + `Data exported to: ${color.cyan(outputFile)}`);
     }
-    
+
     if (type === 'aliases' || type === 'all') {
       const outputFile = options.output || path.join(defaultDir, `codexcli-aliases-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), 'utf8');
@@ -465,47 +509,47 @@ export function importData(type: string, file: string, options: any): void {
       console.error(`Invalid type: ${type}. Must be 'data', 'aliases', or 'all'`);
       return;
     }
-    
+
     // Check if file exists
     if (!fs.existsSync(file)) {
       console.error(color.red(`Import file not found: ${file}`));
       return;
     }
-    
+
     // Confirm before overwriting unless --force is used
     if (!options.force) {
       console.log(color.yellow(`⚠ This will ${options.merge ? 'merge' : 'replace'} your ${type} file.`));
       console.log(color.yellow(`To proceed without confirmation, use the --force flag.`));
-      
+
       // In a real CLI, you'd prompt for confirmation here
       // For this implementation, we'll just warn and continue
       console.log(color.yellow(`Continuing with import...`));
     }
-    
+
     // Import data
     const importedData = JSON.parse(fs.readFileSync(file, 'utf8'));
-    
+
     if (type === 'data' || type === 'all') {
       const currentData = options.merge ? loadData() : {};
-      
+
       // Merge or replace data
-      const newData = options.merge 
+      const newData = options.merge
         ? deepMerge(currentData, importedData)
         : importedData;
-      
+
       // Save the data
       saveData(newData);
       console.log(color.green('✓ ') + `Data ${options.merge ? 'merged' : 'imported'} successfully`);
     }
-    
+
     if (type === 'aliases' || type === 'all') {
       const currentAliases = options.merge ? loadAliases() : {};
-      
+
       // Merge or replace aliases
-      const newAliases = options.merge 
-        ? { ...currentAliases, ...importedData } 
+      const newAliases = options.merge
+        ? { ...currentAliases, ...importedData }
         : importedData;
-      
+
       // Save the aliases
       saveAliases(newAliases);
       console.log(color.green('✓ ') + `Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
@@ -513,7 +557,7 @@ export function importData(type: string, file: string, options: any): void {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(color.red('Error importing data:'), errorMessage);
-    
+
     if (error instanceof SyntaxError) {
       console.error(color.red('The import file contains invalid JSON.'));
     }
@@ -528,23 +572,23 @@ export function resetData(type: string, options: any): void {
       console.error(`Invalid type: ${type}. Must be 'data', 'aliases', or 'all'`);
       return;
     }
-    
+
     // Confirm before resetting unless --force is used
     if (!options.force) {
       console.log(color.yellow(`⚠ This will reset your ${type} to an empty state.`));
       console.log(color.yellow(`To proceed without confirmation, use the --force flag.`));
-      
+
       // In a real CLI, you'd prompt for confirmation here
       // For this implementation, we'll just warn and continue
       console.log(color.yellow(`Continuing with reset...`));
     }
-    
+
     // Reset data
     if (type === 'data' || type === 'all') {
       saveData({});
       console.log(color.green('✓ ') + `Data has been reset to an empty state`);
     }
-    
+
     // Reset aliases
     if (type === 'aliases' || type === 'all') {
       saveAliases({});
@@ -559,7 +603,7 @@ export function resetData(type: string, options: any): void {
 // Deep merges two objects
 function deepMerge(target: any, source: any): any {
   const output = { ...target };
-  
+
   if (isObject(target) && isObject(source)) {
     Object.keys(source).forEach(key => {
       if (isObject(source[key])) {
@@ -573,7 +617,7 @@ function deepMerge(target: any, source: any): any {
       }
     });
   }
-  
+
   return output;
 }
 
@@ -597,18 +641,18 @@ export function handleConfig(setting?: string, value?: string, options?: any) {
   // If no setting provided, show all settings
   if (!setting) {
     const config = loadConfig();
-    
+
     console.log(color.bold('Current Configuration:'));
     console.log('─'.repeat(25));
-    
+
     for (const [key, val] of Object.entries(config)) {
       console.log(`${color.green(key.padEnd(15))}: ${val}`);
     }
-    
+
     console.log('\nUse `ccli config --help` to see available options');
     return;
   }
-  
+
   // If only setting provided, show that setting's value
   if (setting && !value) {
     const currentValue = getConfigSetting(setting);
@@ -619,7 +663,7 @@ export function handleConfig(setting?: string, value?: string, options?: any) {
     }
     return;
   }
-  
+
   // If both setting and value provided, update the setting
   setConfigSetting(setting, value);
   console.log(`Updated ${color.green(setting)} to: ${value}`);
@@ -629,12 +673,12 @@ export function handleConfig(setting?: string, value?: string, options?: any) {
 export function configSet(setting: string, value: string): void {
   try {
     const currentValue = getConfigSetting(setting);
-    
+
     console.log(`Changing ${setting} from ${currentValue} to ${value}`);
-    
+
     // Parse value based on setting type
     let parsedValue: any = value;
-    
+
     if (setting === 'colors') {
       // Handle boolean conversion
       parsedValue = value.toLowerCase() === 'true' || value === '1';
@@ -646,7 +690,7 @@ export function configSet(setting: string, value: string): void {
         return;
       }
     }
-    
+
     // Set the config with the parsed value
     setConfigSetting(setting, parsedValue);
     console.log(`${setting} set to ${parsedValue}`);
@@ -663,17 +707,17 @@ export interface Commands {
   findEntries?: (term: string, options: any) => void;
   find?: (term: string, options: any) => void;
   removeEntry: (key: string) => void;
-  
+
   // Alias functions
   addAlias?: (name: string, command: string) => void;
   removeAlias?: (name: string) => void;
   listAliases?: () => void;
   runAlias?: (name: string, args: string[]) => void;
-  
+
   // Config functions
   setConfig?: (key: string, value: string) => void;
   getConfig?: (key?: string) => void;
-  
+
   // Other functions
   listEntries?: (options: any) => void;
   setupExamples?: (force?: boolean) => void;
