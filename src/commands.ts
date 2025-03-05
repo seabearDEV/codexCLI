@@ -1,10 +1,3 @@
-/**
- * Implementation of core CodexCLI commands
- * 
- * This module contains the business logic for all CLI commands,
- * handling data operations and user feedback. Each command function 
- * corresponds to a CLI command defined in index.ts.
- */
 import { loadData, saveData, handleError } from './storage';
 import { setNestedValue, getNestedValue, removeNestedValue, flattenObject } from './utils';
 import { formatKeyValue, displayTree } from './formatting';
@@ -21,25 +14,17 @@ import path from 'path';
 import { loadAliases, saveAliases, getAliasesForPath } from './alias';
 import { loadConfig, getConfigSetting, setConfigSetting } from './config';
 
-/**
- * Prints a success message with a green checkmark
- * @param {string} message - The success message to display
- */
+// Prints a success message with a green checkmark
 function printSuccess(message: string): void {
   console.log(color.green('✓ ') + message);
 }
 
-/**
- * Prints a warning message with a yellow warning symbol
- * @param {string} message - The warning message to display
- */
+// Prints a warning message with a yellow warning symbol
 function printWarning(message: string): void {
   console.log(color.yellow('⚠ ') + message);
 }
 
-/**
- * Display entries with colorized paths and alias indicators
- */
+// Display entries with colorized paths and alias indicators
 function displayEntries(entries: Record<string, string>): void {
   Object.entries(entries).forEach(([key, value]) => {
     const colorizedPath = colorizePathByLevels(key);
@@ -53,9 +38,7 @@ function displayEntries(entries: Record<string, string>): void {
   });
 }
 
-/**
- * Colorize path segments with alternating colors
- */
+// Colorize path segments with alternating colors
 function colorizePathByLevels(path: string): string {
   const colors = [color.cyan, color.yellow, color.green, color.magenta, color.blue];
   const parts = path.split('.');
@@ -66,13 +49,7 @@ function colorizePathByLevels(path: string): string {
   }).join('.');
 }
 
-/**
- * Adds or updates a data entry in storage
- * Supports nested properties via dot notation (e.g., 'user.name')
- * 
- * @param {string} key - The key for the entry
- * @param {string} value - The value to store
- */
+// Adds or updates a data entry in storage
 export function addEntry(key: string, value: any): void {
   try {
     // Ensure the directory exists before trying to add data
@@ -93,14 +70,7 @@ export function addEntry(key: string, value: any): void {
   }
 }
 
-/**
- * Retrieves and displays a data entry or entries
- * Supports nested access via dot notation and different output formats
- * When no key is provided, it displays all entries
- * 
- * @param {string} [key] - The optional key to look up
- * @param {Object} options - Display options (e.g., {raw: true} for unformatted output)
- */
+// Retrieves and displays a data entry or entries
 export function getEntry(key?: string, options: any = {}): void {
   const data = loadData();
   
@@ -216,11 +186,7 @@ export function getEntry(key?: string, options: any = {}): void {
   console.log(value);
 }
 
-/**
- * Helper function to convert a flattened object back to nested structure
- * @param {Object} flatObj - Flattened object with dot notation keys
- * @returns {Object} - Nested object structure
- */
+// Convert a flattened object back to nested structure
 function unflattenObject(flatObj: {[key: string]: any}): Record<string, any> {
   const result: Record<string, any> = {};
   
@@ -240,12 +206,7 @@ function unflattenObject(flatObj: {[key: string]: any}): Record<string, any> {
   return result;
 }
 
-/**
- * Removes an entry from storage by its key
- * Supports nested properties via dot notation
- * 
- * @param {string} key - The key of the entry to remove
- */
+// Removes an entry from storage by its key
 export function removeEntry(key: string): void {
   const data = loadData();
   let removed = false;
@@ -273,13 +234,7 @@ export function removeEntry(key: string): void {
   }
 }
 
-/**
- * Searches for entries by key or value
- * Performs a case-insensitive search across all entries
- * 
- * @param {string} searchTerm - The term to search for in keys and values
- * @param {Object} options - Display options (e.g., {tree: true} for tree view)
- */
+// Searches for entries by key or value
 export function searchEntries(searchTerm: string, options: any = {}): void {
   const data = loadData();
   
@@ -327,11 +282,7 @@ export function searchEntries(searchTerm: string, options: any = {}): void {
   });
 }
 
-/**
- * Initializes data storage with example data
- * 
- * @param {boolean} force - Whether to overwrite existing data
- */
+// Initializes data storage with example data
 export function initializeExampleData(force: boolean = false): void {
   try {
     // Use the utility functions directly for consistency
@@ -478,9 +429,7 @@ export function initializeExampleData(force: boolean = false): void {
   }
 }
 
-/**
- * Exports data or aliases to a file
- */
+// Exports data or aliases to a file
 export function exportData(type: string, options: any): void {
   try {
     if (!['data', 'aliases', 'all'].includes(type)) {
@@ -508,13 +457,7 @@ export function exportData(type: string, options: any): void {
   }
 }
 
-/**
- * Imports data or aliases from a file
- * 
- * @param {string} type - Type of data to import ('data', 'aliases', or 'all')
- * @param {string} file - Path to the file to import
- * @param {object} options - Import options (merge, force)
- */
+// Imports data or aliases from a file
 export function importData(type: string, file: string, options: any): void {
   try {
     // Validate type parameter
@@ -577,12 +520,7 @@ export function importData(type: string, file: string, options: any): void {
   }
 }
 
-/**
- * Resets data or aliases to an empty state
- * 
- * @param {string} type - Type of data to reset ('data', 'aliases', or 'all')
- * @param {object} options - Reset options (force)
- */
+// Resets data or aliases to an empty state
 export function resetData(type: string, options: any): void {
   try {
     // Validate type parameter
@@ -618,9 +556,7 @@ export function resetData(type: string, options: any): void {
   }
 }
 
-/**
- * Deep merges two objects
- */
+// Deep merges two objects
 function deepMerge(target: any, source: any): any {
   const output = { ...target };
   
@@ -641,16 +577,12 @@ function deepMerge(target: any, source: any): any {
   return output;
 }
 
-/**
- * Checks if a value is an object
- */
+// Checks if a value is an object
 function isObject(item: any): boolean {
   return (item && typeof item === 'object' && !Array.isArray(item));
 }
 
-/**
- * Handles configuration operations for viewing and changing settings
- */
+// Handles configuration operations for viewing and changing settings
 export function handleConfig(setting?: string, value?: string, options?: any) {
   // Handle the --list option
   if (options && options.list) {
@@ -693,12 +625,7 @@ export function handleConfig(setting?: string, value?: string, options?: any) {
   console.log(`Updated ${color.green(setting)} to: ${value}`);
 }
 
-/**
- * Set a configuration value
- * 
- * @param {string} setting - The setting name
- * @param {string} value - The value to set
- */
+// Set a configuration value
 export function configSet(setting: string, value: string): void {
   try {
     const currentValue = getConfigSetting(setting);

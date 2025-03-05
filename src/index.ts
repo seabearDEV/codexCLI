@@ -24,15 +24,12 @@ codexCLI
   .command('get [key]')
   .description('Retrieve entries or specific data')
   .option('-f, --format <format>', 'Output format (json, yaml, text)')
-  .option('-t, --tree', 'Display data in a hierarchical tree structure')  // Add this line
-  .option('-r, --raw', 'Output raw values without formatting')          // Also add this option
+  .option('-t, --tree', 'Display data in a hierarchical tree structure')
+  .option('-r, --raw', 'Output raw values without formatting')
   .action((key: string | undefined, options: { format?: string, tree?: boolean, raw?: boolean }) => {
-    // If key is provided, check if it's an alias and resolve it
     if (key) {
-      key = resolveKey(key); // Use the existing resolveKey function
+      key = resolveKey(key);
     }
-    
-    // Continue with your existing implementation
     commands.getEntry(key, options);
   });
 
@@ -66,7 +63,6 @@ aliasCommand
   .command('add <name> <command...>')
   .description('Add a new command alias')
   .action((name: string, commandArray: string[]) => {
-    // Use directly imported function instead of through commands
     setAlias(name, commandArray.join(' '));
   });
 
@@ -74,7 +70,6 @@ aliasCommand
   .command('remove <name>')
   .description('Remove an alias')
   .action((name: string) => {
-    // Use directly imported function
     removeAlias(name);
   });
 
@@ -84,17 +79,14 @@ aliasCommand
   .option('-t, --tree', 'Display data in a hierarchical tree structure')
   .option('-f, --format <format>', 'Output format (json, yaml, text)')
   .action((name: string, options: { tree?: boolean, format?: string }) => {
-    // Use directly imported function
     const aliases = loadAliases();
     
-    // Add tree view support
     if (options.tree) {
       console.log('\n' + color.boldColors.magenta('Aliases (Tree View):'));
       
       if (Object.keys(aliases).length === 0) {
         console.log(color.gray('  No aliases found.'));
       } else {
-        // If a specific name was provided, only show that alias
         if (name) {
           const aliasValue = aliases[name];
           
@@ -103,11 +95,9 @@ aliasCommand
             return;
           }
           
-          // Display just this alias in tree format
           const singleAlias = { [name]: aliasValue };
           displayAliasesAsTree(singleAlias);
         } else {
-          // Display all aliases in tree format
           displayAliasesAsTree(aliases);
         }
       }
@@ -115,9 +105,7 @@ aliasCommand
       return;
     }
     
-    // Non-tree view (original code)
     if (!name) {
-      // When no name provided, list all aliases
       console.log('\n' + color.boldColors.magenta('Aliases:'));
       
       if (Object.keys(aliases).length === 0) {
@@ -131,7 +119,6 @@ aliasCommand
       return;
     }
     
-    // Show specific alias
     const aliasValue = aliases[name];
     
     if (!aliasValue) {
@@ -147,12 +134,9 @@ const configCommand = codexCLI
   .command('config')
   .description('Manage configuration settings')
   .action(() => {
-    // Show all config settings when just "ccli config" is run
-    // This essentially does the same as "ccli config get" with no arguments
     commands.handleConfig();
   });
 
-// Keep the subcommands as they are
 configCommand
   .command('set <key> <value>')
   .description('Set a configuration value')
@@ -211,11 +195,10 @@ codexCLI
   .description('Reset data or aliases to empty state')
   .option('-f, --force', 'Skip confirmation')
   .action((type: string, options: { force?: boolean }) => {
-    // Fix: Pass the entire options object instead of just options.force
     commands.resetData(type, options);
   });
 
-  // Show help command
+// Show help command
 codexCLI
   .command('help')
   .description('Show detailed help information')
@@ -223,16 +206,13 @@ codexCLI
     showHelp();
   });
 
-// Check if any command was specified
+// Show custom help if no command is specified
 if (process.argv.length <= 2) {
-  // When no command is provided, show our custom help instead of Commander's default
   showHelp();
 } else {
-  // Otherwise parse as normal
   codexCLI.parse(process.argv);
 }
 
-// Add this helper function in your file
 function displayAliasesAsTree(aliases: Record<string, string>): void {
   console.log('');
   console.log('└── Aliases');

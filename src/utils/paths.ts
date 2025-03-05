@@ -1,10 +1,3 @@
-/**
- * Path utilities for CodexCLI
- * 
- * This module handles path resolution and directory management for application data.
- * It automatically determines the appropriate storage locations based on the execution
- * environment (development vs. production) and ensures the necessary directories exist.
- */
 import path from 'path';
 import os from 'os';
 import * as fs from 'fs';
@@ -51,7 +44,7 @@ export function ensureDataDirectoryExists(): string {
 }
 
 /**
- * Returns the path to the data file without ensuring it exists
+ * Returns the path to the data file
  * 
  * @returns {string} Path to the data.json file
  */

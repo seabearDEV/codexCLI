@@ -1,6 +1,3 @@
-/**
- * Configuration management for CodexCLI
- */
 import fs from 'fs';
 import { getConfigFilePath, ensureDataDirectoryExists } from './utils/paths';
 
@@ -8,14 +5,12 @@ import { getConfigFilePath, ensureDataDirectoryExists } from './utils/paths';
 export interface Config {
   colors: boolean;
   theme: string;
-  // Remove indentSize
 }
 
 // Default configuration
 const defaultConfig: Config = {
   colors: true,
   theme: 'default'
-  // Remove indentSize
 };
 
 // Load configuration

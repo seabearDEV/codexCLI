@@ -1,15 +1,8 @@
-/**
- * Formatting utilities for CodexCLI
- * 
- * This module provides functions for styling console output with colors,
- * formatting data in consistent ways, and generating help text.
- * It uses the chalk library for terminal styling.
- */
 import chalk from 'chalk';
 import { getDataFilePath, getAliasFilePath, getConfigFilePath } from './utils/paths';
 import { loadConfig } from './config';
 
-// Add this if you have a `formatting.ts` file with color functions
+// Cache color config to avoid frequent reloading
 let colorConfigCache: boolean | null = null;
 let lastConfigCheck = 0;
 
@@ -23,7 +16,7 @@ export function isColorEnabled(): boolean {
   return colorConfigCache;
 }
 
-// Helper function to use chalk only when colors are enabled
+// Color helper functions that respect user configuration
 export const color = {
   cyan: (text: string): string => isColorEnabled() ? chalk.cyan(text) : text,
   green: (text: string): string => isColorEnabled() ? chalk.green(text) : text,
@@ -34,9 +27,7 @@ export const color = {
   gray: (text: string): string => isColorEnabled() ? chalk.gray(text) : text,
   white: (text: string): string => isColorEnabled() ? chalk.whiteBright(text) : text,
   italic: (text: string): string => isColorEnabled() ? chalk.italic(text) : text,
-  // Add a general bold function
   bold: (text: string): string => isColorEnabled() ? chalk.bold(text) : text,
-  // Keep the specific color bold functions as an object
   boldColors: {
     cyan: (text: string): string => isColorEnabled() ? chalk.bold.cyan(text) : text,
     green: (text: string): string => isColorEnabled() ? chalk.bold.green(text) : text,
@@ -61,13 +52,7 @@ export function formatOutput(data: any): void {
  * Format and display a key-value pair with color
  */
 export function formatKeyValue(key: string, value: any): void {
-  // Check if colors are enabled from config
-  const colorize = isColorEnabled();
-  
-  // Format the key with colors if enabled
-  const formattedKey = colorize ? colorizePathByLevels(key) : key;
-  
-  // Format and print
+  const formattedKey = isColorEnabled() ? colorizePathByLevels(key) : key;
   console.log(`${formattedKey}: ${value}`);
 }
 
@@ -75,7 +60,6 @@ export function formatKeyValue(key: string, value: any): void {
  * Colorize path segments with alternating colors
  */
 function colorizePathByLevels(path: string): string {
-  // If colors are disabled, return plain path
   if (!isColorEnabled()) {
     return path;
   }
@@ -99,8 +83,6 @@ function colorizePathByLevels(path: string): string {
  * Uses color coding to improve readability and visual appeal.
  */
 export function showHelp(): void {
-  // Remove direct chalk usage and use our color helper instead
-  
   console.log();
   console.log('┌───────────────────────────────────────────┐');
   console.log('│ CodexCLI - Command Line Information Store │');
@@ -163,7 +145,6 @@ export function showHelp(): void {
  * Display data in a tree format
  */
 export function displayTree(data: object, prefix: string = ''): void {
-  // Use color only if enabled
   const colorEnabled = isColorEnabled();
   
   Object.entries(data).forEach(([key, value], index, array) => {
@@ -171,7 +152,6 @@ export function displayTree(data: object, prefix: string = ''): void {
     const connector = isLast ? '└── ' : '├── ';
     const fullPrefix = prefix + connector;
     
-    // Apply colors conditionally
     const displayKey = colorEnabled ? color.cyan(key) : key;
     
     if (typeof value === 'object' && value !== null) {
