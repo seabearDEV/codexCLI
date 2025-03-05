@@ -1,4 +1,4 @@
-import { CodexData } from './types';
+import { CodexData } from '../types';
 
 /**
  * Sets a value at a nested path using dot notation (e.g., 'user.settings.theme')

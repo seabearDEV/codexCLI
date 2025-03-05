@@ -1,5 +1,5 @@
 import { loadData, saveData, handleError } from './storage';
-import { setNestedValue, getNestedValue, removeNestedValue, flattenObject } from './utils';
+import { setNestedValue, getNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
 import { formatKeyValue, displayTree } from './formatting';
 import { color } from './formatting';
 import fs from 'fs';
