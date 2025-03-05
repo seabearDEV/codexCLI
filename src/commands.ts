@@ -107,16 +107,18 @@ export function getEntry(key?: string, options: any = {}): void {
   // If no key is provided, show all entries
   if (!key) {
     if (Object.keys(data).length === 0) {
-      console.log('No entries found.');
+      console.log('\n' + color.boldColors.magenta('Entries:'));
+      console.log(color.gray('  No entries found. Add one with "ccli add <key> <value>"'));
+      console.log('');
       return;
     }
-    
+
     // Handle tree display for all entries
     if (options.tree) {
       displayTree(data);
       return;
     }
-    
+
     displayEntries(flattenObject(data));
     return;
   }

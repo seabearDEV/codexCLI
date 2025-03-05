@@ -60,6 +60,7 @@ export function setAlias(alias: string, path: string): void {
   const aliases = loadAliases();
   aliases[alias] = path;
   saveAliases(aliases);
+  console.log(`Alias '${alias}' added successfully.`);
 }
 
 /**

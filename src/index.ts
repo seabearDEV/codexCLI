@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import * as commands from './commands'; 
-import { setAlias, removeAlias, loadAliases } from './alias';
+import { setAlias, removeAlias, loadAliases, resolveKey } from './alias';
 import { showHelp, color } from './formatting';
 import { version } from '../package.json';
 
@@ -27,6 +27,12 @@ codexCLI
   .option('-t, --tree', 'Display data in a hierarchical tree structure')  // Add this line
   .option('-r, --raw', 'Output raw values without formatting')          // Also add this option
   .action((key: string | undefined, options: { format?: string, tree?: boolean, raw?: boolean }) => {
+    // If key is provided, check if it's an alias and resolve it
+    if (key) {
+      key = resolveKey(key); // Use the existing resolveKey function
+    }
+    
+    // Continue with your existing implementation
     commands.getEntry(key, options);
   });
 
