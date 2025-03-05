@@ -238,48 +238,92 @@ export function removeEntry(key: string): void {
 export function searchEntries(searchTerm: string, options: any = {}): void {
   const data = loadData();
   
-  if (Object.keys(data).length === 0) {
+  if (Object.keys(data).length === 0 && !options.aliasesOnly) {
     console.log('No entries to search in.');
     return;
   }
   
   // Flatten nested objects for searching
   const flattenedData = flattenObject(data);
-  const matches: Record<string, string> = {};
+  const dataMatches: Record<string, any> = {};
+  const aliasMatches: Record<string, string> = {};
   const lcSearchTerm = searchTerm.toLowerCase();
   
-  // Search in both keys and values
-  Object.entries(flattenedData).forEach(([key, value]) => {
-    if (
-      key.toLowerCase().includes(lcSearchTerm) || 
-      (typeof value === 'string' && value.toLowerCase().includes(lcSearchTerm))
-    ) {
-      matches[key] = value;
-    }
-  });
+  // Search in data entries if not aliasesOnly
+  if (!options.aliasesOnly) {
+    Object.entries(flattenedData).forEach(([key, value]) => {
+      const keyMatches = key.toLowerCase().includes(lcSearchTerm);
+      const valueMatches = typeof value === 'string' && value.toLowerCase().includes(lcSearchTerm);
+      
+      if (
+        (!options.keysOnly && !options.valuesOnly && (keyMatches || valueMatches)) ||
+        (options.keysOnly && keyMatches) ||
+        (options.valuesOnly && valueMatches)
+      ) {
+        dataMatches[key] = value;
+      }
+    });
+  }
   
-  if (Object.keys(matches).length === 0) {
+  // Search in aliases if not entriesOnly
+  if (!options.entriesOnly) {
+    const aliases = loadAliases();
+    Object.entries(aliases).forEach(([aliasName, targetPath]) => {
+      const nameMatches = aliasName.toLowerCase().includes(lcSearchTerm);
+      const pathMatches = String(targetPath).toLowerCase().includes(lcSearchTerm);
+      
+      if (
+        (!options.keysOnly && !options.valuesOnly && (nameMatches || pathMatches)) ||
+        (options.keysOnly && nameMatches) ||
+        (options.valuesOnly && pathMatches)
+      ) {
+        aliasMatches[aliasName] = String(targetPath);
+      }
+    });
+  }
+  
+  const hasDataMatches = Object.keys(dataMatches).length > 0;
+  const hasAliasMatches = Object.keys(aliasMatches).length > 0;
+  
+  if (!hasDataMatches && !hasAliasMatches) {
     console.log(`No matches found for '${searchTerm}'.`);
     return;
   }
   
-  console.log(`Found ${Object.keys(matches).length} matches for '${searchTerm}':`);
+  const totalMatches = Object.keys(dataMatches).length + Object.keys(aliasMatches).length;
+  console.log(`Found ${totalMatches} matches for '${searchTerm}':`);
   
-  // Use tree display if requested
-  if (options?.tree) {
-    // Create an object with just the matching entries
-    const matchesObj = {};
-    Object.keys(matches).forEach(key => {
-      setNestedValue(matchesObj, key, matches[key]);
-    });
-    displayTree(matchesObj);
-    return;
+  // Display data matches if any
+  if (hasDataMatches) {
+    if (hasAliasMatches) {
+      console.log('\nData entries:');
+    }
+    
+    // Use tree display if requested
+    if (options?.tree) {
+      const matchesObj = {};
+      Object.keys(dataMatches).forEach(key => {
+        setNestedValue(matchesObj, key, dataMatches[key]);
+      });
+      displayTree(matchesObj);
+    } else {
+      // Default display with color-coded keys
+      Object.entries(dataMatches).forEach(([key, value]) => {
+        formatKeyValue(key, value);
+      });
+    }
   }
   
-  // Default display with color-coded keys
-  Object.entries(matches).forEach(([key, value]) => {
-    formatKeyValue(key, value);
-  });
+  // Display alias matches if any
+  if (hasAliasMatches) {
+    if (hasDataMatches) {
+      console.log('\nAliases:');
+    }
+    
+    Object.entries(aliasMatches).forEach(([aliasName, targetPath]) => {
+      console.log(`${color.cyan(aliasName)} ${color.gray('->')} ${color.yellow(targetPath)}`);
+    });
+  }
 }
 
 // Initializes data storage with example data

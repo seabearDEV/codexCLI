@@ -105,9 +105,13 @@ export function showHelp(): void {
   console.log('  help                                  Show this help message');
   
   console.log('\n' + color.boldColors.magenta('OPTIONS:'));
-  console.log(`  ${color.yellow('--tree')}     Display data in a hierarchical tree structure`);
-  console.log(`  ${color.yellow('--raw')}      Output raw values without formatting (for scripting)`);
-  console.log(`  ${color.yellow('--debug')}    Enable debug output for troubleshooting\n`);
+  console.log(`  ${color.yellow('--tree')}          Display data in a hierarchical tree structure`);
+  console.log(`  ${color.yellow('--raw')}           Output raw values without formatting (for scripting)`);
+  console.log(`  ${color.yellow('--debug')}         Enable debug output for troubleshooting`);
+  console.log(`  ${color.yellow('--keys-only')}, ${color.yellow('-k')}   Search only in keys (for find command)`);
+  console.log(`  ${color.yellow('--values-only')}, ${color.yellow('-v')}  Search only in values (for find command)`);
+  console.log(`  ${color.yellow('--entries-only')}, ${color.yellow('-e')}  Search only in data entries (for find command)`);
+  console.log(`  ${color.yellow('--aliases-only')}, ${color.yellow('-a')}  Search only in aliases (for find command)}\n`);
   
   console.log(color.boldColors.magenta('EXAMPLES:'));
   console.log(`  ${color.yellow('ccli')} ${color.green('add')} ${color.cyan('server.ip')} 192.168.1.100`);
@@ -115,24 +119,9 @@ export function showHelp(): void {
   console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server.ip')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server')}`);
   console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.yellow('--tree')}                  ${color.gray('# Display all data as a tree')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('find')} 192.168.1.100\n`);
-  
-  console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('set myalias server.production.ip')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('myalias')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('get')}                 ${color.gray('# List all aliases')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('get myalias')}         ${color.gray('# Show specific alias')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('alias')} ${color.cyan('remove myalias')}\n`);
-  
-  console.log(`  ${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server')} ${color.yellow('--tree')}    ${color.gray('# Display server info as a tree')}`);
-  
-  console.log(`  ${color.yellow('ccli')} ${color.green('examples')} ${color.yellow('--force')}     ${color.gray('# Initialize with example data')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('export')} ${color.cyan('data')} ${color.yellow('-o')} backup.json       ${color.gray('# Export data to a file')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('import')} ${color.cyan('all')} backup.json ${color.yellow('--merge')}   ${color.gray('# Import and merge data')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('reset')} ${color.cyan('aliases')} ${color.yellow('--force')}            ${color.gray('# Reset aliases to empty state')}`);
-  
-  console.log(`  ${color.yellow('ccli')} ${color.green('config')}                  ${color.gray('# View all current settings')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('config')} ${color.cyan('colors false')}     ${color.gray('# Disable colored output')}`);
-  console.log(`  ${color.yellow('ccli')} ${color.green('config')} ${color.yellow('--list')}           ${color.gray('# List available settings')}\n`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('find')} 192.168.1.100`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('find')} 192.168.1.100 ${color.yellow('--aliases-only')}  ${color.gray('# Search only in aliases')}`);
+  console.log(`  ${color.yellow('ccli')} ${color.green('find')} prod ${color.yellow('-a')}               ${color.gray('# Search only in aliases (short form)')}\n`);
   
   const isDev = process.env.NODE_ENV === 'development';
   console.log(color.boldColors.magenta('DATA STORAGE:'));
