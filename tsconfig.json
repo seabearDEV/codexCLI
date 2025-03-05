@@ -24,7 +24,7 @@
 		// Additional options
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
-		"removeComments": false, // Preserve comments for better documentation
+		"removeComments": true, // Changed to true to remove comments from the compiled output
 		"sourceMap": true,
 		"resolveJsonModule": true, // Allow importing JSON files
 		"incremental": true, // Speed up builds by reusing information from previous compilations

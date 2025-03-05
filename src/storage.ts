@@ -1,13 +1,5 @@
-/**
- * Data storage management module for CodexCLI
- * 
- * This module handles all data persistence operations, including reading from
- * and writing to the JSON storage file. It provides error handling and ensures
- * that the storage directory exists before attempting file operations.
- */
 import fs from 'fs';
 import { color } from './formatting';
-// Import the path utility instead of defining a duplicate function
 import { getDataFilePath } from './utils/paths';
 
 /**
@@ -54,8 +46,6 @@ export function handleError(message: string, error: any, context?: string): void
 
 /**
  * Load data from storage
- * 
- * @returns {object} The parsed JSON data
  */
 export function loadData(): Record<string, any> {
   const filePath = getDataFilePath();
@@ -72,12 +62,6 @@ export function loadData(): Record<string, any> {
 
 /**
  * Save data to storage
- * 
- * Serializes the data object to JSON and writes it to the data file.
- * Uses pretty formatting with 2-space indentation for human readability.
- * 
- * @param {CodexData} data - The data object to save
- * @throws Will call handleError if file writing fails
  */
 export function saveData(data: Record<string, any>): void {
   const filePath = getDataFilePath();
@@ -91,9 +75,6 @@ export function saveData(data: Record<string, any>): void {
 
 /**
  * Perform an operation with the loaded data and save the data afterwards
- * 
- * @param {function} operation - The operation to perform with the data
- * @returns {any} The result of the operation
  */
 export function withData<T>(operation: (data: Record<string, any>) => T): T {
   const data = loadData();

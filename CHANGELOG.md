@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 (2025-03-04)
+
+Patch release with a bug fix for aliases, better comments, and optimizations
+
+- ✅ Fixed bug where aliases weren't properly linking to nested entries
+- ✅ Simplified and cleaned up comments for better code readability
+- ✅ Removed scripts directory and unneeded copyBuild.js to reduce package size
+- ✅ Set removeComments to true in tsconfig for a cleaner /dist folder
+- ✅ Updated dependencies to latest versions for security and performance
+
 ## 1.0.0 (2025-03-04)
 
 Initial release with core functionality:

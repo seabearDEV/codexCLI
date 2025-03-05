@@ -1,21 +1,7 @@
-/**
- * Utility functions for CodexCLI
- * 
- * This module provides helper functions for manipulating nested data structures,
- * accessing and modifying values using dot notation paths, and flattening
- * hierarchical data for display purposes.
- */
-import { CodexData } from './types';
+import { CodexData } from '../types';
 
 /**
- * Sets a value at a nested path
- * 
- * Accepts a dot-notation path (e.g., 'user.settings.theme') and creates
- * the necessary object hierarchy if it doesn't already exist.
- * 
- * @param {CodexData} obj - The target object to modify
- * @param {string} path - Dot-notation path where value should be set
- * @param {string} value - Value to set at the specified path
+ * Sets a value at a nested path using dot notation (e.g., 'user.settings.theme')
  */
 export function setNestedValue(obj: CodexData, path: string, value: string): void {
   const keys = path.split('.');
@@ -35,14 +21,7 @@ export function setNestedValue(obj: CodexData, path: string, value: string): voi
 }
 
 /**
- * Gets a value from a nested path
- * 
- * Retrieves a value using dot notation path, returning undefined
- * if any segment of the path doesn't exist.
- * 
- * @param {CodexData} obj - The source object to retrieve from
- * @param {string} path - Dot-notation path to the desired value
- * @returns {string | undefined} The value if found, undefined otherwise
+ * Gets a value from a nested path using dot notation
  */
 export function getNestedValue(obj: Record<string, any>, path: string): any {
   if (!path) return obj;
@@ -50,14 +29,7 @@ export function getNestedValue(obj: Record<string, any>, path: string): any {
 }
 
 /**
- * Removes a value at a nested path
- * 
- * Deletes the target property and optionally cleans up empty parent objects.
- * Returns a boolean indicating success or failure.
- * 
- * @param {CodexData} obj - The object to modify
- * @param {string} path - Dot-notation path of the value to remove
- * @returns {boolean} True if removal succeeded, false if path doesn't exist
+ * Removes a value at a nested path and cleans up empty parent objects
  */
 export function removeNestedValue(obj: CodexData, path: string): boolean {
   const keys = path.split('.');
@@ -91,7 +63,7 @@ export function removeNestedValue(obj: CodexData, path: string): boolean {
   
   delete current[lastKey];
   
-  // Clean up empty objects (optional)
+  // Clean up empty objects
   for (let i = stack.length - 1; i >= 0; i--) {
     const { obj, key } = stack[i];
     if (Object.keys(obj[key]).length === 0) {
@@ -105,28 +77,15 @@ export function removeNestedValue(obj: CodexData, path: string): boolean {
 }
 
 /**
- * Flattens nested objects for display
- * 
- * Converts a hierarchical object structure into a flat key-value map,
- * where nested keys are represented using dot notation.
- * Uses memoization to improve performance for repeated calls.
- * 
- * Example:
- *   Input: { user: { name: "John", email: "john@example.com" } }
- *   Output: { "user.name": "John", "user.email": "john@example.com" }
- * 
- * @param {CodexData} obj - The hierarchical object to flatten
- * @param {string} prefix - Optional prefix for nested keys (used for recursion)
- * @returns {Record<string, string>} Flattened key-value pairs
+ * Flattens nested objects into a flat map with dot-notation keys
+ * Example: { user: { name: "John" } } → { "user.name": "John" }
  */
-// Memoize flattenObject for repeated calls on same data
 const flattenCache = new Map<string, Record<string, any>>();
 
 export function flattenObject(obj: Record<string, any>, parentKey: string = ''): Record<string, any> {
   // Create a cache key from the object and parent key
   const cacheKey = parentKey + JSON.stringify(obj);
   
-  // Check if result is already in cache
   if (flattenCache.has(cacheKey)) {
     return flattenCache.get(cacheKey)!;
   }
@@ -143,9 +102,8 @@ export function flattenObject(obj: Record<string, any>, parentKey: string = ''):
     return acc;
   }, {} as Record<string, any>);
   
-  // Store result in cache (limit cache size to prevent memory issues)
+  // Store result in cache (limit cache size)
   if (flattenCache.size > 100) {
-    // Remove oldest entry - fix the potential undefined issue
     const firstKeyIterator = flattenCache.keys().next();
     if (!firstKeyIterator.done && firstKeyIterator.value !== undefined) {
       flattenCache.delete(firstKeyIterator.value);
@@ -158,10 +116,6 @@ export function flattenObject(obj: Record<string, any>, parentKey: string = ''):
 
 /**
  * Sets a value in a nested object using a dot-notation path
- * 
- * @param obj The object to modify
- * @param path Dot-notation path to the value
- * @param value The value to set
  */
 export function nestedSetValue(obj: Record<string, any>, path: string, value: any): void {
   const parts = path.split('.');

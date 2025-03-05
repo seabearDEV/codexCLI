@@ -1,6 +1,6 @@
 {
 	"name": "codexcli",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "A command-line information store for quick reference of frequently used data",
 	"bin": {
 		"ccli": "dist/index.js"
@@ -13,7 +13,7 @@
 	],
 	"main": "dist/index.js",
 	"scripts": {
-		"build": "tsc && node scripts/copyBuild.js",
+		"build": "tsc",
 		"start": "node dist/index.js",
 		"dev": "NODE_ENV=development ts-node src/index.ts",
 		"install-local": "npm run build && npm link",
