@@ -36,14 +36,14 @@ codexCLI
 // Find command
 codexCLI
   .command('find <term>')
-  .description('Search for entries or aliases by term')
-  .option('-k, --keys-only', 'Search only in keys')
-  .option('-v, --values-only', 'Search only in values')
-  .option('-t, --tree', 'Display matches in tree view')
-  .option('-e, --entries-only', 'Search only in data entries')
-  .option('-a, --aliases-only', 'Search only in aliases')
-  .action((term, options) => {
-    commands.searchEntries(term, options);
+  .description('Find entries by key or value')
+  .option('-k, --keys-only', 'Only search in keys')
+  .option('-v, --values-only', 'Only search in values')
+  .action((term: string, options: { keysOnly?: boolean, valuesOnly?: boolean }) => {
+    commands.searchEntries(term, {
+      keysOnly: options.keysOnly,
+      valuesOnly: options.valuesOnly,
+    });
   });
 
 // Remove command
