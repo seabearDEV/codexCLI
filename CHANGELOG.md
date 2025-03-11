@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.0 (2025-03-15)
+
+- ✅ Added new search functionality allowing users to search for entries with flexible matching (#4)
+
 ## 1.0.2 (2025-03-10)
 
 - ✅ The command "ccli get --tree" now shows associated aliases when using the --tree flag (#2)
