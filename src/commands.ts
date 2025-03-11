@@ -83,9 +83,21 @@ export function getEntry(key?: string, options: any = {}): void {
       return;
     }
 
-    // Handle tree display for all entries
+    // Handle tree display for all entries with alias information
     if (options.tree) {
-      displayTree(data);
+      // Load all aliases to check against keys
+      const aliases = loadAliases();
+      // Create a mapping from keys to aliases with proper typing
+      const keyToAliasMap: Record<string, string[]> = {};
+      
+      for (const [alias, target] of Object.entries(aliases)) {
+        if (!keyToAliasMap[target]) {
+          keyToAliasMap[target] = [];
+        }
+        keyToAliasMap[target].push(alias);
+      }
+      
+      displayTree(data, keyToAliasMap);
       return;
     }
 
@@ -153,7 +165,18 @@ export function getEntry(key?: string, options: any = {}): void {
   if (typeof value === 'object' && value !== null) {
     // For tree display
     if (options.tree) {
-      displayTree({ [key]: value });
+      // Load aliases to include in tree display
+      const aliases = loadAliases();
+      const keyToAliasMap: Record<string, string[]> = {};
+      
+      for (const [alias, target] of Object.entries(aliases)) {
+        if (!keyToAliasMap[target]) {
+          keyToAliasMap[target] = [];
+        }
+        keyToAliasMap[target].push(alias);
+      }
+      
+      displayTree({ [key]: value }, keyToAliasMap);
       return;
     }
     
@@ -272,7 +295,19 @@ export function searchEntries(searchTerm: string, options: any = {}): void {
     Object.keys(matches).forEach(key => {
       setNestedValue(matchesObj, key, matches[key]);
     });
-    displayTree(matchesObj);
+    
+    // Load aliases to include in tree display
+    const aliases = loadAliases();
+    const keyToAliasMap: Record<string, string[]> = {};
+    
+    for (const [alias, target] of Object.entries(aliases)) {
+      if (!keyToAliasMap[target]) {
+        keyToAliasMap[target] = [];
+      }
+      keyToAliasMap[target].push(alias);
+    }
+    
+    displayTree(matchesObj, keyToAliasMap);
     return;
   }
   

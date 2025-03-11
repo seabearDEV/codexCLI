@@ -144,7 +144,7 @@ export function showHelp(): void {
 /**
  * Display data in a tree format
  */
-export function displayTree(data: object, prefix: string = ''): void {
+export function displayTree(data: object, keyToAliasMap: Record<string, string[]> = {}, prefix = '', path = ''): void {
   const colorEnabled = isColorEnabled();
   
   Object.entries(data).forEach(([key, value], index, array) => {
@@ -154,13 +154,18 @@ export function displayTree(data: object, prefix: string = ''): void {
     
     const displayKey = colorEnabled ? color.cyan(key) : key;
     
+    // Remove unused variable and just use fullPath
+    const fullPath = path ? `${path}.${key}` : key;
+    const aliases = keyToAliasMap[fullPath];
+    const aliasDisplay = aliases && aliases.length > 0 ? ` (${aliases[0]})` : '';
+    
     if (typeof value === 'object' && value !== null) {
-      console.log(`${fullPrefix}${displayKey}`);
+      console.log(`${fullPrefix}${displayKey}${aliasDisplay}`);
       const childPrefix = prefix + (isLast ? ' '.repeat(4) : '│   ');
-      displayTree(value, childPrefix);
+      displayTree(value, keyToAliasMap, childPrefix, fullPath);
     } else {
       const displayValue = colorEnabled ? color.white(value) : value;
-      console.log(`${fullPrefix}${displayKey}: ${displayValue}`);
+      console.log(`${fullPrefix}${displayKey}${aliasDisplay}: ${displayValue}`);
     }
   });
 }
