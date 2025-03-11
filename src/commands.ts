@@ -31,9 +31,9 @@ function displayEntries(entries: Record<string, string>): void {
     const aliases = getAliasesForPath(key);
     
     if (aliases.length > 0) {
-      console.log(`${colorizedPath} ${color.blue('(' + aliases[0] + ')')} ${value}`);
+      console.log(`${colorizedPath}: ${color.blue('(' + aliases[0] + ')')} ${value}`);
     } else {
-      console.log(`${colorizedPath} ${value}`);
+      console.log(`${colorizedPath}: ${value}`);
     }
   });
 }
