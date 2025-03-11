@@ -3,7 +3,7 @@ import { color } from '../formatting';
 // Conditionally log debug information
 export function debug(message: string, data?: any): void {
   if (process.env.DEBUG === 'true') {
-    console.log(color.gray(`[DEBUG] ${message}`));
-    if (data) console.log(color.gray(JSON.stringify(data, null, 2)));
+    console.log(color.boldColors.yellow(`[DEBUG] ${message}`));
+    if (data !== undefined) console.log(color.gray(JSON.stringify(data, null, 2)));
   }
 }

@@ -11,6 +11,14 @@ const codexCLI = new Command();
 codexCLI.version(version);
 codexCLI.description('A CLI tool for storing and retrieving code snippets, commands, and knowledge');
 
+// Add global debug option
+codexCLI.option('--debug', 'Enable debug mode')
+  .hook('preAction', (thisCommand) => {
+    if (thisCommand.opts().debug) {
+      process.env.DEBUG = 'true';
+    }
+  });
+
 // Add command
 codexCLI
   .command('add <key> <value...>')

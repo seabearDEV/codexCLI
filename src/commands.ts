@@ -13,6 +13,7 @@ import {
 import path from 'path';
 import { loadAliases, saveAliases, getAliasesForPath } from './alias';
 import { loadConfig, getConfigSetting, setConfigSetting } from './config';
+import { debug } from './utils/debug';
 
 // Prints a success message with a green checkmark
 function printSuccess(message: string): void {
@@ -72,6 +73,12 @@ export function addEntry(key: string, value: any): void {
 
 // Retrieves and displays a data entry or entries
 export function getEntry(key?: string, options: any = {}): void {
+  debug('getEntry called', { key, options });
+  
+  // Add more debug statements in key points of your function
+  // For example, before loading data:
+  debug('Loading data from storage');
+  
   const data = loadData();
 
   // If no key is provided, show all entries
@@ -216,6 +223,9 @@ export function getEntry(key?: string, options: any = {}): void {
 
   // Simple value display
   console.log(value);
+  
+  // After processing data:
+  debug('Data processed', { resultSize: typeof value === 'object' ? Object.keys(value || {}).length : 1 });
 }
 
 // Convert a flattened object back to nested structure
