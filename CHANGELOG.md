@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 (2025-03-10)
+
+- ✅ The command "ccli get --tree" now shows associated aliases when using the --tree flag (#2)
+- ✅ The command "ccli get" now separates keys from values with a colon (#3)
+
 ## 1.0.1 (2025-03-04)
 
 Patch release with a bug fix for aliases, better comments, and optimizations
