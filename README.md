@@ -101,7 +101,7 @@ Aliases provide shortcuts to frequently used paths:
 
 ```bash
 # Create an alias
-ccli alias set prod-ip server.production.ip
+ccli alias add prod-ip server.production.ip
 
 # Use the alias
 ccli get prod-ip
@@ -116,9 +116,13 @@ ccli alias get
 # Output raw value (useful for scripting)
 ccli get server.production.ip --raw
 
-# Display hierarchical data as a tree (aliases are shown in parentheses)
+# Display hierarchical data as a tree
 ccli get server --tree
 ccli find production --tree
+
+# When using --tree, aliases are shown in parentheses before the entry value:
+# Example output:
+# system.commands.getIP (ip): ipconfig getifaddr en0
 ```
 
 ### Configuration
@@ -183,7 +187,7 @@ ccli get server
 ```bash
 ccli add personal.contact.email john@example.com
 ccli add personal.contact.phone 555-1234
-ccli alias set myemail personal.contact.email
+ccli alias add myemail personal.contact.email
 ccli get myemail
 ```
 

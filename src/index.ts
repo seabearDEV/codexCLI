@@ -39,10 +39,12 @@ codexCLI
   .description('Find entries by key or value')
   .option('-k, --keys-only', 'Only search in keys')
   .option('-v, --values-only', 'Only search in values')
-  .action((term: string, options: { keysOnly?: boolean, valuesOnly?: boolean }) => {
+  .option('-t, --tree', 'Display results in a hierarchical tree structure')
+  .action((term: string, options: { keysOnly?: boolean, valuesOnly?: boolean, tree?: boolean }) => {
     commands.searchEntries(term, {
       keysOnly: options.keysOnly,
       valuesOnly: options.valuesOnly,
+      tree: options.tree
     });
   });
 

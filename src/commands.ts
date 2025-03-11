@@ -145,7 +145,16 @@ export function getEntry(key?: string, options: any = {}): void {
           )
         );
 
-        displayTree(subtree);
+        const aliases = loadAliases();
+        const keyToAliasMap: Record<string, string[]> = {};
+              
+        for (const [alias, target] of Object.entries(aliases)) {
+          if (!keyToAliasMap[target]) {
+            keyToAliasMap[target] = [];
+          }
+          keyToAliasMap[target].push(alias);
+        }
+        displayTree(subtree, keyToAliasMap);
         return;
       }
 
@@ -324,11 +333,25 @@ export function searchEntries(searchTerm: string, options: any = {}): void {
 
     // Use tree display if requested
     if (options?.tree) {
+      // Create an object with just the matching entries
       const matchesObj = {};
       Object.keys(dataMatches).forEach(key => {
         setNestedValue(matchesObj, key, dataMatches[key]);
       });
-      displayTree(matchesObj);
+      
+      // Load aliases to include in tree display
+      const aliases = loadAliases();
+      const keyToAliasMap: Record<string, string[]> = {};
+      
+      for (const [alias, target] of Object.entries(aliases)) {
+        if (!keyToAliasMap[target]) {
+          keyToAliasMap[target] = [];
+        }
+        keyToAliasMap[target].push(alias);
+      }
+      
+      displayTree(matchesObj, keyToAliasMap);
+      return;
     } else {
       // Default display with color-coded keys
       Object.entries(dataMatches).forEach(([key, value]) => {

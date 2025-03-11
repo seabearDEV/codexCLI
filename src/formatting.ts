@@ -142,6 +142,13 @@ export function displayTree(data: object, keyToAliasMap: Record<string, string[]
     const fullPrefix = prefix + connector;
 
     const displayKey = colorEnabled ? color.cyan(key) : key;
+    
+    // Calculate the full path for this entry (needed for alias lookup)
+    const fullPath = path ? `${path}.${key}` : key;
+    
+    // Look up any aliases for this path
+    const aliases = keyToAliasMap[fullPath];
+    const aliasDisplay = aliases && aliases.length > 0 ? ` (${aliases[0]})` : '';
 
     if (typeof value === 'object' && value !== null) {
       console.log(`${fullPrefix}${displayKey}${aliasDisplay}`);
