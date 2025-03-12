@@ -3,6 +3,7 @@
 ## 1.1.0 (2025-03-15)
 
 - ✅ Added new search functionality allowing users to search for entries with flexible matching (#4)
+- ✅ The --debug flag isn't working correctly #6
 
 ## 1.0.2 (2025-03-10)
 
