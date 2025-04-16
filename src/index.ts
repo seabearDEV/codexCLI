@@ -22,6 +22,7 @@ codexCLI.option('--debug', 'Enable debug mode')
 // Add command
 codexCLI
   .command('add <key> <value...>')
+  .alias('a')
   .description('Add or update an entry')
   .action((key: string, valueArray: string[]) => {
     commands.addEntry(key, valueArray.join(' '));
@@ -30,6 +31,7 @@ codexCLI
 // Get command
 codexCLI
   .command('get [key]')
+  .alias('g')
   .description('Retrieve entries or specific data')
   .option('-f, --format <format>', 'Output format (json, yaml, text)')
   .option('-t, --tree', 'Display data in a hierarchical tree structure')
@@ -44,6 +46,7 @@ codexCLI
 // Find command
 codexCLI
   .command('find <term>')
+  .alias('f')
   .description('Find entries by key or value')
   .option('-k, --keys-only', 'Only search in keys')
   .option('-v, --values-only', 'Only search in values')
@@ -71,6 +74,7 @@ const aliasCommand = codexCLI
 
 aliasCommand
   .command('add <name> <command...>')
+  .alias('a')
   .description('Add a new command alias')
   .action((name: string, commandArray: string[]) => {
     setAlias(name, commandArray.join(' '));
@@ -78,6 +82,7 @@ aliasCommand
 
 aliasCommand
   .command('remove <name>')
+  .alias('rm')
   .description('Remove an alias')
   .action((name: string) => {
     removeAlias(name);
@@ -85,6 +90,7 @@ aliasCommand
 
 aliasCommand
   .command('get [name]')
+  .alias('g')
   .description('List all aliases or get a specific alias')
   .option('-t, --tree', 'Display data in a hierarchical tree structure')
   .option('-f, --format <format>', 'Output format (json, yaml, text)')

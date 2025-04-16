@@ -104,6 +104,15 @@ export function showHelp(): void {
   console.log('  examples                              Initialize with example data');
   console.log('  help                                  Show this help message');
 
+  console.log('\n' + color.boldColors.magenta('SHORTCUTS:'));
+  console.log(`  ${color.yellow('g')}            ${color.gray('=')} ${color.green('get')}                 ${color.gray('ccli g server.ip')}`);
+  console.log(`  ${color.yellow('a')}            ${color.gray('=')} ${color.green('add')}                 ${color.gray('ccli a server.ip 192.168.1.1')}`);
+  console.log(`  ${color.yellow('f')}            ${color.gray('=')} ${color.green('find')}                ${color.gray('ccli f 192.168')}`);
+  console.log(`  ${color.yellow('rm')}           ${color.gray('=')} ${color.green('remove')}              ${color.gray('ccli rm server.old')}`);
+  console.log(`  ${color.yellow('al')} ${color.gray('g')}         ${color.gray('=')} ${color.green('alias get')}           ${color.gray('ccli al g')}`);
+  console.log(`  ${color.yellow('al')} ${color.gray('a')}         ${color.gray('=')} ${color.green('alias add')}           ${color.gray('ccli al a myip server.ip')}`);
+  console.log(`  ${color.yellow('al')} ${color.gray('rm')}        ${color.gray('=')} ${color.green('alias remove')}        ${color.gray('ccli al rm myip')}`);
+
   console.log('\n' + color.boldColors.magenta('OPTIONS:'));
   console.log(`  ${color.yellow('--tree')}          Display data in a hierarchical tree structure`);
   console.log(`  ${color.yellow('--raw')}           Output raw values without formatting (for scripting)`);
