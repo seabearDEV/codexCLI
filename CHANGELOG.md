@@ -1,9 +1,15 @@
 # Changelog
 
+## 1.1.1 (2025-04-15)
+
+- ✅ Fixing issue where the alias wasn't displaying correctly on nested levels. (#7)
+- ✅ Added new shortcuts for commands and added examples for how to use them on the help screen
+
+
 ## 1.1.0 (2025-03-15)
 
 - ✅ Added new search functionality allowing users to search for entries with flexible matching (#4)
-- ✅ The --debug flag isn't working correctly #6
+- ✅ The --debug flag isn't working correctly (#6)
 
 ## 1.0.2 (2025-03-10)
 
