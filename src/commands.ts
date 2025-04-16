@@ -207,8 +207,9 @@ export function getEntry(key?: string, options: any = {}): void {
     // Transform keys to include full path
     const entries: Record<string, string> = {};
     Object.entries(filteredEntries).forEach(([entryKey, entryValue]) => {
-      const fullPath = key + '.' + entryKey.replace(/^[^.]+\./, '');
-      entries[fullPath] = entryValue as string;
+      // When flattening {[key]: value}, the keys will already contain the full path
+      // Just use entryKey directly instead of trying to modify it
+      entries[entryKey] = entryValue as string;
     });
 
     displayEntries(entries);
