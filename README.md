@@ -239,6 +239,43 @@ ccli alias add myemail personal.contact.email
 ccli get myemail
 ```
 
+### Shell Tab-Completion
+
+CodexCLI supports tab-completion for Bash and Zsh, including commands, flags, stored keys, alias names, and more.
+
+#### Quick Setup
+
+```bash
+# Auto-detect your shell and install completions
+ccli completions install
+```
+
+This appends a completion loader to your `~/.zshrc` or `~/.bashrc` and tells you to restart your shell (or `source` the file).
+
+#### Manual Setup
+
+If you prefer to set it up yourself:
+
+```bash
+# Zsh - add to ~/.zshrc
+eval "$(ccli completions zsh)"
+
+# Bash - add to ~/.bashrc or ~/.bash_profile
+eval "$(ccli completions bash)"
+```
+
+#### What Gets Completed
+
+| Context | Completions |
+|---|---|
+| `ccli <TAB>` | All commands (`get`, `add`, `find`, `alias`, etc.) |
+| `ccli get <TAB>` | Flags + stored data keys + aliases |
+| `ccli get --format <TAB>` | `json`, `yaml`, `text` |
+| `ccli alias <TAB>` | Subcommands (`add`, `remove`, `get`) |
+| `ccli alias remove <TAB>` | Alias names |
+| `ccli export <TAB>` | `data`, `aliases`, `all` |
+| `ccli config set <TAB>` | `colors`, `theme` |
+
 ### Debugging
 
 When troubleshooting, you can enable debug output:

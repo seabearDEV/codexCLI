@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import * as commands from './commands'; 
+import * as commands from './commands';
 import { setAlias, removeAlias, loadAliases, resolveKey } from './alias';
 import { showHelp, color } from './formatting';
 import { version } from '../package.json';
+import { getCompletions, generateBashScript, generateZshScript, installCompletions } from './completions';
+
+// Early-exit handler for shell tab-completion (must run before Commander parses args)
+const completionFlagIndex = process.argv.indexOf('--get-completions');
+if (completionFlagIndex !== -1) {
+  const compLine = process.argv[completionFlagIndex + 1] || '';
+  const compPoint = parseInt(process.argv[completionFlagIndex + 2] || '0', 10) || compLine.length;
+  getCompletions(compLine, compPoint).forEach(r => console.log(r));
+  process.exit(0);
+}
 
 // Initialize the CLI
 const codexCLI = new Command();
@@ -212,6 +222,32 @@ codexCLI
   .option('-f, --force', 'Skip confirmation')
   .action((type: string, options: { force?: boolean }) => {
     commands.resetData(type, options);
+  });
+
+// Completions command group
+const completionsCommand = codexCLI
+  .command('completions')
+  .description('Generate shell completion scripts');
+
+completionsCommand
+  .command('bash')
+  .description('Output Bash completion script')
+  .action(() => {
+    process.stdout.write(generateBashScript());
+  });
+
+completionsCommand
+  .command('zsh')
+  .description('Output Zsh completion script')
+  .action(() => {
+    process.stdout.write(generateZshScript());
+  });
+
+completionsCommand
+  .command('install')
+  .description('Auto-detect shell and install completions')
+  .action(() => {
+    installCompletions();
   });
 
 // Show help command

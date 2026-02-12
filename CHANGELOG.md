@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.0 (2026-02-12)
+
+- Added shell tab-completion for Bash and Zsh (`ccli completions bash|zsh|install`)
+- Completions cover commands, subcommands, flags, stored data keys, alias names, config keys, export types, and format options
+
 ## 1.2.0 (2026-02-12)
 
 - Added MCP (Model Context Protocol) server for AI agent integration (Claude Code, Claude Desktop)
