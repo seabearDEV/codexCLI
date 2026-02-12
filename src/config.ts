@@ -72,27 +72,3 @@ export function setConfigSetting(key: string, value: any): void {
   }
 }
 
-// Display current configuration
-export function displayConfig(): void {
-  const config = loadConfig();
-  console.log('Current Configuration:');
-  console.log('─────────────────────────');
-  Object.entries(config).forEach(([key, value]) => {
-    console.log(`${key.padEnd(12)} : ${value}`);
-  });
-}
-
-/**
- * Check if colors are enabled in configuration
- */
-let colorEnabledCache: boolean | null = null;
-let lastConfigCheck = 0;
-
-export function isColorEnabled(): boolean {
-  const now = Date.now();
-  if (colorEnabledCache === null || now - lastConfigCheck > 5000) {
-    colorEnabledCache = loadConfig().colors !== false;
-    lastConfigCheck = now;
-  }
-  return colorEnabledCache;
-}

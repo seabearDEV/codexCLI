@@ -1,6 +1,6 @@
 import { loadData, saveData, handleError } from './storage';
 import { setNestedValue, getNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
-import { formatKeyValue, displayTree } from './formatting';
+import { formatKeyValue, displayTree, colorizePathByLevels } from './formatting';
 import { color } from './formatting';
 import fs from 'fs';
 import {
@@ -11,7 +11,7 @@ import {
   getConfigFilePath
 } from './utils/paths';
 import path from 'path';
-import { loadAliases, saveAliases, getAliasesForPath } from './alias';
+import { loadAliases, saveAliases, buildKeyToAliasMap } from './alias';
 import { loadConfig, getConfigSetting, setConfigSetting } from './config';
 import { debug } from './utils/debug';
 
@@ -26,28 +26,18 @@ function printWarning(message: string): void {
 }
 
 // Display entries with colorized paths and alias indicators
-function displayEntries(entries: Record<string, string>): void {
+function displayEntries(entries: Record<string, string>, keyToAliasMap?: Record<string, string[]>): void {
+  const aliasMap = keyToAliasMap ?? buildKeyToAliasMap();
   Object.entries(entries).forEach(([key, value]) => {
     const colorizedPath = colorizePathByLevels(key);
-    const aliases = getAliasesForPath(key);
+    const aliases = aliasMap[key];
 
-    if (aliases.length > 0) {
+    if (aliases && aliases.length > 0) {
       console.log(`${colorizedPath}: ${color.blue('(' + aliases[0] + ')')} ${value}`);
     } else {
       console.log(`${colorizedPath}: ${value}`);
     }
   });
-}
-
-// Colorize path segments with alternating colors
-function colorizePathByLevels(path: string): string {
-  const colors = [color.cyan, color.yellow, color.green, color.magenta, color.blue];
-  const parts = path.split('.');
-
-  return parts.map((part, index) => {
-    const colorFn = colors[index % colors.length];
-    return colorFn(part);
-  }).join('.');
 }
 
 // Adds or updates a data entry in storage
@@ -57,12 +47,7 @@ export function addEntry(key: string, value: any): void {
     ensureDataDirectoryExists();
     const data = loadData();
 
-    // Handle nested paths with dot notation
-    if (key.includes('.')) {
-      setNestedValue(data, key, value);
-    } else {
-      data[key] = value;
-    }
+    setNestedValue(data, key, value);
 
     saveData(data);
     console.log(`Entry '${key}' added successfully.`);
@@ -92,19 +77,7 @@ export function getEntry(key?: string, options: any = {}): void {
 
     // Handle tree display for all entries with alias information
     if (options.tree) {
-      // Load all aliases to check against keys
-      const aliases = loadAliases();
-      // Create a mapping from keys to aliases with proper typing
-      const keyToAliasMap: Record<string, string[]> = {};
-      
-      for (const [alias, target] of Object.entries(aliases)) {
-        if (!keyToAliasMap[target]) {
-          keyToAliasMap[target] = [];
-        }
-        keyToAliasMap[target].push(alias);
-      }
-      
-      displayTree(data, keyToAliasMap);
+      displayTree(data, buildKeyToAliasMap());
       return;
     }
 
@@ -113,12 +86,7 @@ export function getEntry(key?: string, options: any = {}): void {
   }
 
   // Handle specific key lookup
-  let value;
-  if (key.includes('.')) {
-    value = getNestedValue(data, key);
-  } else {
-    value = data[key];
-  }
+  const value = getNestedValue(data, key);
 
   // Check if the value exists
   if (value === undefined) {
@@ -152,16 +120,7 @@ export function getEntry(key?: string, options: any = {}): void {
           )
         );
 
-        const aliases = loadAliases();
-        const keyToAliasMap: Record<string, string[]> = {};
-              
-        for (const [alias, target] of Object.entries(aliases)) {
-          if (!keyToAliasMap[target]) {
-            keyToAliasMap[target] = [];
-          }
-          keyToAliasMap[target].push(alias);
-        }
-        displayTree(subtree, keyToAliasMap);
+        displayTree(subtree, buildKeyToAliasMap());
         return;
       }
 
@@ -181,18 +140,7 @@ export function getEntry(key?: string, options: any = {}): void {
   if (typeof value === 'object' && value !== null) {
     // For tree display
     if (options.tree) {
-      // Load aliases to include in tree display
-      const aliases = loadAliases();
-      const keyToAliasMap: Record<string, string[]> = {};
-      
-      for (const [alias, target] of Object.entries(aliases)) {
-        if (!keyToAliasMap[target]) {
-          keyToAliasMap[target] = [];
-        }
-        keyToAliasMap[target].push(alias);
-      }
-      
-      displayTree({ [key]: value }, keyToAliasMap);
+      displayTree({ [key]: value }, buildKeyToAliasMap());
       return;
     }
 
@@ -204,15 +152,7 @@ export function getEntry(key?: string, options: any = {}): void {
       return;
     }
 
-    // Transform keys to include full path
-    const entries: Record<string, string> = {};
-    Object.entries(filteredEntries).forEach(([entryKey, entryValue]) => {
-      // When flattening {[key]: value}, the keys will already contain the full path
-      // Just use entryKey directly instead of trying to modify it
-      entries[entryKey] = entryValue as string;
-    });
-
-    displayEntries(entries);
+    displayEntries(filteredEntries);
     return;
   }
 
@@ -254,15 +194,7 @@ export function removeEntry(key: string): void {
   const data = loadData();
   let removed = false;
 
-  // Handle nested paths
-  if (key.includes('.')) {
-    removed = removeNestedValue(data, key);
-  } else {
-    if (data[key] !== undefined) {
-      delete data[key];
-      removed = true;
-    }
-  }
+  removed = removeNestedValue(data, key);
 
   if (!removed) {
     printWarning(`Entry '${key}' not found.`);
@@ -350,18 +282,7 @@ export function searchEntries(searchTerm: string, options: any = {}): void {
         setNestedValue(matchesObj, key, dataMatches[key]);
       });
       
-      // Load aliases to include in tree display
-      const aliases = loadAliases();
-      const keyToAliasMap: Record<string, string[]> = {};
-      
-      for (const [alias, target] of Object.entries(aliases)) {
-        if (!keyToAliasMap[target]) {
-          keyToAliasMap[target] = [];
-        }
-        keyToAliasMap[target].push(alias);
-      }
-      
-      displayTree(matchesObj, keyToAliasMap);
+      displayTree(matchesObj, buildKeyToAliasMap());
       return;
     } else {
       // Default display with color-coded keys
@@ -663,14 +584,10 @@ function deepMerge(target: any, source: any): any {
 
   if (isObject(target) && isObject(source)) {
     Object.keys(source).forEach(key => {
-      if (isObject(source[key])) {
-        if (!(key in target)) {
-          Object.assign(output, { [key]: source[key] });
-        } else {
-          output[key] = deepMerge(target[key], source[key]);
-        }
+      if (isObject(source[key]) && key in target) {
+        output[key] = deepMerge(target[key], source[key]);
       } else {
-        Object.assign(output, { [key]: source[key] });
+        output[key] = source[key];
       }
     });
   }
@@ -756,29 +673,3 @@ export function configSet(setting: string, value: string): void {
   }
 }
 
-// Add this interface to understand what's available
-export interface Commands {
-  addEntry: (key: string, value: string) => void;
-  getEntry: (key: string | undefined, options?: any) => void;
-  // What is the actual name for findEntries?
-  findEntries?: (term: string, options: any) => void;
-  find?: (term: string, options: any) => void;
-  removeEntry: (key: string) => void;
-
-  // Alias functions
-  addAlias?: (name: string, command: string) => void;
-  removeAlias?: (name: string) => void;
-  listAliases?: () => void;
-  runAlias?: (name: string, args: string[]) => void;
-
-  // Config functions
-  setConfig?: (key: string, value: string) => void;
-  getConfig?: (key?: string) => void;
-
-  // Other functions
-  listEntries?: (options: any) => void;
-  setupExamples?: (force?: boolean) => void;
-  exportData: (type: string, options: any) => void;
-  importData: (type: string, file: string, options: any) => void;
-  resetData: (type: string, force?: boolean) => void;
-}

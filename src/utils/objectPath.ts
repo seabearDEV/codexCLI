@@ -80,52 +80,17 @@ export function removeNestedValue(obj: CodexData, path: string): boolean {
  * Flattens nested objects into a flat map with dot-notation keys
  * Example: { user: { name: "John" } } → { "user.name": "John" }
  */
-const flattenCache = new Map<string, Record<string, any>>();
-
 export function flattenObject(obj: Record<string, any>, parentKey: string = ''): Record<string, any> {
-  // Create a cache key from the object and parent key
-  const cacheKey = parentKey + JSON.stringify(obj);
-  
-  if (flattenCache.has(cacheKey)) {
-    return flattenCache.get(cacheKey)!;
-  }
-  
-  const result = Object.keys(obj).reduce((acc, key) => {
+  return Object.keys(obj).reduce((acc, key) => {
     const newKey = parentKey ? `${parentKey}.${key}` : key;
-    
+
     if (typeof obj[key] === 'object' && obj[key] !== null) {
       Object.assign(acc, flattenObject(obj[key], newKey));
     } else {
       acc[newKey] = obj[key];
     }
-    
+
     return acc;
   }, {} as Record<string, any>);
-  
-  // Store result in cache (limit cache size)
-  if (flattenCache.size > 100) {
-    const firstKeyIterator = flattenCache.keys().next();
-    if (!firstKeyIterator.done && firstKeyIterator.value !== undefined) {
-      flattenCache.delete(firstKeyIterator.value);
-    }
-  }
-  flattenCache.set(cacheKey, result);
-  
-  return result;
 }
 
-/**
- * Sets a value in a nested object using a dot-notation path
- */
-export function nestedSetValue(obj: Record<string, any>, path: string, value: any): void {
-  const parts = path.split('.');
-  let current = obj;
-  
-  for (let i = 0; i < parts.length - 1; i++) {
-    const key = parts[i];
-    current[key] = current[key] || {};
-    current = current[key];
-  }
-  
-  current[parts[parts.length - 1]] = value;
-}

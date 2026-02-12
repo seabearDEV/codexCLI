@@ -15,20 +15,6 @@ export function handleOperation<T>(operation: () => T, errorMessage: string): T 
 }
 
 /**
- * Handle operation with consistent error handling and default value
- */
-export function safeOperation<T>(operation: () => T, 
-                               errorMessage: string, 
-                               defaultValue: T): T {
-  try {
-    return operation();
-  } catch (error) {
-    handleError(errorMessage, error);
-    return defaultValue;
-  }
-}
-
-/**
  * Consistent error handling with improved context
  */
 export function handleError(message: string, error: any, context?: string): void {
@@ -73,12 +59,3 @@ export function saveData(data: Record<string, any>): void {
   }, `Failed to save data to ${filePath}`);
 }
 
-/**
- * Perform an operation with the loaded data and save the data afterwards
- */
-export function withData<T>(operation: (data: Record<string, any>) => T): T {
-  const data = loadData();
-  const result = operation(data);
-  saveData(data);
-  return result;
-}

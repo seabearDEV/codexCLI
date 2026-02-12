@@ -55,35 +55,6 @@ export function getDataFilePath(): string {
   return dataFilePathCache;
 }
 
-/**
- * Checks if data.json exists
- * Does NOT create anything
- * 
- * @returns {boolean} True if data file exists, false otherwise
- */
-export function dataFileExists(): boolean {
-  return fs.existsSync(getDataFilePath());
-}
-
-/**
- * Ensures data.json exists in the appropriate location
- * Creates an empty data structure if the file doesn't exist
- * 
- * @returns {string} Path to the data file
- */
-export function ensureDataFileExists(): string {
-  const dataFilePath = getDataFilePath();
-  
-  if (!fs.existsSync(dataFilePath)) {
-    // Create directory if it doesn't exist
-    ensureDataDirectoryExists();
-    
-    // Create an empty data structure
-    fs.writeFileSync(dataFilePath, JSON.stringify({}, null, 2), 'utf8');
-  }
-  
-  return dataFilePath;
-}
 
 /**
  * Get the path to the aliases file

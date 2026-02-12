@@ -74,3 +74,16 @@ export function getAliasesForPath(path: string): string[] {
     .filter(([_, targetPath]) => targetPath === path)
     .map(([aliasName]) => aliasName);
 }
+
+// Build inverted map from target paths to alias names
+export function buildKeyToAliasMap(): Record<string, string[]> {
+  const aliases = loadAliases();
+  const keyToAliasMap: Record<string, string[]> = {};
+  for (const [alias, target] of Object.entries(aliases)) {
+    if (!keyToAliasMap[target]) {
+      keyToAliasMap[target] = [];
+    }
+    keyToAliasMap[target].push(alias);
+  }
+  return keyToAliasMap;
+}

@@ -38,17 +38,6 @@ export const color = {
 };
 
 /**
- * Format and output data with colors based on nesting level
- * 
- * Takes any data object and formats it as JSON with indentation
- * 
- * @param {any} data - The data object to format and display
- */
-export function formatOutput(data: any): void {
-  console.log(JSON.stringify(data, null, 2));
-}
-
-/**
  * Format and display a key-value pair with color
  */
 export function formatKeyValue(key: string, value: any): void {
@@ -59,7 +48,7 @@ export function formatKeyValue(key: string, value: any): void {
 /**
  * Colorize path segments with alternating colors
  */
-function colorizePathByLevels(path: string): string {
+export function colorizePathByLevels(path: string): string {
   if (!isColorEnabled()) {
     return path;
   }
@@ -170,11 +159,3 @@ export function displayTree(data: object, keyToAliasMap: Record<string, string[]
   });
 }
 
-/**
- * Print system information
- */
-export function printSystemInfo(isDev = false): void {
-  console.log(`  ${isDev ? '[DEV] ' : ''}Data is stored in:          ${getDataFilePath()}`);
-  console.log(`  ${isDev ? '[DEV] ' : ''}Aliases are stored in:       ${getAliasFilePath()}`);
-  console.log(`  ${isDev ? '[DEV] ' : ''}Config is stored in:         ${getConfigFilePath()}\n`);
-}
