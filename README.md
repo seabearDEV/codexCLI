@@ -53,7 +53,7 @@ npm install -g .
 ccli --version
 ```
 
-If the command is not found, verfiy that npm's global bin directory is in your PATH:
+If the command is not found, verify that npm's global bin directory is in your PATH:
 
 ```bash
 echo $PATH | grep -o "$(npm config get prefix)/bin"
@@ -95,6 +95,20 @@ ccli remove server.production.ip
 ccli help
 ```
 
+### Shortcuts
+
+Most commands have short aliases for faster typing:
+
+| Shortcut | Command        | Example                          |
+|----------|----------------|----------------------------------|
+| `g`      | `get`          | `ccli g server.ip`               |
+| `a`      | `add`          | `ccli a server.ip 192.168.1.1`   |
+| `f`      | `find`         | `ccli f 192.168`                 |
+| `rm`     | `remove`       | `ccli rm server.old`             |
+| `al g`   | `alias get`    | `ccli al g`                      |
+| `al a`   | `alias add`    | `ccli al a myip server.ip`       |
+| `al rm`  | `alias remove` | `ccli al rm myip`                |
+
 ### Working with Aliases
 
 Aliases provide shortcuts to frequently used paths:
@@ -125,15 +139,48 @@ ccli find production --tree
 # system.commands.getIP (ip): ipconfig getifaddr en0
 ```
 
+### Search Options
+
+The `find` command supports filtering to narrow your search:
+
+```bash
+# Search only in keys
+ccli find production --keys-only
+ccli find production -k
+
+# Search only in values
+ccli find 192.168 --values-only
+ccli find 192.168 -v
+
+# Search only in data entries (skip aliases)
+ccli find prod --entries-only
+ccli find prod -e
+
+# Search only in aliases
+ccli find prod --aliases-only
+ccli find prod -a
+```
+
 ### Configuration
 
 ```bash
-# View a configuration setting
-ccli config colorEnabled
+# View all configuration settings
+ccli config
 
-# Change a configuration setting
-ccli config colorEnabled false
+# View a specific setting
+ccli config colors
+
+# Change a setting
+ccli config colors false
+ccli config theme dark
 ```
+
+Available settings:
+
+| Setting  | Values                  | Description                     |
+|----------|-------------------------|---------------------------------|
+| `colors` | `true` / `false`        | Enable/disable colored output   |
+| `theme`  | `default` / `dark` / `light` | UI theme                  |
 
 ### Data Management
 
