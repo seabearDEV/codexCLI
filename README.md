@@ -13,6 +13,7 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 - **Tree Visualization**: Display nested data in a tree-like structure
 - **Aliases**: Create shortcuts to frequently accessed paths
 - **Search Capabilities**: Find entries by searching keys or values
+- **MCP Server**: Expose CodexCLI as a tool for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
 - **Development/Production Modes**: Different storage locations based on environment
 
 ## Installation
@@ -245,6 +246,63 @@ When troubleshooting, you can enable debug output:
 ```bash
 ccli --debug get server.production
 ```
+
+## MCP Server (AI Agent Integration)
+
+CodexCLI includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, allowing AI agents like Claude Code and Claude Desktop to read and write your CodexCLI data store as a native tool -- no shell commands required.
+
+### Setup
+
+#### Claude Code
+
+```bash
+claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
+```
+
+If you installed CodexCLI globally, you can also use:
+
+```bash
+claude mcp add codexcli -- ccli-mcp
+```
+
+#### Claude Desktop
+
+Add the following to your Claude Desktop MCP config file:
+
+```json
+{
+  "mcpServers": {
+    "codexcli": {
+      "command": "node",
+      "args": ["/absolute/path/to/dist/mcp-server.js"]
+    }
+  }
+}
+```
+
+### Available Tools
+
+Once connected, the following tools are available to the AI agent:
+
+| Tool | Description |
+|---|---|
+| `codex_add` | Add or update an entry (key + value) |
+| `codex_get` | Retrieve a specific entry, a subtree, or all entries (flat or tree format) |
+| `codex_remove` | Remove an entry by key |
+| `codex_search` | Search entries by key, value, or alias (case-insensitive) |
+| `codex_alias_set` | Create or update an alias for a dot-notation path |
+| `codex_alias_remove` | Remove an alias |
+| `codex_alias_list` | List all defined aliases |
+
+### Verifying the MCP Server
+
+You can verify the server starts correctly by sending an MCP `initialize` request:
+
+```bash
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1.0"}}}' | node dist/mcp-server.js
+```
+
+A successful response will include `"serverInfo":{"name":"codexcli"}` in the JSON output.
 
 ## License
 
