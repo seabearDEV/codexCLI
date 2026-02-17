@@ -1,6 +1,6 @@
 import { getEntriesFlat } from '../storage';
 import { setNestedValue } from '../utils/objectPath';
-import { formatKeyValue, displayTree } from '../formatting';
+import { formatKeyValue, displayTree, highlightMatch } from '../formatting';
 import { color } from '../formatting';
 import { loadAliases, buildKeyToAliasMap } from '../alias';
 import { SearchOptions } from '../types';
@@ -45,7 +45,8 @@ function displaySearchResults(
   dataMatches: Record<string, string>,
   aliasMatches: Record<string, string>,
   aliases: Record<string, string>,
-  options: SearchOptions
+  options: SearchOptions,
+  searchTerm: string
 ): void {
   const dataMatchKeys = Object.keys(dataMatches);
   const aliasMatchKeys = Object.keys(aliasMatches);
@@ -53,9 +54,7 @@ function displaySearchResults(
   const hasAliasMatches = aliasMatchKeys.length > 0;
 
   if (hasDataMatches) {
-    if (hasAliasMatches) {
-      console.log('\nData entries:');
-    }
+    console.log(`\nData entries (${dataMatchKeys.length}):`);
 
     if (options.tree) {
       const matchesObj = {};
@@ -65,18 +64,18 @@ function displaySearchResults(
       displayTree(matchesObj, buildKeyToAliasMap(aliases));
     } else {
       Object.entries(dataMatches).forEach(([key, value]) => {
-        formatKeyValue(key, value);
+        formatKeyValue(key, value, searchTerm);
       });
     }
   }
 
   if (hasAliasMatches) {
-    if (hasDataMatches) {
-      console.log('\nAliases:');
-    }
+    console.log(`\nAliases (${aliasMatchKeys.length}):`);
 
     Object.entries(aliasMatches).forEach(([aliasName, targetPath]) => {
-      console.log(`${color.cyan(aliasName)} ${color.gray('->')} ${color.yellow(targetPath)}`);
+      const highlightedName = highlightMatch(aliasName, searchTerm);
+      const highlightedPath = highlightMatch(targetPath, searchTerm);
+      console.log(`${color.cyan(highlightedName)} ${color.gray('->')} ${color.yellow(highlightedPath)}`);
     });
   }
 }
@@ -103,5 +102,5 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
   }
 
   console.log(`Found ${totalMatches} matches for '${searchTerm}':`);
-  displaySearchResults(dataMatches, aliasMatches, aliases, options);
+  displaySearchResults(dataMatches, aliasMatches, aliases, options, searchTerm);
 }

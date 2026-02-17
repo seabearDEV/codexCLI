@@ -11,6 +11,20 @@ export function isColorEnabled(): boolean {
   return loadConfig().colors !== false;
 }
 
+/**
+ * Highlight occurrences of a search term in text with bold inverse styling.
+ * Case-insensitive. Preserves original casing of matched text.
+ * Returns text unchanged when colors are disabled or term is empty.
+ */
+export function highlightMatch(text: string, term: string): string {
+  if (!term || !isColorEnabled()) {
+    return text;
+  }
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escaped, 'gi');
+  return text.replace(regex, (match) => chalk.inverse(match));
+}
+
 // Color helper functions that respect user configuration
 export const color = {
   cyan: (text: string): string => isColorEnabled() ? chalk.cyan(text) : text,
@@ -35,14 +49,15 @@ export const color = {
 /**
  * Format and display a key-value pair with color
  */
-export function formatKeyValue(key: string, value: unknown): void {
-  const formattedKey = isColorEnabled() ? colorizePathByLevels(key) : key;
+export function formatKeyValue(key: string, value: unknown, searchTerm?: string): void {
+  const formattedKey = isColorEnabled() ? colorizePathByLevels(key, searchTerm) : key;
   const displayValue = typeof value === 'string' && isEncrypted(value) ? '[encrypted]' : value;
   const prefix = `${formattedKey}:`;
   const termWidth = process.stdout.columns || 80;
   const prefixWidth = visibleLength(prefix) + 1; // +1 for the space
   const valueWidth = termWidth - prefixWidth;
-  const valueStr = String(displayValue);
+  const rawValueStr = String(displayValue);
+  const valueStr = searchTerm ? highlightMatch(rawValueStr, searchTerm) : rawValueStr;
 
   if (valueWidth < 20) {
     console.log(`${prefix} ${valueStr}`);
@@ -62,7 +77,7 @@ export function formatKeyValue(key: string, value: unknown): void {
 /**
  * Colorize path segments with alternating colors
  */
-export function colorizePathByLevels(path: string): string {
+export function colorizePathByLevels(path: string, searchTerm?: string): string {
   if (!isColorEnabled()) {
     return path;
   }
@@ -73,7 +88,8 @@ export function colorizePathByLevels(path: string): string {
   return parts
     .map((part, index) => {
       const colorFn = colors[index % colors.length];
-      return colorFn(part);
+      const highlighted = searchTerm ? highlightMatch(part, searchTerm) : part;
+      return colorFn(highlighted);
     })
     .join('.');
 }

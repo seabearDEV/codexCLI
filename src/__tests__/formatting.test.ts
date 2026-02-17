@@ -1,4 +1,5 @@
-import { formatTree, showHelp, displayTree, formatKeyValue, colorizePathByLevels, color, isColorEnabled } from '../formatting';
+import chalk from 'chalk';
+import { formatTree, showHelp, displayTree, formatKeyValue, colorizePathByLevels, color, isColorEnabled, highlightMatch } from '../formatting';
 
 // Mock config to avoid file-system dependency
 jest.mock('../config', () => ({
@@ -163,6 +164,55 @@ describe('color functions when enabled', () => {
     expect(typeof color.boldColors.yellow('test')).toBe('string');
     expect(typeof color.boldColors.blue('test')).toBe('string');
     expect(typeof color.boldColors.magenta('test')).toBe('string');
+  });
+});
+
+describe('highlightMatch', () => {
+  it('returns text unchanged when colors are disabled', () => {
+    expect(highlightMatch('hello world', 'world')).toBe('hello world');
+  });
+
+  it('returns text unchanged when term is empty', () => {
+    expect(highlightMatch('hello world', '')).toBe('hello world');
+  });
+
+  describe('when colors are enabled', () => {
+    const { loadConfig } = require('../config');
+    let originalLevel: typeof chalk.level;
+
+    beforeEach(() => {
+      (loadConfig as jest.Mock).mockReturnValue({ colors: true, theme: 'default' });
+      originalLevel = chalk.level;
+      chalk.level = 1; // Force ANSI color output in non-TTY
+    });
+
+    afterEach(() => {
+      (loadConfig as jest.Mock).mockReturnValue({ colors: false, theme: 'default' });
+      chalk.level = originalLevel;
+    });
+
+    it('wraps matched text with ANSI codes', () => {
+      const result = highlightMatch('hello world', 'world');
+      expect(result).not.toBe('hello world');
+      expect(result).toContain('world');
+    });
+
+    it('matches case-insensitively and preserves original casing', () => {
+      const result = highlightMatch('Hello World', 'hello');
+      expect(result).not.toBe('Hello World');
+      expect(result).toContain('Hello');
+    });
+
+    it('returns text unchanged when there is no match', () => {
+      const result = highlightMatch('hello world', 'xyz');
+      expect(result).toBe('hello world');
+    });
+
+    it('escapes regex special characters in term', () => {
+      const result = highlightMatch('price is $100.00', '$100.00');
+      expect(result).not.toBe('price is $100.00');
+      expect(result).toContain('$100.00');
+    });
   });
 });
 
