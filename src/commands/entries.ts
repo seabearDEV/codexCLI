@@ -10,6 +10,7 @@ import { buildKeyToAliasMap, setAlias } from '../alias';
 import { debug } from '../utils/debug';
 import { GetOptions } from '../types';
 import { printSuccess, printWarning, printError, displayEntries, askConfirmation, askPassword } from './helpers';
+import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 
 export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean }): Promise<void> {
@@ -180,6 +181,9 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   }
 
   if (typeof value === 'object' && value !== null) {
+    if (options.copy) {
+      printWarning('--copy only works with a single value, not a subtree.');
+    }
     displaySubtree(key, value, aliasMap, options);
     return;
   }
@@ -189,12 +193,30 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   if (isEncrypted(strValue) && options.decrypt) {
     const password = await askPassword('Password: ');
     const decrypted = decryptValue(strValue, password);
+    if (options.copy) {
+      try {
+        copyToClipboard(decrypted);
+        printSuccess('Copied to clipboard.');
+      } catch (err) {
+        printError(`Failed to copy: ${err instanceof Error ? err.message : err}`);
+      }
+    }
     if (options.raw) {
       console.log(decrypted);
     } else {
       displayEntries({ [key]: decrypted }, aliasMap);
     }
     return;
+  }
+
+  if (options.copy) {
+    const copyValue = isEncrypted(strValue) ? '[encrypted]' : strValue;
+    try {
+      copyToClipboard(copyValue);
+      printSuccess('Copied to clipboard.');
+    } catch (err) {
+      printError(`Failed to copy: ${err instanceof Error ? err.message : err}`);
+    }
   }
 
   if (options.raw) {

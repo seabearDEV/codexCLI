@@ -64,6 +64,8 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--alias': 'Create an alias for this key',
   '--decrypt': 'Decrypt an encrypted value',
   '-d': 'Decrypt an encrypted value',
+  '--copy': 'Copy value to clipboard',
+  '-c': 'Copy value to clipboard',
 };
 
 const GLOBAL_FLAGS: Record<string, string> = {
@@ -89,6 +91,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
       '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
     },
     argType: 'dataKey',
     description: 'Retrieve entries',
@@ -99,6 +102,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
       '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
     },
     argType: 'dataKey',
     description: 'Retrieve entries',

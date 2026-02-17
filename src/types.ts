@@ -7,6 +7,7 @@ export interface GetOptions {
   raw?: boolean | undefined;
   keysOnly?: boolean | undefined;
   decrypt?: boolean | undefined;
+  copy?: boolean | undefined;
 }
 
 export interface SearchOptions {

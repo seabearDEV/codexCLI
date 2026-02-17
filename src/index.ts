@@ -67,7 +67,8 @@ codexCLI
   .option('-r, --raw', 'Output raw values without formatting')
   .option('-k, --keys-only', 'Only show keys')
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, keysOnly?: boolean, decrypt?: boolean }) => {
+  .option('-c, --copy', 'Copy value to clipboard')
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, keysOnly?: boolean, decrypt?: boolean, copy?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }

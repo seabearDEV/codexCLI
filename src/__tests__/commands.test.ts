@@ -16,6 +16,7 @@ import {
 } from '../commands';
 import { displayAliases } from '../commands/helpers';
 import { encryptValue, isEncrypted } from '../utils/crypto';
+import { copyToClipboard } from '../utils/clipboard';
 import { stripAnsi } from '../utils/wordWrap';
 import { clearDataCache } from '../storage';
 import { clearAliasCache } from '../alias';
@@ -38,6 +39,11 @@ jest.mock('fs', () => ({
 // Mock readline for TTY confirmation prompts
 jest.mock('readline', () => ({
   createInterface: jest.fn(),
+}));
+
+// Mock clipboard utility
+jest.mock('../utils/clipboard', () => ({
+  copyToClipboard: jest.fn(),
 }));
 
 // Mock askPassword for encryption tests
@@ -987,6 +993,78 @@ describe('Commands', () => {
         call.some((arg: unknown) => typeof arg === 'string' && arg.includes('No entries found'))
       );
       expect(showedEmpty).toBe(true);
+    });
+  });
+
+  describe('getEntry with --copy', () => {
+    it('copies a single leaf value to clipboard', async () => {
+      await getEntry('server.production.ip', { copy: true });
+
+      expect(copyToClipboard).toHaveBeenCalledWith('192.168.1.100');
+      // Should also display the value
+      const logCalls = (console.log as jest.Mock).mock.calls;
+      const showedValue = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('192.168.1.100'))
+      );
+      expect(showedValue).toBe(true);
+    });
+
+    it('prints success message after copying', async () => {
+      await getEntry('server.production.ip', { copy: true });
+
+      const logCalls = (console.log as jest.Mock).mock.calls;
+      const showedCopied = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Copied to clipboard'))
+      );
+      expect(showedCopied).toBe(true);
+    });
+
+    it('warns when trying to copy a subtree', async () => {
+      await getEntry('server', { copy: true });
+
+      const logCalls = (console.log as jest.Mock).mock.calls;
+      const showedWarning = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('only works with a single value'))
+      );
+      expect(showedWarning).toBe(true);
+      expect(copyToClipboard).not.toHaveBeenCalled();
+    });
+
+    it('does not copy when key is not found', async () => {
+      await getEntry('nonexistent.key', { copy: true });
+
+      expect(copyToClipboard).not.toHaveBeenCalled();
+    });
+
+    it('copies decrypted value with --copy --decrypt', async () => {
+      const encryptedVal = encryptValue('secret-data', 'mypass');
+      const mockData = { api: { key: encryptedVal } };
+      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(mockData));
+      (askPassword as jest.Mock).mockResolvedValueOnce('mypass');
+
+      await getEntry('api.key', { copy: true, decrypt: true });
+
+      expect(copyToClipboard).toHaveBeenCalledWith('secret-data');
+    });
+
+    it('handles clipboard error gracefully', async () => {
+      (copyToClipboard as jest.Mock).mockImplementation(() => {
+        throw new Error('pbcopy not found');
+      });
+
+      await getEntry('server.production.ip', { copy: true });
+
+      const errorCalls = (console.error as jest.Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Failed to copy'))
+      );
+      expect(showedError).toBe(true);
+      // Should still display the value
+      const logCalls = (console.log as jest.Mock).mock.calls;
+      const showedValue = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('192.168.1.100'))
+      );
+      expect(showedValue).toBe(true);
     });
   });
 

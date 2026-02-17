@@ -153,6 +153,7 @@ export function showHelp(): void {
   opt(`${color.yellow('--dry')}`, 'Print the command without executing (for run command)');
   opt(`${color.yellow('--encrypt')}, ${color.yellow('-e')}`, 'Encrypt the value with a password (for set command)');
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value (for get/run commands)');
+  opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard (for get command)');
   opt(`${color.yellow('--debug')}`, 'Enable debug output for troubleshooting');
   console.log();
 
@@ -174,7 +175,6 @@ export function showHelp(): void {
   ex(`${color.yellow('ccli')} ${color.green('export')} all ${color.yellow('-o')} backup.json`, '# Export data and aliases');
   ex(`${color.yellow('ccli')} ${color.green('set')} ${color.cyan('api.key')} sk-abc123 ${color.yellow('-e')}`, '# Store encrypted value');
   ex(`${color.yellow('ccli')} ${color.green('config')} ${color.cyan('theme')} dark`, '# Change a setting');
-  console.log();
 }
 
 export function showAliasHelp(): void {
