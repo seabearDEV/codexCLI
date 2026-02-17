@@ -63,16 +63,23 @@ describe('Completions', () => {
       expect(v).not.toContain('get');
     });
 
-    it('returns flags for get command', () => {
-      const results = getCompletions('ccli get ', 9);
+    it('returns flags for get command when typing a dash', () => {
+      const results = getCompletions('ccli get -', 10);
       const v = values(results);
       expect(v).toContain('--tree');
       expect(v).toContain('--raw');
       expect(v).not.toContain('--format');
     });
 
-    it('returns flags with descriptions and group', () => {
+    it('does not return flags for get command without a dash', () => {
       const results = getCompletions('ccli get ', 9);
+      const v = values(results);
+      expect(v).not.toContain('--tree');
+      expect(v).not.toContain('--raw');
+    });
+
+    it('returns flags with descriptions and group', () => {
+      const results = getCompletions('ccli get -', 10);
       const treeItem = findItem(results, '--tree');
       expect(treeItem).toBeDefined();
       expect(treeItem!.description).toBe('Display as tree');
@@ -84,52 +91,52 @@ describe('Completions', () => {
       expect(rawItem!.group).toBe('flags');
     });
 
-    it('returns flags for run command', () => {
-      const results = getCompletions('ccli run ', 9);
+    it('returns flags for run command when typing a dash', () => {
+      const results = getCompletions('ccli run -', 10);
       const v = values(results);
       expect(v).toContain('--yes');
       expect(v).toContain('--dry');
     });
 
-    it('returns flags for r shortcut', () => {
-      const results = getCompletions('ccli r ', 7);
+    it('returns flags for r shortcut when typing a dash', () => {
+      const results = getCompletions('ccli r -', 8);
       const v = values(results);
       expect(v).toContain('--yes');
       expect(v).toContain('--dry');
     });
 
-    it('returns --encrypt flag for set command', () => {
-      const results = getCompletions('ccli set ', 9);
+    it('returns --encrypt flag for set command when typing a dash', () => {
+      const results = getCompletions('ccli set -', 10);
       const v = values(results);
       expect(v).toContain('--encrypt');
     });
 
-    it('returns --encrypt flag for s shortcut', () => {
-      const results = getCompletions('ccli s ', 7);
+    it('returns --encrypt flag for s shortcut when typing a dash', () => {
+      const results = getCompletions('ccli s -', 8);
       const v = values(results);
       expect(v).toContain('--encrypt');
     });
 
-    it('returns --decrypt flag for get command', () => {
-      const results = getCompletions('ccli get ', 9);
+    it('returns --decrypt flag for get command when typing a dash', () => {
+      const results = getCompletions('ccli get -', 10);
       const v = values(results);
       expect(v).toContain('--decrypt');
     });
 
-    it('returns --decrypt flag for g shortcut', () => {
-      const results = getCompletions('ccli g ', 7);
+    it('returns --decrypt flag for g shortcut when typing a dash', () => {
+      const results = getCompletions('ccli g -', 8);
       const v = values(results);
       expect(v).toContain('--decrypt');
     });
 
-    it('returns --decrypt flag for run command', () => {
-      const results = getCompletions('ccli run ', 9);
+    it('returns --decrypt flag for run command when typing a dash', () => {
+      const results = getCompletions('ccli run -', 10);
       const v = values(results);
       expect(v).toContain('--decrypt');
     });
 
-    it('returns --decrypt flag for r shortcut', () => {
-      const results = getCompletions('ccli r ', 7);
+    it('returns --decrypt flag for r shortcut when typing a dash', () => {
+      const results = getCompletions('ccli r -', 8);
       const v = values(results);
       expect(v).toContain('--decrypt');
     });
@@ -208,8 +215,8 @@ describe('Completions', () => {
       expect(dataItem!.description).toBe('Export type');
     });
 
-    it('includes global flags', () => {
-      const results = getCompletions('ccli get ', 9);
+    it('includes global flags when typing a dash', () => {
+      const results = getCompletions('ccli get -', 10);
       const v = values(results);
       expect(v).toContain('--debug');
       expect(v).toContain('--version');
@@ -217,7 +224,7 @@ describe('Completions', () => {
     });
 
     it('includes global flags with descriptions', () => {
-      const results = getCompletions('ccli get ', 9);
+      const results = getCompletions('ccli get -', 10);
       const debugItem = findItem(results, '--debug');
       expect(debugItem).toBeDefined();
       expect(debugItem!.description).toBe('Enable debug output');
@@ -374,16 +381,21 @@ describe('Completions', () => {
   });
 
   describe('default argType (null) branch', () => {
-    it('returns flags but no data keys for find command', () => {
-      const results = getCompletions('ccli find ', 10);
+    it('returns flags for find command when typing a dash', () => {
+      const results = getCompletions('ccli find -', 11);
       const v = values(results);
-      // find has argType: null, so no data keys
       expect(v).toContain('--keys-only');
       expect(v).toContain('--values-only');
       expect(v).toContain('--entries-only');
       expect(v).toContain('--aliases-only');
       expect(v).toContain('--debug');
-      // Should not contain any data keys
+    });
+
+    it('returns no completions for find command without a dash', () => {
+      const results = getCompletions('ccli find ', 10);
+      const v = values(results);
+      // find has argType: null, so no data keys or flags
+      expect(v).not.toContain('--keys-only');
       expect(v).not.toContain('server.ip');
     });
   });
@@ -412,12 +424,10 @@ describe('Completions', () => {
       });
       (fs.existsSync as jest.Mock).mockReturnValue(true);
 
-      // Should not throw, just return flags without data keys
+      // Should not throw, just return empty results without data keys
       const results = getCompletions('ccli get ', 9);
       expect(Array.isArray(results)).toBe(true);
-      // Should still have flags
-      const v = values(results);
-      expect(v).toContain('--tree');
+      expect(results).toHaveLength(0);
     });
 
     it('returns empty alias names when loadAliases throws', () => {

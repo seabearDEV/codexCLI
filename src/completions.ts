@@ -353,25 +353,28 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
     return [];
   }
 
-  // Build candidates: flags + dynamic values
+  // Build candidates: flags only when typing a dash, data keys otherwise
   const candidates: CompletionItem[] = [];
+  const typingFlag = partial.startsWith('-');
 
-  // Add flags that haven't been used yet
-  const usedFlags = new Set(args.filter(a => a.startsWith('-')));
-  for (const [flag, desc] of Object.entries(activeDef.flags)) {
-    if (!usedFlags.has(flag)) {
-      candidates.push({ value: flag, description: desc, group: 'flags' });
+  if (typingFlag) {
+    // Add flags that haven't been used yet
+    const usedFlags = new Set(args.filter(a => a.startsWith('-')));
+    for (const [flag, desc] of Object.entries(activeDef.flags)) {
+      if (!usedFlags.has(flag)) {
+        candidates.push({ value: flag, description: desc, group: 'flags' });
+      }
     }
-  }
-  for (const [flag, desc] of Object.entries(GLOBAL_FLAGS)) {
-    if (!usedFlags.has(flag)) {
-      candidates.push({ value: flag, description: desc, group: 'flags' });
+    for (const [flag, desc] of Object.entries(GLOBAL_FLAGS)) {
+      if (!usedFlags.has(flag)) {
+        candidates.push({ value: flag, description: desc, group: 'flags' });
+      }
     }
-  }
-
-  // Add dynamic argument values
-  if (activeDef.argType) {
-    candidates.push(...getDynamicValues(activeDef.argType));
+  } else {
+    // Add dynamic argument values
+    if (activeDef.argType) {
+      candidates.push(...getDynamicValues(activeDef.argType));
+    }
   }
 
   return filterPrefix(candidates, partial);
