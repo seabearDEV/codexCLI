@@ -189,6 +189,16 @@ const CLI_TREE: Record<string, CommandDef> = {
       get: { flags: {}, argType: 'configKey', description: 'Get config values' },
     },
   },
+  info: {
+    flags: {},
+    argType: null,
+    description: 'Show version, stats, and storage info',
+  },
+  i: {
+    flags: {},
+    argType: null,
+    description: 'Show version, stats, and storage info',
+  },
   examples: {
     flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] },
     argType: null,

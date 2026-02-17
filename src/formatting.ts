@@ -1,8 +1,4 @@
 import chalk from 'chalk';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { getDataFilePath, getAliasFilePath, getConfigFilePath, getDbFilePath } from './utils/paths';
 import { loadConfig } from './config';
 import { isEncrypted } from './utils/crypto';
 import { interpretEscapes, visibleLength, wordWrap } from './utils/wordWrap';
@@ -121,6 +117,7 @@ export function showHelp(): void {
   console.log('  export     <type>                     Export data or aliases to a file');
   console.log('  import     <type> <file>              Import data or aliases from a file');
   console.log('  reset      <type>                     Reset data or aliases to empty state');
+  console.log('  info                                  Show version, stats, and storage info');
   console.log('  examples                              Initialize with example data');
   console.log();
   console.log('  Use --help with any command for details (e.g. ccli set --help)');
@@ -131,6 +128,7 @@ export function showHelp(): void {
   console.log(`  ${color.yellow('r')}            ${color.gray('=')} ${color.green('run')}                 ${color.gray('ccli r my.command')}`);
   console.log(`  ${color.yellow('f')}            ${color.gray('=')} ${color.green('find')}                ${color.gray('ccli f 192.168')}`);
   console.log(`  ${color.yellow('rm')}           ${color.gray('=')} ${color.green('remove')}              ${color.gray('ccli rm server.old')}`);
+  console.log(`  ${color.yellow('i')}            ${color.gray('=')} ${color.green('info')}                ${color.gray('ccli i')}`);
   console.log(`  ${color.yellow('al')} ${color.gray('g')}         ${color.gray('=')} ${color.green('alias get')}           ${color.gray('ccli al g')}`);
   console.log(`  ${color.yellow('al')} ${color.gray('s')}         ${color.gray('=')} ${color.green('alias set')}           ${color.gray('ccli al s myip server.ip')}`);
   console.log(`  ${color.yellow('al')} ${color.gray('rm')}        ${color.gray('=')} ${color.green('alias remove')}        ${color.gray('ccli al rm myip')}`);
@@ -176,39 +174,6 @@ export function showHelp(): void {
   ex(`${color.yellow('ccli')} ${color.green('export')} all ${color.yellow('-o')} backup.json`, '# Export data and aliases');
   ex(`${color.yellow('ccli')} ${color.green('set')} ${color.cyan('api.key')} sk-abc123 ${color.yellow('-e')}`, '# Store encrypted value');
   ex(`${color.yellow('ccli')} ${color.green('config')} ${color.cyan('theme')} dark`, '# Change a setting');
-  console.log();
-
-  const isDev = process.env.NODE_ENV === 'development';
-  const devPrefix = isDev ? '[DEV] ' : '';
-  const backend = loadConfig().backend;
-  console.log(color.boldColors.magenta('DATA STORAGE:'));
-  if (backend === 'sqlite') {
-    console.log(`  ${devPrefix}Backend:                     ${color.cyan('sqlite')}`);
-    console.log(`  ${devPrefix}Database:                    ${getDbFilePath()}`);
-  } else {
-    console.log(`  ${devPrefix}Backend:                     ${color.cyan('json')}`);
-    console.log(`  ${devPrefix}Entries are stored in:       ${getDataFilePath()}`);
-    console.log(`  ${devPrefix}Aliases are stored in:       ${getAliasFilePath()}`);
-  }
-  console.log(`  ${devPrefix}Config is stored in:         ${getConfigFilePath()}`);
-
-  const shell = process.env.SHELL || '';
-  let rcFile: string | null = null;
-  const home = os.homedir();
-  if (shell.endsWith('/zsh')) {
-    rcFile = path.join(home, '.zshrc');
-  } else if (shell.endsWith('/bash')) {
-    const bashProfile = path.join(home, '.bash_profile');
-    const bashrc = path.join(home, '.bashrc');
-    rcFile = process.platform === 'darwin' && fs.existsSync(bashProfile) ? bashProfile : bashrc;
-  }
-  if (rcFile && fs.existsSync(rcFile) && fs.readFileSync(rcFile, 'utf8').includes('ccli completions')) {
-    console.log(`  ${devPrefix}Shell completions:           ${color.green('installed')} (${rcFile})`);
-  } else {
-    console.log(`  ${devPrefix}Shell completions:           ${color.yellow('not installed')} (run: ccli completions install)`);
-  }
-  console.log();
-  console.log(color.gray('Tip: Press q to exit when output is paginated.'));
   console.log();
 }
 

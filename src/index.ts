@@ -203,6 +203,15 @@ configCommand
     await withPager(() => commands.handleConfig(key));
   });
 
+// Info command
+codexCLI
+  .command('info')
+  .alias('i')
+  .description('Show version, stats, and storage info')
+  .action(() => {
+    commands.showInfo();
+  });
+
 // Examples command
 codexCLI
   .command('examples')

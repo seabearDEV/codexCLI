@@ -3,3 +3,4 @@ export { searchEntries } from './search';
 export { exportData, importData, resetData } from './data-management';
 export { initializeExampleData } from './init';
 export { handleConfig, configSet } from './config-commands';
+export { showInfo } from './info';

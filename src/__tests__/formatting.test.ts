@@ -76,15 +76,12 @@ describe('showHelp', () => {
     expect(output).toContain('SHORTCUTS:');
     expect(output).toContain('OPTIONS:');
     expect(output).toContain('EXAMPLES:');
-    expect(output).toContain('DATA STORAGE:');
   });
 
-  it('includes storage path references', () => {
+  it('includes tip referencing ccli info', () => {
     showHelp();
     const output = consoleSpy.mock.calls.map(c => c.join(' ')).join('\n');
-    expect(output).toContain('Entries are stored in:');
-    expect(output).toContain('Aliases are stored in:');
-    expect(output).toContain('Config is stored in:');
+    expect(output).toContain('ccli info');
   });
 });
 
@@ -230,9 +227,8 @@ describe('showHelp with NODE_ENV=development', () => {
     process.env.NODE_ENV = originalNodeEnv;
   });
 
-  it('includes [DEV] prefix in data storage paths', () => {
+  it('still renders without errors in dev mode', () => {
     showHelp();
-    const output = consoleSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
-    expect(output).toContain('[DEV]');
+    expect(consoleSpy).toHaveBeenCalled();
   });
 });
