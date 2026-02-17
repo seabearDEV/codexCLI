@@ -1,0 +1,57 @@
+import { color } from '../formatting';
+import { loadConfig, getConfigSetting, setConfigSetting } from '../config';
+import { printError } from './helpers';
+
+export function handleConfig(setting?: string, value?: string, options?: { list?: boolean }) {
+  // Handle the --list option
+  if (options && options.list) {
+    console.log(color.bold('Available Configuration Settings:'));
+    console.log('─'.repeat(40));
+    console.log(`${color.green('colors'.padEnd(15))}: Enable/disable colored output (true/false)`);
+    console.log(`${color.green('theme'.padEnd(15))}: UI theme (default/dark/light)`);
+    console.log(`${color.green('backend'.padEnd(15))}: Storage backend (json/sqlite)`);
+    return;
+  }
+
+  // If no setting provided, show all settings
+  if (!setting) {
+    const config = loadConfig();
+
+    console.log(color.bold('Current Configuration:'));
+    console.log('─'.repeat(25));
+
+    for (const [key, val] of Object.entries(config)) {
+      console.log(`${color.green(key.padEnd(15))}: ${val}`);
+    }
+
+    console.log('\nUse `ccli config --help` to see available options');
+    return;
+  }
+
+  // If only setting provided, show that setting's value
+  if (setting && !value) {
+    const currentValue = getConfigSetting(setting);
+    if (currentValue !== null) {
+      console.log(`${color.green(setting)}: ${currentValue}`);
+    } else {
+      printError(`Setting '${color.yellow(setting)}' does not exist`);
+    }
+    return;
+  }
+
+  // If both setting and value provided, update the setting
+  setConfigSetting(setting, value!);
+  console.log(`Updated ${color.green(setting)} to: ${value}`);
+}
+
+export function configSet(setting: string, value: string): void {
+  try {
+    const currentValue = getConfigSetting(setting);
+
+    console.log(`Changing ${setting} from ${currentValue} to ${value}`);
+    setConfigSetting(setting, value);
+    console.log(`${setting} set to ${value}`);
+  } catch (error) {
+    printError(`Error setting config ${setting}: ${error}`);
+  }
+}

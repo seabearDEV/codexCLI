@@ -1,0 +1,42 @@
+{
+	"compilerOptions": {
+		// Module settings
+		"esModuleInterop": true,
+		"moduleResolution": "node",
+		"module": "CommonJS",
+		"target": "ES2022",
+		
+		// Output settings
+		"outDir": "./dist",
+		"rootDir": "./src",
+		"declaration": true, // Generate .d.ts files for better TypeScript integration
+		"declarationMap": true, // Generate sourcemaps for declaration files
+		
+		// Type checking
+		"strict": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noImplicitOverride": true, // Ensure 'override' keyword is used when overriding methods
+		"exactOptionalPropertyTypes": true, // Stricter handling of optional properties
+		
+		// Additional options
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"removeComments": true, // Changed to true to remove comments from the compiled output
+		"sourceMap": true,
+		"resolveJsonModule": true, // Allow importing JSON files
+		"incremental": true, // Speed up builds by reusing information from previous compilations
+		"importHelpers": true, // Reduce bundle size by importing helpers from tslib
+		"useUnknownInCatchVariables": true, // Safer error handling with unknown type for caught errors
+		
+		// Module resolution 
+		"baseUrl": "./src",
+		"paths": {
+			"@utils/*": ["utils/*"]
+		}
+	},
+	"include": ["src/**/*"],
+	"exclude": ["node_modules", "**/*.test.ts"]
+}

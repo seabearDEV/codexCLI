@@ -1,0 +1,58 @@
+{
+	"name": "codexcli",
+	"version": "1.0.0",
+	"description": "A command-line information store for quick reference of frequently used data",
+	"bin": {
+		"ccli": "dist/index.js",
+		"ccli-mcp": "dist/mcp-server.js"
+	},
+	"files": [
+		"dist",
+		"bin",
+		"README.md",
+		"LICENSE"
+	],
+	"main": "dist/index.js",
+	"scripts": {
+		"build": "tsc && chmod +x dist/index.js dist/mcp-server.js",
+		"start": "node dist/index.js",
+		"dev": "NODE_ENV=development ts-node src/index.ts",
+		"install-local": "npm run build && npm link",
+		"prepublish": "npm run build",
+		"lint": "eslint src/",
+		"test": "jest",
+		"test:watch": "jest --watch"
+	},
+	"keywords": [
+		"cli",
+		"command-line",
+		"data-store",
+		"reference",
+		"information"
+	],
+	"author": "Kory Hoopes (seabearDEV)",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/seabearDEV/codexCLI.git"
+	},
+	"devDependencies": {
+		"@types/jest": "^29.5.0",
+		"@types/node": "^22.13.8",
+		"jest": "^29.5.0",
+		"ts-jest": "^29.1.0",
+		"ts-node": "^10.9.2",
+		"tslib": "^2.8.1",
+		"typescript": "^5.8.2",
+		"typescript-eslint": "^8.14.0"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.26.0",
+		"chalk": "^4.1.2",
+		"commander": "^13.1.0",
+		"zod": "^4.3.6"
+	},
+	"optionalDependencies": {
+		"better-sqlite3": "^11.10.0"
+	}
+}
