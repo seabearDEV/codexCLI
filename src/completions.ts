@@ -66,6 +66,7 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '-d': 'Decrypt an encrypted value',
   '--copy': 'Copy value to clipboard',
   '-c': 'Copy value to clipboard',
+  '--clear': 'Clear terminal after setting',
 };
 
 const GLOBAL_FLAGS: Record<string, string> = {
@@ -76,12 +77,12 @@ const GLOBAL_FLAGS: Record<string, string> = {
 
 const CLI_TREE: Record<string, CommandDef> = {
   set: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'] },
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'] },
     argType: 'dataKey',
     description: 'Set an entry',
   },
   s: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'] },
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'] },
     argType: 'dataKey',
     description: 'Set an entry',
   },
@@ -492,18 +493,39 @@ export function installCompletions(): void {
     process.exit(1);
   }
 
-  // Check if already installed
-  if (fs.existsSync(rcFile)) {
-    const content = fs.readFileSync(rcFile, 'utf8');
-    if (content.includes('ccli completions')) {
-      console.log(`Completions already installed in ${rcFile}`);
-      return;
-    }
+  const content = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
+
+  // Install completions
+  if (content.includes('ccli completions')) {
+    console.log(`Completions already installed in ${rcFile}`);
+  } else {
+    const completionBlock = `\n# CodexCLI shell completions\n${scriptCmd}\n`;
+    fs.appendFileSync(rcFile, completionBlock, 'utf8');
+    console.log(`Completions installed in ${rcFile}`);
   }
 
-  // Append to RC file
-  const line = `\n# CodexCLI shell completions\n${scriptCmd}\n`;
-  fs.appendFileSync(rcFile, line, 'utf8');
-  console.log(`Completions installed in ${rcFile}`);
+  // Install history exclusion
+  // Re-read content since completions block may have been appended above
+  let currentContent = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
+
+  if (currentContent.includes('_codexcli_history_filter') || (!shell.endsWith('/zsh') && currentContent.includes('HISTIGNORE'))) {
+    console.log(`History exclusion already configured in ${rcFile}`);
+  } else {
+    // Migrate from old HISTORY_IGNORE approach if present (zsh only)
+    if (shell.endsWith('/zsh') && currentContent.includes('HISTORY_IGNORE')) {
+      currentContent = currentContent
+        .replace(/\n?# CodexCLI - exclude from shell history\n/, '\n')
+        .replace(/\n?HISTORY_IGNORE="\(ccli \*\)"\n?/, '\n');
+      fs.writeFileSync(rcFile, currentContent, 'utf8');
+      console.log('Migrated from old HISTORY_IGNORE to zshaddhistory hook');
+    }
+
+    const historyBlock = shell.endsWith('/zsh')
+      ? `\n# CodexCLI - exclude from shell history (set/s commands may contain sensitive values)\n[[ -z \${functions[add-zsh-hook]} ]] && autoload -Uz add-zsh-hook\n_codexcli_history_filter() { [[ $1 != ccli\\ (set|s)\\ * ]] }\nadd-zsh-hook zshaddhistory _codexcli_history_filter\n`
+      : `\n# CodexCLI - exclude from shell history (set/s commands may contain sensitive values)\nHISTIGNORE="\${HISTIGNORE:+\$HISTIGNORE:}ccli set *:ccli s *"\n`;
+    fs.appendFileSync(rcFile, historyBlock, 'utf8');
+    console.log(`History exclusion installed in ${rcFile}`);
+  }
+
   console.log(`Restart your shell or run: source ${rcFile}`);
 }

@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import * as commands from './commands';
 import { setAlias, removeAlias, renameAlias, loadAliases, resolveKey } from './alias';
 import { showHelp, showExamples } from './formatting';
-import { displayAliases } from './commands/helpers';
+import { displayAliases, askPassword, askConfirmation, printError } from './commands/helpers';
 import { version } from '../package.json';
 import { getCompletions, generateBashScript, generateZshScript, installCompletions } from './completions';
 import { withPager } from './utils/pager';
@@ -48,14 +48,45 @@ codexCLI.option('--debug', 'Enable debug mode')
 
 // Set command
 codexCLI
-  .command('set <key> <value...>')
+  .command('set <key> [value...]')
   .alias('s')
   .description('Set an entry (prompts before overwriting)')
   .option('-f, --force', 'Overwrite existing entries without confirmation')
   .option('-e, --encrypt', 'Encrypt the value with a password')
   .option('-a, --alias <name>', 'Create an alias for this key')
-  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string }) => {
-    await commands.setEntry(key.replace(/:$/, ''), valueArray.join(' '), options.force, options.encrypt, options.alias);
+  .option('-p, --prompt', 'Read value interactively (avoids shell expansion of $, !, etc.)')
+  .option('-s, --show', 'Show input when using --prompt (default is masked)')
+  .option('-c, --clear', 'Clear terminal and scrollback after setting (removes sensitive input from history)')
+  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean }) => {
+    let value: string;
+    if (options.prompt) {
+      if (!process.stdin.isTTY) {
+        printError('--prompt requires an interactive terminal.');
+        process.exitCode = 1;
+        return;
+      }
+      if (options.show) {
+        value = await askConfirmation('Value: ');
+      } else {
+        value = await askPassword('Value: ');
+        const confirm = await askPassword('Confirm: ');
+        if (value !== confirm) {
+          printError('Values do not match.');
+          process.exitCode = 1;
+          return;
+        }
+      }
+    } else if (valueArray.length === 0) {
+      printError('Missing value. Provide a value or use --prompt (-p) to enter it interactively.');
+      process.exitCode = 1;
+      return;
+    } else {
+      value = valueArray.join(' ');
+    }
+    await commands.setEntry(key.replace(/:$/, ''), value, options.force, options.encrypt, options.alias);
+    if (options.clear) {
+      process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+    }
   });
 
 // Get command

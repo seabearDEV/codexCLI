@@ -97,6 +97,12 @@ ccli set mykey "my value"
 # Set a nested entry
 ccli set server.production.ip 192.168.1.100
 
+# Set a value interactively (use -p to avoid shell expansion of $, !, etc.)
+ccli set secret.password -p
+
+# Same, but with visible input
+ccli set secret.password -p --show
+
 # Get a specific entry
 ccli get server.production.ip
 

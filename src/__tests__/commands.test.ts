@@ -997,16 +997,16 @@ describe('Commands', () => {
   });
 
   describe('getEntry with --copy', () => {
-    it('copies a single leaf value to clipboard', async () => {
+    it('copies a single leaf value to clipboard without displaying it', async () => {
       await getEntry('server.production.ip', { copy: true });
 
       expect(copyToClipboard).toHaveBeenCalledWith('192.168.1.100');
-      // Should also display the value
+      // Should NOT display the value (suppressed when copy succeeds)
       const logCalls = (console.log as jest.Mock).mock.calls;
       const showedValue = logCalls.some(call =>
         call.some((arg: unknown) => typeof arg === 'string' && arg.includes('192.168.1.100'))
       );
-      expect(showedValue).toBe(true);
+      expect(showedValue).toBe(false);
     });
 
     it('prints success message after copying', async () => {

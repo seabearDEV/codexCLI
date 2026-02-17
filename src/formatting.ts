@@ -146,6 +146,8 @@ export function showHelp(): void {
   opt(`${color.yellow('--force')}, ${color.yellow('-f')}`, 'Overwrite existing entries without confirmation');
   opt(`${color.yellow('--encrypt')}, ${color.yellow('-e')}`, 'Encrypt the value with a password');
   opt(`${color.yellow('--alias')} <name>`, 'Create an alias for this key');
+  opt(`${color.yellow('--prompt')}, ${color.yellow('-p')}`, 'Read value interactively (avoids shell expansion)');
+  opt(`${color.yellow('--show')}, ${color.yellow('-s')}`, 'Show input when using --prompt (default is masked)');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (get):'));
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display data in a hierarchical tree structure');

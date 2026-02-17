@@ -37,7 +37,13 @@ export async function runCommand(key: string, options: { yes?: boolean, dry?: bo
         return;
       }
       const password = await askPassword('Password: ');
-      value = decryptValue(value, password);
+      try {
+        value = decryptValue(value, password);
+      } catch {
+        printError('Decryption failed. Wrong password or corrupted data.');
+        process.exitCode = 1;
+        return;
+      }
     }
 
     console.log(color.gray('$ ') + color.white(value));
@@ -194,11 +200,19 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
 
   if (isEncrypted(strValue) && options.decrypt) {
     const password = await askPassword('Password: ');
-    const decrypted = decryptValue(strValue, password);
+    let decrypted: string;
+    try {
+      decrypted = decryptValue(strValue, password);
+    } catch {
+      printError('Decryption failed. Wrong password or corrupted data.');
+      process.exitCode = 1;
+      return;
+    }
     if (options.copy) {
       try {
         copyToClipboard(decrypted);
         printSuccess('Copied to clipboard.');
+        return;
       } catch (err) {
         printError(`Failed to copy: ${err instanceof Error ? err.message : err}`);
       }
@@ -216,6 +230,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     try {
       copyToClipboard(copyValue);
       printSuccess('Copied to clipboard.');
+      return;
     } catch (err) {
       printError(`Failed to copy: ${err instanceof Error ? err.message : err}`);
     }

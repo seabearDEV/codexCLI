@@ -533,10 +533,10 @@ describe('Completions', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 
-    it('skips if completions already installed', () => {
+    it('skips if completions and history exclusion already installed', () => {
       process.env.SHELL = '/bin/zsh';
       (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue('eval "$(ccli completions zsh)"');
+      (fs.readFileSync as jest.Mock).mockReturnValue('eval "$(ccli completions zsh)"\n_codexcli_history_filter');
 
       installCompletions();
 
@@ -546,6 +546,33 @@ describe('Completions', () => {
         call.some((arg: unknown) => typeof arg === 'string' && arg.includes('already installed'))
       );
       expect(showedAlready).toBe(true);
+    });
+
+    it('migrates from old HISTORY_IGNORE to zshaddhistory hook', () => {
+      process.env.SHELL = '/bin/zsh';
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      const oldContent = 'eval "$(ccli completions zsh)"\n\n# CodexCLI - exclude from shell history\nHISTORY_IGNORE="(ccli *)"';
+      (fs.readFileSync as jest.Mock).mockReturnValue(oldContent);
+
+      installCompletions();
+
+      // Should have written the file to remove old HISTORY_IGNORE
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      const writeCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      expect(writeCall[1]).not.toContain('HISTORY_IGNORE');
+
+      // Should have appended the new hook
+      expect(fs.appendFileSync).toHaveBeenCalled();
+      const appendCall = (fs.appendFileSync as jest.Mock).mock.calls[0];
+      expect(appendCall[1]).toContain('_codexcli_history_filter');
+      expect(appendCall[1]).toContain('add-zsh-hook zshaddhistory');
+
+      // Should log migration message
+      const logCalls = consoleSpy.mock.calls;
+      const showedMigrated = logCalls.some((call: unknown[]) =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Migrated'))
+      );
+      expect(showedMigrated).toBe(true);
     });
   });
 });
