@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import {
   setAlias,
   removeAlias,
+  renameAlias,
   loadAliases,
   saveAliases,
   buildKeyToAliasMap,
@@ -129,6 +130,36 @@ describe('Alias Management', () => {
       // If removeAlias doesn't log an error, we should modify our expectations
       // Instead of checking console.error, check that writeFileSync wasn't called
       // (since nothing should be written if the alias doesn't exist)
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('renameAlias', () => {
+    it('renames an existing alias', () => {
+      const result = renameAlias('prod-ip', 'production-ip');
+
+      expect(result).toBe(true);
+      expect(fs.writeFileSync).toHaveBeenCalled();
+
+      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedAliases = JSON.parse(savedCall[1]);
+
+      expect(savedAliases['production-ip']).toBe('server.production.ip');
+      expect(savedAliases['prod-ip']).toBeUndefined();
+      expect(savedAliases['dev-ip']).toBe('server.development.ip');
+    });
+
+    it('returns false when old name does not exist', () => {
+      const result = renameAlias('nonexistent', 'new-name');
+
+      expect(result).toBe(false);
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+
+    it('returns false when new name already exists', () => {
+      const result = renameAlias('prod-ip', 'dev-ip');
+
+      expect(result).toBe(false);
       expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
   });

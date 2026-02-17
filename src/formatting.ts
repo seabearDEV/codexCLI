@@ -118,6 +118,7 @@ export function showHelp(): void {
   console.log(`  ${color.yellow('al')} ${color.gray('g')}         ${color.gray('=')} ${color.green('alias get')}           ${color.gray('ccli al g')}`);
   console.log(`  ${color.yellow('al')} ${color.gray('s')}         ${color.gray('=')} ${color.green('alias set')}           ${color.gray('ccli al s myip server.ip')}`);
   console.log(`  ${color.yellow('al')} ${color.gray('rm')}        ${color.gray('=')} ${color.green('alias remove')}        ${color.gray('ccli al rm myip')}`);
+  console.log(`  ${color.yellow('al')} ${color.gray('rn')}        ${color.gray('=')} ${color.green('alias rename')}        ${color.gray('ccli al rn myip newip')}`);
 
   // Align all option descriptions at the same column
   const optDescCol = 26; // description starts this many chars after the 2-space indent
@@ -208,11 +209,13 @@ export function showAliasHelp(): void {
   console.log('  set        <name> <path>          Create or update an alias');
   console.log('  get        [name]                 List all aliases or get a specific one');
   console.log('  remove     <name>                 Remove an alias');
+  console.log('  rename     <old> <new>            Rename an alias');
 
   console.log('\n' + color.boldColors.magenta('SHORTCUTS:'));
   console.log(`  ${color.yellow('al s')}         ${color.gray('=')} ${color.green('alias set')}           ${color.gray('ccli al s myip server.ip')}`);
   console.log(`  ${color.yellow('al g')}         ${color.gray('=')} ${color.green('alias get')}           ${color.gray('ccli al g')}`);
   console.log(`  ${color.yellow('al rm')}        ${color.gray('=')} ${color.green('alias remove')}        ${color.gray('ccli al rm myip')}`);
+  console.log(`  ${color.yellow('al rn')}        ${color.gray('=')} ${color.green('alias rename')}        ${color.gray('ccli al rn myip newip')}`);
 
   const alOpt = (flag: string, desc: string) => {
     const pad = ' '.repeat(Math.max(2, 26 - visibleLength(flag)));
@@ -231,6 +234,7 @@ export function showAliasHelp(): void {
   alEx(`${color.yellow('ccli')} ${color.green('alias get')}`, '# List all aliases');
   alEx(`${color.yellow('ccli')} ${color.green('alias get')} ${color.cyan('myip')}`, '# Show where "myip" points');
   alEx(`${color.yellow('ccli')} ${color.green('alias get')} ${color.yellow('-t')}`, '# Display aliases as a tree');
+  alEx(`${color.yellow('ccli')} ${color.green('alias rename')} ${color.cyan('myip')} ${color.cyan('prodip')}`, '# Rename "myip" to "prodip"');
   alEx(`${color.yellow('ccli')} ${color.green('alias remove')} ${color.cyan('myip')}`, '# Remove the "myip" alias');
   alEx(`${color.yellow('ccli')} ${color.green('get')} ${color.cyan('myip')}`, '# Use alias in place of key');
   console.log();

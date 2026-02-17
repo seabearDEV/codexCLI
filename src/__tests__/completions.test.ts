@@ -318,6 +318,19 @@ describe('Completions', () => {
       expect(v).toContain('prod');
     });
 
+    it('returns alias names for alias rename command', () => {
+      const mockAliases = { myip: 'server.ip', prod: 'server.prod' };
+      (fs.readFileSync as jest.Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
+        return JSON.stringify({});
+      });
+
+      const results = getCompletions('ccli alias rename ', 18);
+      const v = values(results);
+      expect(v).toContain('myip');
+      expect(v).toContain('prod');
+    });
+
     it('returns config keys for configKey commands', () => {
       const results = getCompletions('ccli config set ', 16);
       const v = values(results);

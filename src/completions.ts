@@ -162,6 +162,8 @@ const CLI_TREE: Record<string, CommandDef> = {
       s:      { flags: {}, argType: 'dataKey', description: 'Set an alias' },
       remove: { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
       rm:     { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
+      rename: { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
+      rn:     { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
       get: {
         flags: {
           '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],

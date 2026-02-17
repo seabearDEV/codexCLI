@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import * as commands from './commands';
-import { setAlias, removeAlias, loadAliases, resolveKey } from './alias';
+import { setAlias, removeAlias, renameAlias, loadAliases, resolveKey } from './alias';
 import { showHelp } from './formatting';
 import { displayAliases } from './commands/helpers';
 import { version } from '../package.json';
@@ -146,6 +146,25 @@ aliasCommand
       console.log(`Alias '${name}' removed successfully.`);
     } else {
       console.error(`Alias '${name}' not found.`);
+      process.exitCode = 1;
+    }
+  });
+
+aliasCommand
+  .command('rename <old-name> <new-name>')
+  .alias('rn')
+  .description('Rename an alias')
+  .action((oldName: string, newName: string) => {
+    const renamed = renameAlias(oldName, newName);
+    if (renamed) {
+      console.log(`Alias '${oldName}' renamed to '${newName}'.`);
+    } else {
+      const aliases = loadAliases();
+      if (!(oldName in aliases)) {
+        console.error(`Alias '${oldName}' not found.`);
+      } else {
+        console.error(`Alias '${newName}' already exists.`);
+      }
       process.exitCode = 1;
     }
   });

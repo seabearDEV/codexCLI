@@ -103,6 +103,19 @@ export function removeAlias(alias: string): boolean {
   return false;
 }
 
+// Rename an alias
+export function renameAlias(oldName: string, newName: string): boolean {
+  const aliases = loadAliases();
+
+  if (!(oldName in aliases)) return false;
+  if (newName in aliases) return false;
+
+  aliases[newName] = aliases[oldName];
+  delete aliases[oldName];
+  saveAliases(aliases);
+  return true;
+}
+
 // Resolve a key that might be an alias
 export function resolveKey(key: string): string {
   const aliases = loadAliases();
