@@ -19,6 +19,7 @@ const mockLoadAliases = jest.fn().mockReturnValue({});
 const mockResolveKey = jest.fn((k: string) => k);
 
 const mockShowHelp = jest.fn();
+const mockShowExamples = jest.fn();
 const identity = (s: string) => s;
 const mockColor = {
   boldColors: { magenta: identity },
@@ -57,6 +58,7 @@ function setupMocks() {
   }));
   jest.doMock('../formatting', () => ({
     showHelp: mockShowHelp,
+    showExamples: mockShowExamples,
     color: mockColor,
   }));
   jest.doMock('../commands/helpers', () => ({
@@ -278,9 +280,14 @@ describe('CLI Entry Point (index.ts)', () => {
     expect(mockGetEntry).toHaveBeenCalledWith(undefined, expect.objectContaining({ keysOnly: true }));
   });
 
-  it('examples calls initializeExampleData', () => {
-    loadCLI('examples');
+  it('init calls initializeExampleData', () => {
+    loadCLI('init');
     expect(mockInitializeExampleData).toHaveBeenCalled();
+  });
+
+  it('examples calls showExamples', () => {
+    loadCLI('examples');
+    expect(mockShowExamples).toHaveBeenCalled();
   });
 
   it('export calls exportData', () => {

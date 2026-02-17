@@ -129,7 +129,7 @@ const CLI_TREE: Record<string, CommandDef> = {
     flags: {
       '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--values-only': FLAG_DESCRIPTIONS['--values-only'], '-v': FLAG_DESCRIPTIONS['-v'],
-      '--entries-only': FLAG_DESCRIPTIONS['--entries-only'],
+      '--entries-only': FLAG_DESCRIPTIONS['--entries-only'], '-e': FLAG_DESCRIPTIONS['--entries-only'],
       '--aliases-only': FLAG_DESCRIPTIONS['--aliases-only'], '-a': FLAG_DESCRIPTIONS['-a'],
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
     },
@@ -140,7 +140,7 @@ const CLI_TREE: Record<string, CommandDef> = {
     flags: {
       '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--values-only': FLAG_DESCRIPTIONS['--values-only'], '-v': FLAG_DESCRIPTIONS['-v'],
-      '--entries-only': FLAG_DESCRIPTIONS['--entries-only'],
+      '--entries-only': FLAG_DESCRIPTIONS['--entries-only'], '-e': FLAG_DESCRIPTIONS['--entries-only'],
       '--aliases-only': FLAG_DESCRIPTIONS['--aliases-only'], '-a': FLAG_DESCRIPTIONS['-a'],
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
     },
@@ -203,10 +203,20 @@ const CLI_TREE: Record<string, CommandDef> = {
     argType: null,
     description: 'Show version, stats, and storage info',
   },
-  examples: {
+  init: {
     flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] },
     argType: null,
     description: 'Initialize with example data',
+  },
+  examples: {
+    flags: {},
+    argType: null,
+    description: 'Show usage examples',
+  },
+  ex: {
+    flags: {},
+    argType: null,
+    description: 'Show usage examples',
   },
   export: {
     flags: {

@@ -118,7 +118,8 @@ export function showHelp(): void {
   console.log('  import     <type> <file>              Import data or aliases from a file');
   console.log('  reset      <type>                     Reset data or aliases to empty state');
   console.log('  info                                  Show version, stats, and storage info');
-  console.log('  examples                              Initialize with example data');
+  console.log('  init                                  Initialize with example data');
+  console.log('  examples                              Show usage examples');
   console.log();
   console.log('  Use --help with any command for details (e.g. ccli set --help)');
 
@@ -141,40 +142,136 @@ export function showHelp(): void {
     console.log(`  ${flag}${pad}${desc}`);
   };
 
-  console.log('\n' + color.boldColors.magenta('OPTIONS:'));
+  console.log('\n' + color.boldColors.magenta('OPTIONS (set):'));
+  opt(`${color.yellow('--force')}, ${color.yellow('-f')}`, 'Overwrite existing entries without confirmation');
+  opt(`${color.yellow('--encrypt')}, ${color.yellow('-e')}`, 'Encrypt the value with a password');
+  opt(`${color.yellow('--alias')} <name>`, 'Create an alias for this key');
+
+  console.log('\n' + color.boldColors.magenta('OPTIONS (get):'));
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display data in a hierarchical tree structure');
   opt(`${color.yellow('--raw')}, ${color.yellow('-r')}`, 'Output raw values without formatting (for scripting)');
-  opt(`${color.yellow('--keys-only')}, ${color.yellow('-k')}`, 'Show only keys (for get/find commands)');
-  opt(`${color.yellow('--values-only')}, ${color.yellow('-v')}`, 'Search only in values (for find command)');
-  opt(`${color.yellow('--entries-only')}`, 'Search only in data entries (for find command)');
-  opt(`${color.yellow('--aliases-only')}, ${color.yellow('-a')}`, 'Search only in aliases (for find command)');
-  opt(`${color.yellow('--force')}, ${color.yellow('-f')}`, 'Overwrite or skip confirmation (for set/reset commands)');
-  opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt (for run command)');
-  opt(`${color.yellow('--dry')}`, 'Print the command without executing (for run command)');
-  opt(`${color.yellow('--encrypt')}, ${color.yellow('-e')}`, 'Encrypt the value with a password (for set command)');
-  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value (for get/run commands)');
-  opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard (for get command)');
+  opt(`${color.yellow('--keys-only')}, ${color.yellow('-k')}`, 'Show only keys');
+  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value');
+  opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard');
+
+  console.log('\n' + color.boldColors.magenta('OPTIONS (run):'));
+  opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt');
+  opt(`${color.yellow('--dry')}`, 'Print the command without executing');
+  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted command before running');
+
+  console.log('\n' + color.boldColors.magenta('OPTIONS (find):'));
+  opt(`${color.yellow('--keys-only')}, ${color.yellow('-k')}`, 'Show only keys');
+  opt(`${color.yellow('--values-only')}, ${color.yellow('-v')}`, 'Search only in values');
+  opt(`${color.yellow('--entries-only')}, ${color.yellow('-e')}`, 'Search only in data entries');
+  opt(`${color.yellow('--aliases-only')}, ${color.yellow('-a')}`, 'Search only in aliases');
+  opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display results in a tree structure');
+
+  console.log('\n' + color.boldColors.magenta('OPTIONS (global):'));
   opt(`${color.yellow('--debug')}`, 'Enable debug output for troubleshooting');
   console.log();
+}
 
-  // Align all example comments at the same column
-  const exDescCol = 42; // comment starts this many chars after the 2-space indent
+/**
+ * Display comprehensive usage examples (standalone via `ccli examples`)
+ */
+export function showExamples(): void {
+  const exDescCol = 50; // comment starts this many chars after the 2-space indent
   const ex = (cmd: string, comment: string) => {
     const pad = ' '.repeat(Math.max(2, exDescCol - visibleLength(cmd)));
     console.log(`  ${cmd}${pad}${color.gray(comment)}`);
   };
 
-  console.log(color.boldColors.magenta('EXAMPLES:'));
-  ex(`${color.yellow('ccli')} ${color.green('set')} ${color.cyan('server.ip')} 192.168.1.100`, '# Set an entry');
-  ex(`${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server')} ${color.yellow('--tree')}`, '# Display a namespace as a tree');
-  ex(`${color.yellow('ccli')} ${color.green('get')} ${color.cyan('server.ip')} ${color.yellow('--raw')}`, '# Raw value (useful for scripting)');
-  ex(`${color.yellow('ccli')} ${color.green('run')} ${color.cyan('my.command')} ${color.yellow('-y')}`, '# Execute a stored command (skip prompt)');
-  ex(`${color.yellow('ccli')} ${color.green('find')} 192.168`, '# Search by key or value');
-  ex(`${color.yellow('ccli')} ${color.green('alias')} ${color.green('set')} ${color.cyan('prod')} ${color.cyan('server.production')}`, '# Create an alias');
-  ex(`${color.yellow('ccli')} ${color.green('remove')} ${color.cyan('server.old')}`, '# Remove an entry');
-  ex(`${color.yellow('ccli')} ${color.green('export')} all ${color.yellow('-o')} backup.json`, '# Export data and aliases');
-  ex(`${color.yellow('ccli')} ${color.green('set')} ${color.cyan('api.key')} sk-abc123 ${color.yellow('-e')}`, '# Store encrypted value');
-  ex(`${color.yellow('ccli')} ${color.green('config')} ${color.cyan('theme')} dark`, '# Change a setting');
+  const y = color.yellow;
+  const g = color.green;
+  const c = color.cyan;
+  const section = (title: string) => console.log('\n' + color.boldColors.magenta(title));
+
+  console.log();
+  console.log('┌────────────────────────────┐');
+  console.log('│ CodexCLI - Usage Examples  │');
+  console.log('└────────────────────────────┘');
+
+  section('STORING DATA:');
+  ex(`${y('ccli')} ${g('set')} ${c('server.ip')} 192.168.1.100`, '# Store a value');
+  ex(`${y('ccli')} ${g('set')} ${c('deploy.cmd')} docker compose up -d`, '# Store a multi-word command');
+  ex(`${y('ccli')} ${g('set')} ${c('api.key')} sk-abc123 ${y('-e')}`, '# Encrypt a secret with a password');
+  ex(`${y('ccli')} ${g('set')} ${c('db.host')} mydb.local ${y('-f')}`, '# Overwrite without confirmation');
+  ex(`${y('ccli')} ${g('set')} ${c('db.host')} mydb.local ${y('-a')} ${c('dbh')}`, '# Store and create alias "dbh" at once');
+
+  section('RETRIEVING DATA:');
+  ex(`${y('ccli')} ${g('get')}`, '# List all entries');
+  ex(`${y('ccli')} ${g('get')} ${c('server.ip')}`, '# Get a specific value');
+  ex(`${y('ccli')} ${g('get')} ${c('server')}`, '# Get everything under a namespace');
+  ex(`${y('ccli')} ${g('get')} ${y('-t')}`, '# Show all data as a tree');
+  ex(`${y('ccli')} ${g('get')} ${c('server')} ${y('--tree')}`, '# Show a namespace as a tree');
+  ex(`${y('ccli')} ${g('get')} ${c('server.ip')} ${y('--raw')}`, '# Raw value, no formatting (for scripts)');
+  ex(`${y('ccli')} ${g('get')} ${y('--keys-only')}`, '# List just the keys');
+  ex(`${y('ccli')} ${g('get')} ${c('api.key')} ${y('-d')}`, '# Decrypt an encrypted value');
+  ex(`${y('ccli')} ${g('get')} ${c('server.ip')} ${y('-c')}`, '# Copy value to clipboard');
+
+  section('RUNNING STORED COMMANDS:');
+  ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')}`, '# Execute (prompts for confirmation)');
+  ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')} ${y('-y')}`, '# Execute without confirmation');
+  ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')} ${y('--dry')}`, '# Preview command without executing');
+  ex(`${y('ccli')} ${g('run')} ${c('secret.script')} ${y('-d')}`, '# Decrypt and execute');
+
+  section('SEARCHING:');
+  ex(`${y('ccli')} ${g('find')} 192.168`, '# Search keys and values');
+  ex(`${y('ccli')} ${g('find')} server ${y('-k')}`, '# Search only in keys');
+  ex(`${y('ccli')} ${g('find')} production ${y('-v')}`, '# Search only in values');
+  ex(`${y('ccli')} ${g('find')} prod ${y('-e')}`, '# Search data entries only (skip aliases)');
+  ex(`${y('ccli')} ${g('find')} ip ${y('-a')}`, '# Search aliases only');
+  ex(`${y('ccli')} ${g('find')} server ${y('-t')}`, '# Show results as a tree');
+
+  section('ALIASES:');
+  ex(`${y('ccli')} ${g('alias set')} ${c('prod')} ${c('server.production.ip')}`, '# Create alias "prod"');
+  ex(`${y('ccli')} ${g('alias get')}`, '# List all aliases');
+  ex(`${y('ccli')} ${g('alias get')} ${c('prod')}`, '# Show where "prod" points');
+  ex(`${y('ccli')} ${g('alias get')} ${y('-t')}`, '# Display aliases as a tree');
+  ex(`${y('ccli')} ${g('alias rename')} ${c('prod')} ${c('production')}`, '# Rename an alias');
+  ex(`${y('ccli')} ${g('alias remove')} ${c('prod')}`, '# Remove an alias');
+  ex(`${y('ccli')} ${g('get')} ${c('prod')}`, '# Use alias in place of full key path');
+
+  section('REMOVING DATA:');
+  ex(`${y('ccli')} ${g('remove')} ${c('server.old')}`, '# Remove an entry');
+
+  section('IMPORT & EXPORT:');
+  ex(`${y('ccli')} ${g('export')} data`, '# Export data to a timestamped file');
+  ex(`${y('ccli')} ${g('export')} aliases ${y('-o')} aliases.json`, '# Export aliases to a specific file');
+  ex(`${y('ccli')} ${g('export')} all ${y('-o')} backup.json`, '# Export everything');
+  ex(`${y('ccli')} ${g('import')} data backup.json`, '# Import data from a file');
+  ex(`${y('ccli')} ${g('import')} all backup.json`, '# Import data and aliases');
+  ex(`${y('ccli')} ${g('reset')} data`, '# Clear all data (prompts first)');
+  ex(`${y('ccli')} ${g('reset')} all ${y('-f')}`, '# Clear everything without confirmation');
+
+  section('CONFIGURATION:');
+  ex(`${y('ccli')} ${g('config')}`, '# Show all settings');
+  ex(`${y('ccli')} ${g('config get')} ${c('theme')}`, '# Get a specific setting');
+  ex(`${y('ccli')} ${g('config set')} ${c('theme')} dark`, '# Change theme (default/dark/light)');
+  ex(`${y('ccli')} ${g('config set')} ${c('colors')} false`, '# Disable colored output');
+  ex(`${y('ccli')} ${g('config set')} ${c('backend')} sqlite`, '# Switch storage to SQLite');
+
+  section('MIGRATION:');
+  ex(`${y('ccli')} ${g('migrate sqlite')}`, '# Migrate JSON data to SQLite');
+  ex(`${y('ccli')} ${g('migrate json')}`, '# Migrate SQLite data back to JSON');
+  ex(`${y('ccli')} ${g('migrate sqlite')} ${y('-f')}`, '# Force re-migration');
+
+  section('SHELL COMPLETIONS:');
+  ex(`${y('ccli')} ${g('completions install')}`, '# Auto-detect shell and install');
+  ex(`${y('ccli')} ${g('completions bash')}`, '# Print Bash completion script');
+  ex(`${y('ccli')} ${g('completions zsh')}`, '# Print Zsh completion script');
+
+  section('OTHER:');
+  ex(`${y('ccli')} ${g('info')}`, '# Show version, stats, and storage paths');
+  ex(`${y('ccli')} ${g('init')}`, '# Load example data to explore');
+  ex(`${y('ccli')} ${g('init')} ${y('-f')}`, '# Reload examples (overwrites existing)');
+
+  section('SCRIPTING TIPS:');
+  ex(`ssh $(${y('ccli')} ${g('get')} ${c('server.ip')} ${y('-r')})`, '# Use raw output in other commands');
+  ex(`${y('ccli')} ${g('get')} ${c('api.key')} ${y('-d -c')}`, '# Decrypt and copy to clipboard');
+  ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')} ${y('-d -y')}`, '# Decrypt and run without prompt');
+
+  console.log();
 }
 
 export function showAliasHelp(): void {

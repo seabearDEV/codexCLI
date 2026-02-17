@@ -3,7 +3,7 @@
 import { Command } from 'commander';
 import * as commands from './commands';
 import { setAlias, removeAlias, renameAlias, loadAliases, resolveKey } from './alias';
-import { showHelp } from './formatting';
+import { showHelp, showExamples } from './formatting';
 import { displayAliases } from './commands/helpers';
 import { version } from '../package.json';
 import { getCompletions, generateBashScript, generateZshScript, installCompletions } from './completions';
@@ -95,7 +95,7 @@ codexCLI
   .description('Find entries by key or value')
   .option('-k, --keys-only', 'Only search in keys')
   .option('-v, --values-only', 'Only search in values')
-  .option('--entries-only', 'Search only in data entries')
+  .option('-e, --entries-only', 'Search only in data entries')
   .option('-a, --aliases-only', 'Search only in aliases')
   .option('-t, --tree', 'Display results in a hierarchical tree structure')
   .action(async (term: string, options: { keysOnly?: boolean, valuesOnly?: boolean, entriesOnly?: boolean, aliasesOnly?: boolean, tree?: boolean }) => {
@@ -213,14 +213,21 @@ codexCLI
     commands.showInfo();
   });
 
-// Examples command
+// Init command
 codexCLI
-  .command('examples')
-  .description('Initialize with example data files')
-  .option('-f, --force', 'Force overwrite if examples already exist')
+  .command('init')
+  .description('Initialize with example data')
+  .option('-f, --force', 'Force overwrite if data already exists')
   .action((options: { force?: boolean }) => {
     commands.initializeExampleData(options.force);
   });
+
+// Examples command
+codexCLI
+  .command('examples')
+  .alias('ex')
+  .description('Show usage examples')
+  .action(() => { withPager(() => showExamples()); });
 
 // Export command
 codexCLI

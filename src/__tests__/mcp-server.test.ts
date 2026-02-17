@@ -667,9 +667,9 @@ describe('MCP Server Tools', () => {
     });
   });
 
-  describe('codex_init_examples', () => {
+  describe('codex_init', () => {
     it('initializes example data when no files exist', async () => {
-      const result = await toolHandlers['codex_init_examples']({ force: undefined });
+      const result = await toolHandlers['codex_init']({ force: undefined });
       expect(result.content[0].text).toContain('Example data, aliases, and config initialized');
       expect(mockWrittenFiles['/mock/data.json']).toBeDefined();
       expect(mockWrittenFiles['/mock/aliases.json']).toBeDefined();
@@ -678,14 +678,14 @@ describe('MCP Server Tools', () => {
 
     it('returns error when files exist and force is not set', async () => {
       mockFiles['/mock/data.json'] = true;
-      const result = await toolHandlers['codex_init_examples']({ force: undefined });
+      const result = await toolHandlers['codex_init']({ force: undefined });
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('already exist');
     });
 
     it('overwrites when force is true', async () => {
       mockFiles['/mock/data.json'] = true;
-      const result = await toolHandlers['codex_init_examples']({ force: true });
+      const result = await toolHandlers['codex_init']({ force: true });
       expect(result.content[0].text).toContain('Example data, aliases, and config initialized');
     });
   });

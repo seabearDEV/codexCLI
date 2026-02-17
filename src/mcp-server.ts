@@ -475,9 +475,9 @@ server.tool(
   }
 );
 
-// --- codex_init_examples ---
+// --- codex_init ---
 server.tool(
-  "codex_init_examples",
+  "codex_init",
   "Initialize example data, aliases, and config",
   {
     force: z.boolean().optional().describe("Overwrite existing files (default false)"),

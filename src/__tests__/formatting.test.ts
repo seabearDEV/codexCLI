@@ -74,14 +74,19 @@ describe('showHelp', () => {
     expect(output).toContain('USAGE:');
     expect(output).toContain('COMMANDS:');
     expect(output).toContain('SHORTCUTS:');
-    expect(output).toContain('OPTIONS:');
-    expect(output).toContain('EXAMPLES:');
+    expect(output).toContain('OPTIONS (set):');
+    expect(output).toContain('OPTIONS (get):');
+    expect(output).toContain('OPTIONS (run):');
+    expect(output).toContain('OPTIONS (find):');
+    expect(output).toContain('OPTIONS (global):');
+    expect(output).toContain('ccli examples');
   });
 
-  it('includes tip referencing ccli info', () => {
+  it('lists the info command', () => {
     showHelp();
     const output = consoleSpy.mock.calls.map(c => c.join(' ')).join('\n');
-    expect(output).toContain('ccli info');
+    expect(output).toContain('info');
+    expect(output).toContain('Show version, stats, and storage info');
   });
 });
 
