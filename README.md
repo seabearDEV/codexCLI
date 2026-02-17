@@ -14,6 +14,7 @@ A command-line information store for quick reference of frequently used data.
   - [Display Options](#display-options)
   - [Search Options](#search-options)
   - [Configuration](#configuration)
+  - [Storage Backend](#storage-backend)
   - [Data Management](#data-management)
   - [Data Storage](#data-storage)
   - [Shell Tab-Completion](#shell-tab-completion)
@@ -210,10 +211,37 @@ ccli config theme dark
 
 Available settings:
 
-| Setting  | Values                  | Description                     |
-|----------|-------------------------|---------------------------------|
-| `colors` | `true` / `false`        | Enable/disable colored output   |
-| `theme`  | `default` / `dark` / `light` | UI theme                  |
+| Setting   | Values                       | Description                     |
+|-----------|------------------------------|---------------------------------|
+| `colors`  | `true` / `false`             | Enable/disable colored output   |
+| `theme`   | `default` / `dark` / `light` | UI theme                       |
+| `backend` | `json` / `sqlite`            | Storage backend                 |
+
+### Storage Backend
+
+CodexCLI supports two storage backends: **JSON** (default) and **SQLite** (via `better-sqlite3`).
+
+To migrate your existing data to SQLite:
+
+```bash
+ccli migrate sqlite
+```
+
+This copies all data and aliases into a SQLite database and switches the backend automatically.
+
+To migrate back to JSON:
+
+```bash
+ccli migrate json
+```
+
+If you want to re-run a migration (e.g., after manually editing files), use the `--force` flag:
+
+```bash
+ccli migrate sqlite --force
+```
+
+You can check which backend is active by running `ccli` with no arguments — the DATA STORAGE section shows the current backend and file paths.
 
 ### Data Management
 
