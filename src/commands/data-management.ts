@@ -7,8 +7,10 @@ import path from 'path';
 import { validateDataType, confirmOrAbort, getInvalidDataTypeMessage, printSuccess, printError } from './helpers';
 import { deepMerge } from '../utils/deepMerge';
 import { maskEncryptedValues } from '../utils/crypto';
+import { debug } from '../utils/debug';
 
 export function exportData(type: string, options: ExportOptions): void {
+  debug('exportData called', { type, options });
   try {
     if (!validateDataType(type)) {
       printError(getInvalidDataTypeMessage(type));
@@ -36,6 +38,7 @@ export function exportData(type: string, options: ExportOptions): void {
 }
 
 export async function importData(type: string, file: string, options: ImportOptions): Promise<void> {
+  debug('importData called', { type, file, options });
   try {
     // Validate type parameter
     if (!validateDataType(type)) {
@@ -105,6 +108,7 @@ export async function importData(type: string, file: string, options: ImportOpti
 }
 
 export async function resetData(type: string, options: ResetOptions): Promise<void> {
+  debug('resetData called', { type, options });
   try {
     // Validate type parameter
     if (!validateDataType(type)) {

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { getDataDirectory, getAliasFilePath } from './utils/paths';
 import { useSqlite, loadAliasesSqlite, saveAliasesSqlite } from './sqlite-backend';
+import { debug } from './utils/debug';
 
 // Interface for the aliases storage
 interface AliasMap {
@@ -119,7 +120,11 @@ export function renameAlias(oldName: string, newName: string): boolean {
 // Resolve a key that might be an alias
 export function resolveKey(key: string): string {
   const aliases = loadAliases();
-  return aliases[key] || key;
+  const resolved = aliases[key] || key;
+  if (resolved !== key) {
+    debug(`Alias resolved: "${key}" -> "${resolved}"`);
+  }
+  return resolved;
 }
 
 // Build inverted map from target paths to alias names

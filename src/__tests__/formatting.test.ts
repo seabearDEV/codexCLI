@@ -79,7 +79,7 @@ describe('showHelp', () => {
     expect(output).toContain('OPTIONS (run):');
     expect(output).toContain('OPTIONS (find):');
     expect(output).toContain('OPTIONS (global):');
-    expect(output).toContain('ccli examples');
+    expect(output).toContain('Show usage examples');
   });
 
   it('lists the info command', () => {

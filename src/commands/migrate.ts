@@ -6,8 +6,10 @@ import { isSqliteAvailable, loadDataSqlite, saveDataSqlite, loadAliasesSqlite, s
 import { clearDataCache } from '../storage';
 import { clearAliasCache } from '../alias';
 import { printError, printSuccess } from './helpers';
+import { debug } from '../utils/debug';
 
 export function migrateToSqlite(options?: { force?: boolean }): void {
+  debug('migrateToSqlite called', { options });
   const config = loadConfig();
 
   if (config.backend === 'sqlite' && !options?.force) {
@@ -69,6 +71,7 @@ export function migrateToSqlite(options?: { force?: boolean }): void {
 }
 
 export function migrateToJson(options?: { force?: boolean }): void {
+  debug('migrateToJson called', { options });
   const config = loadConfig();
 
   if (config.backend === 'json' && !options?.force) {

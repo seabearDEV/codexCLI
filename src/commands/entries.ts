@@ -14,6 +14,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 
 export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean }): Promise<void> {
+  debug('runCommand called', { key, options });
   try {
     let value = getValue(key);
 
@@ -64,6 +65,7 @@ export async function runCommand(key: string, options: { yes?: boolean, dry?: bo
 }
 
 export async function setEntry(key: string, value: string, force: boolean = false, encrypt: boolean = false, alias?: string): Promise<void> {
+  debug('setEntry called', { key, force, encrypt, alias });
   try {
     ensureDataDirectoryExists();
 
@@ -228,6 +230,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
 }
 
 export function removeEntry(key: string): void {
+  debug('removeEntry called', { key });
   const removed = removeValue(key);
 
   if (!removed) {

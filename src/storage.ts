@@ -7,6 +7,7 @@ import {
 } from './sqlite-backend';
 import { getNestedValue, setNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
 import { CodexData, CodexValue } from './types';
+import { debug } from './utils/debug';
 
 // Mtime-based cache for data
 let dataCache: CodexData | null = null;
@@ -57,10 +58,12 @@ export function handleError(message: string, error: unknown, context?: string): 
  */
 export function loadData(): CodexData {
   if (useSqlite()) {
+    debug('loadData: using SQLite backend');
     return loadDataSqlite();
   }
 
   const filePath = getDataFilePath();
+  debug('loadData: using JSON backend', { filePath });
 
   // Fast path: check cache via mtime before hitting the filesystem
   if (dataCache !== null && dataCacheMtime !== null) {

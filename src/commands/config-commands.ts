@@ -1,8 +1,10 @@
 import { color } from '../formatting';
 import { loadConfig, getConfigSetting, setConfigSetting } from '../config';
 import { printError } from './helpers';
+import { debug } from '../utils/debug';
 
 export function handleConfig(setting?: string, value?: string, options?: { list?: boolean }) {
+  debug('handleConfig called', { setting, value, options });
   // Handle the --list option
   if (options && options.list) {
     console.log(color.bold('Available Configuration Settings:'));
@@ -45,6 +47,7 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
 }
 
 export function configSet(setting: string, value: string): void {
+  debug('configSet called', { setting, value });
   try {
     const currentValue = getConfigSetting(setting);
 

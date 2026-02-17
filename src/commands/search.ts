@@ -5,6 +5,7 @@ import { color } from '../formatting';
 import { loadAliases, buildKeyToAliasMap } from '../alias';
 import { SearchOptions } from '../types';
 import { isEncrypted } from '../utils/crypto';
+import { debug } from '../utils/debug';
 
 function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: string, options: SearchOptions): Record<string, string> {
   const matches: Record<string, string> = {};
@@ -81,6 +82,7 @@ function displaySearchResults(
 }
 
 export function searchEntries(searchTerm: string, options: SearchOptions = {}): void {
+  debug('searchEntries called', { searchTerm, options });
   const flattenedData = options.aliasesOnly ? {} : getEntriesFlat();
 
   if (Object.keys(flattenedData).length === 0 && !options.aliasesOnly) {
