@@ -24,7 +24,7 @@ function getMaxCompletionItems(): number {
 }
 
 // Argument types for dynamic completion
-type ArgType = 'dataKey' | 'aliasName' | 'configKey' | 'exportType' | null;
+type ArgType = 'dataKey' | 'dataKeyPrefix' | 'aliasName' | 'configKey' | 'exportType' | null;
 
 interface CommandDef {
   flags: Record<string, string>;
@@ -79,12 +79,12 @@ const GLOBAL_FLAGS: Record<string, string> = {
 const CLI_TREE: Record<string, CommandDef> = {
   set: {
     flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'] },
-    argType: 'dataKey',
+    argType: 'dataKeyPrefix',
     description: 'Set an entry',
   },
   s: {
     flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'] },
-    argType: 'dataKey',
+    argType: 'dataKeyPrefix',
     description: 'Set an entry',
   },
   get: {
@@ -284,7 +284,8 @@ function getAliasNames(): string[] {
 
 function getDynamicValues(argType: ArgType): CompletionItem[] {
   switch (argType) {
-    case 'dataKey': {
+    case 'dataKey':
+    case 'dataKeyPrefix': {
       const keys = getDataKeys()        .map(k => ({ value: k, description: 'Data key', group: 'data keys' }));
       const aliases = getAliasNames()        .map(a => ({ value: a, description: 'Alias', group: 'aliases' }));
       return [...keys, ...aliases];
@@ -298,6 +299,32 @@ function getDynamicValues(argType: ArgType): CompletionItem[] {
     default:
       return [];
   }
+}
+
+/** Truncate completion values to the next dot-segment boundary after the typed partial. */
+function truncateToNextDot(items: CompletionItem[], partial: string): CompletionItem[] {
+  const seen = new Set<string>();
+  const result: CompletionItem[] = [];
+
+  for (const item of items) {
+    const dotIndex = item.value.indexOf('.', partial.length);
+    if (dotIndex === -1) {
+      // No more dots — return the full value (leaf key or alias)
+      if (!seen.has(item.value)) {
+        seen.add(item.value);
+        result.push(item);
+      }
+    } else {
+      // Truncate to include the dot (namespace prefix)
+      const prefix = item.value.substring(0, dotIndex + 1);
+      if (!seen.has(prefix)) {
+        seen.add(prefix);
+        result.push({ value: prefix, description: 'Namespace', group: item.group });
+      }
+    }
+  }
+
+  return result;
 }
 
 // --- Core completion logic ---
@@ -407,7 +434,14 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
     }
   }
 
-  return filterPrefix(candidates, partial);
+  const filtered = filterPrefix(candidates, partial);
+
+  // For dataKeyPrefix, truncate to next dot-segment so set completes one level at a time
+  if (activeDef.argType === 'dataKeyPrefix' && !typingFlag) {
+    return truncateToNextDot(filtered, partial);
+  }
+
+  return filtered;
 }
 
 function filterPrefix(items: CompletionItem[], prefix: string): CompletionItem[] {
@@ -431,6 +465,17 @@ _ccli_completions() {
     local value="\${line%%\${tab}*}"
     COMPREPLY+=("$value")
   done <<< "$completions"
+  # Suppress trailing space for namespace prefixes (values ending in .)
+  local all_dot=1
+  for reply in "\${COMPREPLY[@]}"; do
+    if [[ "$reply" != *. ]]; then
+      all_dot=0
+      break
+    fi
+  done
+  if [[ $all_dot -eq 1 && \${#COMPREPLY[@]} -gt 0 ]]; then
+    compopt -o nospace
+  fi
 }
 complete -o default -F _ccli_completions ccli
 `;
@@ -462,10 +507,21 @@ _ccli_completions() {
     _files
     return
   fi
-  local grp_name
+  local grp_name _ccli_val
+  local -a _ccli_items _ccli_dot _ccli_norm
   for grp_name in \${(ko)groups}; do
-    local -a items=("\${(@s:|:)groups[\$grp_name]}")
-    _describe "\$grp_name" items
+    _ccli_items=("\${(@s:|:)groups[\$grp_name]}")
+    _ccli_dot=()
+    _ccli_norm=()
+    for _ccli_val in "\${_ccli_items[@]}"; do
+      if [[ "\${_ccli_val%%:*}" == *. ]]; then
+        _ccli_dot+=("\${_ccli_val%%:*}")
+      else
+        _ccli_norm+=("\$_ccli_val")
+      fi
+    done
+    (( \${#_ccli_norm} )) && _describe "\$grp_name" _ccli_norm
+    (( \${#_ccli_dot} )) && compadd -S '' -- "\${_ccli_dot[@]}"
   done
 }
 compdef _ccli_completions ccli

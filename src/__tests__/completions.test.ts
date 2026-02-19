@@ -259,6 +259,11 @@ describe('Completions', () => {
       // Bash script should extract only the value before the tab
       expect(script).toContain('${line%%${tab}*}');
     });
+
+    it('suppresses trailing space for namespace prefixes ending in dot', () => {
+      const script = generateBashScript();
+      expect(script).toContain('compopt -o nospace');
+    });
   });
 
   describe('generateZshScript', () => {
@@ -275,10 +280,16 @@ describe('Completions', () => {
       expect(script).toContain('local -A groups');
       // Iterates groups with sorted keys
       expect(script).toContain('${(ko)groups}');
-      // Uses _describe per group
-      expect(script).toContain('_describe "$grp_name" items');
+      // Uses _describe per group for normal items
+      expect(script).toContain('_describe "$grp_name" _ccli_norm');
       // Uses $'\t' for tab
       expect(script).toContain("$'\\t'");
+    });
+
+    it('suppresses trailing space for namespace prefixes ending in dot', () => {
+      const script = generateZshScript();
+      // Uses compadd -S '' for dot-terminated items (not _describe which lacks -S support)
+      expect(script).toContain("compadd -S '' -- \"${_ccli_dot[@]}\"");
     });
   });
 
@@ -366,6 +377,92 @@ describe('Completions', () => {
       expect(v).toContain('data');
       expect(v).toContain('aliases');
       expect(v).toContain('all');
+    });
+  });
+
+  describe('dataKeyPrefix for set/s commands', () => {
+    it('completes to namespace prefix instead of full key', () => {
+      const mockData = { test: { key1: 'val1', key2: 'val2' } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli set te', 11);
+      const v = values(results);
+      expect(v).toContain('test.');
+      expect(v).not.toContain('test.key1');
+      expect(v).not.toContain('test.key2');
+    });
+
+    it('shows leaf keys when partial includes the namespace dot', () => {
+      const mockData = { test: { key1: 'val1', key2: 'val2' } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli set test.', 14);
+      const v = values(results);
+      expect(v).toContain('test.key1');
+      expect(v).toContain('test.key2');
+    });
+
+    it('deduplicates namespace prefixes', () => {
+      const mockData = { server: { prod: { ip: '1.2.3.4' }, dev: { ip: '5.6.7.8' } } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli s ', 7);
+      const v = values(results);
+      const serverDots = v.filter(val => val === 'server.');
+      expect(serverDots).toHaveLength(1);
+    });
+
+    it('completes nested namespace one level at a time', () => {
+      const mockData = { server: { prod: { ip: '1.2.3.4' }, dev: { ip: '5.6.7.8' } } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli set server.', 16);
+      const v = values(results);
+      expect(v).toContain('server.prod.');
+      expect(v).toContain('server.dev.');
+      expect(v).not.toContain('server.prod.ip');
+    });
+
+    it('shows full key at leaf level', () => {
+      const mockData = { server: { prod: { ip: '1.2.3.4' } } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli set server.prod.', 21);
+      const v = values(results);
+      expect(v).toContain('server.prod.ip');
+    });
+
+    it('includes aliases without truncation', () => {
+      const mockData = { test: { key1: 'val1' } };
+      const mockAliases = { myalias: 'test.key1' };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
+        return JSON.stringify(mockData);
+      });
+
+      const results = getCompletions('ccli set m', 10);
+      const v = values(results);
+      expect(v).toContain('myalias');
+    });
+
+    it('marks truncated values as Namespace', () => {
+      const mockData = { test: { key1: 'val1' } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli set te', 11);
+      const item = findItem(results, 'test.');
+      expect(item).toBeDefined();
+      expect(item!.description).toBe('Namespace');
+    });
+
+    it('does not affect get command (still returns full keys)', () => {
+      const mockData = { test: { key1: 'val1' } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli get te', 11);
+      const v = values(results);
+      expect(v).toContain('test.key1');
+      expect(v).not.toContain('test.');
     });
   });
 
