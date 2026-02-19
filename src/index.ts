@@ -114,7 +114,8 @@ codexCLI
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry', 'Print the command without executing')
   .option('-d, --decrypt', 'Decrypt an encrypted command before running')
-  .action(async (key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean }) => {
+  .option('--source', 'Output command to stdout for shell eval (used by shell wrapper)')
+  .action(async (key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }) => {
     key = resolveKey(key.replace(/:$/, ''));
     await commands.runCommand(key, options);
   });

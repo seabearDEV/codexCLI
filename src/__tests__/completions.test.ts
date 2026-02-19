@@ -144,6 +144,18 @@ describe('Completions', () => {
       expect(v).toContain('--decrypt');
     });
 
+    it('returns --source flag for run command when typing a dash', () => {
+      const results = getCompletions('ccli run -', 10);
+      const v = values(results);
+      expect(v).toContain('--source');
+    });
+
+    it('returns --source flag for r shortcut when typing a dash', () => {
+      const results = getCompletions('ccli r -', 8);
+      const v = values(results);
+      expect(v).toContain('--source');
+    });
+
     it('returns subcommands for alias', () => {
       const results = getCompletions('ccli alias ', 11);
       const v = values(results);
@@ -536,10 +548,10 @@ describe('Completions', () => {
       expect(consoleErrorSpy).toHaveBeenCalled();
     });
 
-    it('skips if completions and history exclusion already installed', () => {
+    it('skips if completions, shell wrapper, and history exclusion already installed', () => {
       process.env.SHELL = '/bin/zsh';
       (fs.existsSync as Mock).mockReturnValue(true);
-      (fs.readFileSync as Mock).mockReturnValue('eval "$(ccli completions zsh)"\n_codexcli_history_filter');
+      (fs.readFileSync as Mock).mockReturnValue('eval "$(ccli completions zsh)"\n# CodexCLI shell wrapper\n_codexcli_history_filter');
 
       installCompletions();
 
@@ -547,6 +559,38 @@ describe('Completions', () => {
       const logCalls = consoleSpy.mock.calls;
       const showedAlready = logCalls.some((call: unknown[]) =>
         call.some((arg: unknown) => typeof arg === 'string' && arg.includes('already installed'))
+      );
+      expect(showedAlready).toBe(true);
+    });
+
+    it('installs shell wrapper for ccli run', () => {
+      process.env.SHELL = '/bin/zsh';
+      (fs.existsSync as Mock).mockReturnValue(false);
+
+      installCompletions();
+
+      const appendCalls = (fs.appendFileSync as Mock).mock.calls;
+      const wrapperAppend = appendCalls.find((call: unknown[]) =>
+        typeof call[1] === 'string' && call[1].includes('# CodexCLI shell wrapper')
+      );
+      expect(wrapperAppend).toBeDefined();
+      expect(wrapperAppend[1]).toContain('command ccli');
+      expect(wrapperAppend[1]).toContain('--source');
+      expect(wrapperAppend[1]).toContain('eval "$__ccli_cmd"');
+    });
+
+    it('skips shell wrapper if already installed', () => {
+      process.env.SHELL = '/bin/zsh';
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(
+        'eval "$(ccli completions zsh)"\n# CodexCLI shell wrapper\nccli() {\n}\n_codexcli_history_filter'
+      );
+
+      installCompletions();
+
+      const logCalls = consoleSpy.mock.calls;
+      const showedAlready = logCalls.some((call: unknown[]) =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Shell wrapper already installed'))
       );
       expect(showedAlready).toBe(true);
     });
@@ -564,11 +608,13 @@ describe('Completions', () => {
       const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
       expect(writeCall[1]).not.toContain('HISTORY_IGNORE');
 
-      // Should have appended the new hook
-      expect(fs.appendFileSync).toHaveBeenCalled();
-      const appendCall = (fs.appendFileSync as Mock).mock.calls[0];
-      expect(appendCall[1]).toContain('_codexcli_history_filter');
-      expect(appendCall[1]).toContain('add-zsh-hook zshaddhistory');
+      // Should have appended the shell wrapper and the new hook
+      const appendCalls = (fs.appendFileSync as Mock).mock.calls;
+      const historyAppend = appendCalls.find((call: unknown[]) =>
+        typeof call[1] === 'string' && call[1].includes('_codexcli_history_filter')
+      );
+      expect(historyAppend).toBeDefined();
+      expect(historyAppend[1]).toContain('add-zsh-hook zshaddhistory');
 
       // Should log migration message
       const logCalls = consoleSpy.mock.calls;

@@ -1155,6 +1155,105 @@ describe('Commands', () => {
     });
   });
 
+  describe('runCommand --source mode', () => {
+    let stderrWriteSpy: SpyInstance;
+    let stdoutWriteSpy: SpyInstance;
+
+    beforeEach(() => {
+      const mockData = {
+        commands: {
+          greet: 'echo hello',
+          nav: 'cd ~/projects',
+        },
+      };
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
+      stderrWriteSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      stdoutWriteSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    });
+
+    afterEach(() => {
+      stderrWriteSpy.mockRestore();
+      stdoutWriteSpy.mockRestore();
+    });
+
+    it('emits raw command to stdout in source mode', async () => {
+      await runCommand('commands.greet', { yes: true, source: true });
+
+      expect(stdoutWriteSpy).toHaveBeenCalledWith('echo hello\n');
+      expect(execSync).not.toHaveBeenCalled();
+    });
+
+    it('writes preview to stderr in source mode', async () => {
+      await runCommand('commands.greet', { yes: true, source: true });
+
+      const stderrCalls = stderrWriteSpy.mock.calls;
+      const showedPreview = stderrCalls.some((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('echo hello')
+      );
+      expect(showedPreview).toBe(true);
+      // Preview should NOT go to console.log (stdout)
+      expect(console.log).not.toHaveBeenCalled();
+    });
+
+    it('emits nothing to stdout with --source --dry', async () => {
+      await runCommand('commands.greet', { dry: true, source: true });
+
+      expect(stdoutWriteSpy).not.toHaveBeenCalled();
+      // But preview should still go to stderr
+      const stderrCalls = stderrWriteSpy.mock.calls;
+      const showedPreview = stderrCalls.some((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('echo hello')
+      );
+      expect(showedPreview).toBe(true);
+    });
+
+    it('uses stderr for confirmation prompt in source mode', async () => {
+      const originalIsTTY = process.stdin.isTTY;
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      const mockRl = {
+        question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('y')),
+        close: vi.fn(),
+      };
+      (readline.createInterface as Mock).mockReturnValue(mockRl);
+
+      await runCommand('commands.greet', { source: true });
+
+      expect(readline.createInterface).toHaveBeenCalledWith(
+        expect.objectContaining({ output: process.stderr })
+      );
+
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
+    });
+
+    it('writes Aborted to stderr in source mode', async () => {
+      const originalIsTTY = process.stdin.isTTY;
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      const mockRl = {
+        question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('n')),
+        close: vi.fn(),
+      };
+      (readline.createInterface as Mock).mockReturnValue(mockRl);
+
+      await runCommand('commands.greet', { source: true });
+
+      const stderrCalls = stderrWriteSpy.mock.calls;
+      const showedAborted = stderrCalls.some((call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('Aborted.')
+      );
+      expect(showedAborted).toBe(true);
+      // Should NOT appear in console.log
+      const logCalls = (console.log as Mock).mock.calls;
+      const loggedAborted = logCalls.some((call: unknown[]) =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Aborted.'))
+      );
+      expect(loggedAborted).toBe(false);
+
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
+    });
+  });
+
   describe('runCommand error path', () => {
     it('sets process.exitCode when execSync throws', async () => {
       const mockData = { commands: { fail: 'exit 42' } };

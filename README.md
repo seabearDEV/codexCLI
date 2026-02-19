@@ -17,6 +17,7 @@ A command-line information store for quick reference of frequently used data.
   - [Storage Backend](#storage-backend)
   - [Data Management](#data-management)
   - [Data Storage](#data-storage)
+  - [Shell Wrapper](#shell-wrapper)
   - [Shell Tab-Completion](#shell-tab-completion)
   - [Debugging](#debugging)
 - [MCP Server (AI Agent Integration)](#mcp-server-ai-agent-integration)
@@ -69,22 +70,26 @@ npm run build
 npm install -g .
 ```
 
-### Verifying Installation
+### Post-Install Setup
 
 ```bash
-# After installation, run:
-
+# Verify the command is available
 ccli --version
+
+# Install shell completions and the shell wrapper (recommended)
+ccli completions install
+
+# Reload your shell
+source ~/.zshrc   # or ~/.bashrc
 ```
 
-If the command is not found, verify that npm's global bin directory is in your PATH:
+This installs tab-completion, history exclusion for sensitive commands, and a **shell wrapper** that lets stored commands like `cd`, `export`, and `alias` affect your current shell (see [Shell Wrapper](#shell-wrapper)).
+
+If `ccli` is not found, verify that npm's global bin directory is in your PATH:
 
 ```bash
 echo $PATH | grep -o "$(npm config get prefix)/bin"
-
 ```
-
-After installation, you can use the ccli command to interact with CodexCLI. To enable shell tab-completion, see [Shell Tab-Completion](#shell-tab-completion).
 
 ## Usage
 
@@ -304,6 +309,10 @@ ccli set commands.logs "ssh prod 'tail -f /var/log/app.log'"
 ccli run commands.deploy          # prompts before executing
 ccli run commands.deploy -y       # skip confirmation
 ccli run commands.deploy --dry    # print without executing
+
+# Shell builtins work too (requires shell wrapper — see Shell Wrapper section)
+ccli set paths.project "cd ~/Projects/my-project"
+ccli r paths.project -y           # actually changes your directory
 ```
 
 #### Personal Information
@@ -315,6 +324,29 @@ ccli alias set myemail personal.contact.email
 ccli get myemail
 ```
 
+### Shell Wrapper
+
+By default, `ccli run` executes commands in a child process. This means shell builtins like `cd`, `export`, and `alias` have no effect on your current shell -- the child exits immediately and your working directory stays the same.
+
+After running `ccli completions install`, a shell wrapper function is added to your shell profile that fixes this. When you use `ccli run` (or `ccli r`), the wrapper:
+
+1. Calls the real `ccli` binary with `--source`, which outputs the raw command to stdout instead of executing it
+2. Captures that output and `eval`s it in your current shell
+
+All other `ccli` commands pass through to the binary unchanged.
+
+```bash
+# Store a navigation command
+ccli set paths.myproject "cd ~/Projects/my-project"
+
+# This actually changes your directory (with the wrapper installed)
+ccli r paths.myproject -y
+
+# Without the wrapper, cd would run in a child process and have no effect
+```
+
+The wrapper is installed automatically by `ccli completions install`. If you already have completions installed, run it again to add the wrapper, then `source` your shell profile.
+
 ### Shell Tab-Completion
 
 CodexCLI supports tab-completion for Bash and Zsh, including commands, flags, stored keys, alias names, and more.
@@ -322,11 +354,11 @@ CodexCLI supports tab-completion for Bash and Zsh, including commands, flags, st
 #### Quick Setup
 
 ```bash
-# Auto-detect your shell and install completions
+# Auto-detect your shell and install completions + shell wrapper
 ccli completions install
 ```
 
-This appends a completion loader to your `~/.zshrc` or `~/.bashrc` and tells you to restart your shell (or `source` the file).
+This appends a completion loader and shell wrapper to your `~/.zshrc` or `~/.bashrc` and tells you to restart your shell (or `source` the file).
 
 #### Manual Setup
 

@@ -67,6 +67,7 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--copy': 'Copy value to clipboard',
   '-c': 'Copy value to clipboard',
   '--clear': 'Clear terminal after setting',
+  '--source': 'Output for shell eval',
 };
 
 const GLOBAL_FLAGS: Record<string, string> = {
@@ -113,6 +114,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
       '--dry': FLAG_DESCRIPTIONS['--dry'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--source': FLAG_DESCRIPTIONS['--source'],
     },
     argType: 'dataKey',
     description: 'Execute a stored command',
@@ -122,6 +124,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
       '--dry': FLAG_DESCRIPTIONS['--dry'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--source': FLAG_DESCRIPTIONS['--source'],
     },
     argType: 'dataKey',
     description: 'Execute a stored command',
@@ -504,8 +507,39 @@ export function installCompletions(): void {
     console.log(`Completions installed in ${rcFile}`);
   }
 
-  // Install history exclusion
+  // Install shell wrapper for `ccli run` / `ccli r` (eval in current shell)
   // Re-read content since completions block may have been appended above
+  let wrapperContent = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
+
+  if (wrapperContent.includes('# CodexCLI shell wrapper')) {
+    console.log(`Shell wrapper already installed in ${rcFile}`);
+  } else {
+    const wrapperBlock = `
+# CodexCLI shell wrapper — eval "ccli run" in the current shell so cd/export/alias work
+ccli() {
+  local subcmd=""
+  for arg in "$@"; do
+    [[ "$arg" == -* ]] && continue
+    subcmd="$arg"
+    break
+  done
+  if [[ "$subcmd" == "run" || "$subcmd" == "r" ]]; then
+    local __ccli_cmd __ccli_exit
+    __ccli_cmd="$(command ccli "$@" --source)"
+    __ccli_exit=$?
+    [[ $__ccli_exit -ne 0 ]] && return $__ccli_exit
+    [[ -n "$__ccli_cmd" ]] && eval "$__ccli_cmd"
+  else
+    command ccli "$@"
+  fi
+}
+`;
+    fs.appendFileSync(rcFile, wrapperBlock, 'utf8');
+    console.log(`Shell wrapper installed in ${rcFile}`);
+  }
+
+  // Install history exclusion
+  // Re-read content since earlier blocks may have been appended above
   let currentContent = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
 
   if (currentContent.includes('_codexcli_history_filter') || (!shell.endsWith('/zsh') && currentContent.includes('HISTIGNORE'))) {

@@ -13,7 +13,7 @@ import { printSuccess, printWarning, printError, displayEntries, askConfirmation
 import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 
-export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean }): Promise<void> {
+export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }): Promise<void> {
   debug('runCommand called', { key, options });
   try {
     let value = getValue(key);
@@ -46,24 +46,36 @@ export async function runCommand(key: string, options: { yes?: boolean, dry?: bo
       }
     }
 
-    console.log(color.gray('$ ') + color.white(value));
+    if (options.source) {
+      process.stderr.write(color.gray('$ ') + color.white(value) + '\n');
+    } else {
+      console.log(color.gray('$ ') + color.white(value));
+    }
 
     if (options.dry) {
       return;
     }
 
     if (!options.yes && process.stdin.isTTY) {
-      const answer = await askConfirmation('Run this? [y/N] ');
+      const answer = await askConfirmation('Run this? [y/N] ', options.source ? process.stderr : undefined);
       if (answer.toLowerCase() !== 'y') {
-        console.log('Aborted.');
+        if (options.source) {
+          process.stderr.write('Aborted.\n');
+        } else {
+          console.log('Aborted.');
+        }
         return;
       }
     }
 
-    try {
-      execSync(value, { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
-    } catch (err: unknown) {
-      process.exitCode = (err && typeof err === 'object' && 'status' in err ? Number(err.status) : 1) || 1;
+    if (options.source) {
+      process.stdout.write(value + '\n');
+    } else {
+      try {
+        execSync(value, { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+      } catch (err: unknown) {
+        process.exitCode = (err && typeof err === 'object' && 'status' in err ? Number(err.status) : 1) || 1;
+      }
     }
   } catch (error) {
     handleError('Failed to run command:', error);
