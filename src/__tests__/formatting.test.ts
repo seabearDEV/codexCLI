@@ -1,18 +1,22 @@
 import chalk from 'chalk';
 import { formatTree, showHelp, displayTree, formatKeyValue, colorizePathByLevels, color, isColorEnabled, highlightMatch } from '../formatting';
+import { loadConfig } from '../config';
 
 // Mock config to avoid file-system dependency
-jest.mock('../config', () => ({
-  loadConfig: jest.fn(() => ({ colors: false, theme: 'default' })),
+vi.mock('../config', () => ({
+  loadConfig: vi.fn(() => ({ colors: false, theme: 'default' })),
 }));
 
 // Mock fs so path utilities don't touch the real filesystem
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(true),
-  readFileSync: jest.fn().mockReturnValue('{}'),
-  mkdirSync: jest.fn(),
-  writeFileSync: jest.fn(),
-}));
+vi.mock('fs', () => {
+  const mock = {
+    existsSync: vi.fn().mockReturnValue(true),
+    readFileSync: vi.fn().mockReturnValue('{}'),
+    mkdirSync: vi.fn(),
+    writeFileSync: vi.fn(),
+  };
+  return { default: mock, ...mock };
+});
 
 describe('formatTree', () => {
   it('renders a simple nested object', () => {
@@ -58,10 +62,10 @@ describe('formatTree', () => {
 });
 
 describe('showHelp', () => {
-  let consoleSpy: jest.SpyInstance;
+  let consoleSpy: SpyInstance;
 
   beforeEach(() => {
-    consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation();
   });
 
   afterEach(() => {
@@ -92,7 +96,7 @@ describe('showHelp', () => {
 
 describe('displayTree', () => {
   it('prints formatted tree to console', () => {
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation();
     displayTree({ a: { b: 'value' } });
     expect(consoleSpy).toHaveBeenCalled();
     const output = consoleSpy.mock.calls[0][0];
@@ -134,7 +138,7 @@ describe('color functions when disabled', () => {
 
 describe('formatKeyValue', () => {
   it('logs key and value to console', () => {
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation();
     formatKeyValue('server.ip', '192.168.1.1');
     expect(consoleSpy).toHaveBeenCalledWith('server.ip: 192.168.1.1');
     consoleSpy.mockRestore();
@@ -142,14 +146,12 @@ describe('formatKeyValue', () => {
 });
 
 describe('color functions when enabled', () => {
-  const { loadConfig } = require('../config');
-
   beforeEach(() => {
-    (loadConfig as jest.Mock).mockReturnValue({ colors: true, theme: 'default' });
+    (loadConfig as Mock).mockReturnValue({ colors: true, theme: 'default' });
   });
 
   afterEach(() => {
-    (loadConfig as jest.Mock).mockReturnValue({ colors: false, theme: 'default' });
+    (loadConfig as Mock).mockReturnValue({ colors: false, theme: 'default' });
   });
 
   it('exercises the color-enabled branch for all color functions', () => {
@@ -179,17 +181,16 @@ describe('highlightMatch', () => {
   });
 
   describe('when colors are enabled', () => {
-    const { loadConfig } = require('../config');
     let originalLevel: typeof chalk.level;
 
     beforeEach(() => {
-      (loadConfig as jest.Mock).mockReturnValue({ colors: true, theme: 'default' });
+      (loadConfig as Mock).mockReturnValue({ colors: true, theme: 'default' });
       originalLevel = chalk.level;
       chalk.level = 1; // Force ANSI color output in non-TTY
     });
 
     afterEach(() => {
-      (loadConfig as jest.Mock).mockReturnValue({ colors: false, theme: 'default' });
+      (loadConfig as Mock).mockReturnValue({ colors: false, theme: 'default' });
       chalk.level = originalLevel;
     });
 
@@ -219,11 +220,11 @@ describe('highlightMatch', () => {
 });
 
 describe('showHelp with NODE_ENV=development', () => {
-  let consoleSpy: jest.SpyInstance;
+  let consoleSpy: SpyInstance;
   const originalNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
-    consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+    consoleSpy = vi.spyOn(console, 'log').mockImplementation();
     process.env.NODE_ENV = 'development';
   });
 

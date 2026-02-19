@@ -4,14 +4,17 @@ import { clearDataCache } from '../storage';
 import { clearAliasCache } from '../alias';
 import { clearConfigCache } from '../config';
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn().mockReturnValue(true),
-  readFileSync: jest.fn().mockReturnValue(JSON.stringify({})),
-  mkdirSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  appendFileSync: jest.fn(),
-  statSync: jest.fn().mockReturnValue({ mtimeMs: 1000 }),
-}));
+vi.mock('fs', () => {
+  const mock = {
+    existsSync: vi.fn().mockReturnValue(true),
+    readFileSync: vi.fn().mockReturnValue(JSON.stringify({})),
+    mkdirSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    appendFileSync: vi.fn(),
+    statSync: vi.fn().mockReturnValue({ mtimeMs: 1000 }),
+  };
+  return { default: mock, ...mock };
+});
 
 /** Extract just the .value strings from CompletionItem[] for simpler assertions */
 function values(items: CompletionItem[]): string[] {
@@ -271,7 +274,7 @@ describe('Completions', () => {
     it('returns data keys and alias names for dataKey commands', () => {
       const mockData = { server: { ip: '1.2.3.4' } };
       const mockAliases = { myip: 'server.ip' };
-      (fs.readFileSync as jest.Mock).mockImplementation((filePath: string) => {
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
         if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
         return JSON.stringify(mockData);
       });
@@ -284,7 +287,7 @@ describe('Completions', () => {
 
     it('returns data keys with "Data key" description', () => {
       const mockData = { server: { ip: '1.2.3.4' } };
-      (fs.readFileSync as jest.Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
 
       const results = getCompletions('ccli get ', 9);
       const keyItem = findItem(results, 'server.ip');
@@ -294,7 +297,7 @@ describe('Completions', () => {
 
     it('returns alias names with "Alias" description', () => {
       const mockAliases = { myip: 'server.ip' };
-      (fs.readFileSync as jest.Mock).mockImplementation((filePath: string) => {
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
         if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
         return JSON.stringify({});
       });
@@ -307,7 +310,7 @@ describe('Completions', () => {
 
     it('returns alias names for aliasName commands', () => {
       const mockAliases = { myip: 'server.ip', prod: 'server.prod' };
-      (fs.readFileSync as jest.Mock).mockImplementation((filePath: string) => {
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
         if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
         return JSON.stringify({});
       });
@@ -320,7 +323,7 @@ describe('Completions', () => {
 
     it('returns alias names for alias rename command', () => {
       const mockAliases = { myip: 'server.ip', prod: 'server.prod' };
-      (fs.readFileSync as jest.Mock).mockImplementation((filePath: string) => {
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
         if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
         return JSON.stringify({});
       });
@@ -356,7 +359,7 @@ describe('Completions', () => {
 
   describe('getCompletions edge cases', () => {
     beforeEach(() => {
-      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify({}));
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify({}));
     });
 
     it('returns top-level commands for unknown command', () => {
@@ -421,10 +424,10 @@ describe('Completions', () => {
   });
 
   describe('error paths in data loading', () => {
-    let consoleErrorSpy: jest.SpyInstance;
+    let consoleErrorSpy: SpyInstance;
 
     beforeEach(() => {
-      consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation();
     });
 
     afterEach(() => {
@@ -432,10 +435,10 @@ describe('Completions', () => {
     });
 
     it('returns empty data keys when loadData throws', () => {
-      (fs.readFileSync as jest.Mock).mockImplementation(() => {
+      (fs.readFileSync as Mock).mockImplementation(() => {
         throw new Error('read error');
       });
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.existsSync as Mock).mockReturnValue(true);
 
       // Should not throw, just return empty results without data keys
       const results = getCompletions('ccli get ', 9);
@@ -444,10 +447,10 @@ describe('Completions', () => {
     });
 
     it('returns empty alias names when loadAliases throws', () => {
-      (fs.readFileSync as jest.Mock).mockImplementation(() => {
+      (fs.readFileSync as Mock).mockImplementation(() => {
         throw new Error('read error');
       });
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.existsSync as Mock).mockReturnValue(true);
 
       const results = getCompletions('ccli alias remove ', 18);
       expect(Array.isArray(results)).toBe(true);
@@ -457,18 +460,18 @@ describe('Completions', () => {
   describe('installCompletions', () => {
     let originalShell: string | undefined;
     let originalHome: string | undefined;
-    let consoleSpy: jest.SpyInstance;
-    let consoleErrorSpy: jest.SpyInstance;
-    let exitSpy: jest.SpyInstance;
+    let consoleSpy: SpyInstance;
+    let consoleErrorSpy: SpyInstance;
+    let exitSpy: SpyInstance;
 
     beforeEach(() => {
       originalShell = process.env.SHELL;
       originalHome = process.env.HOME;
       process.env.HOME = '/home/testuser';
-      consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-      exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-      jest.clearAllMocks();
+      consoleSpy = vi.spyOn(console, 'log').mockImplementation();
+      consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation();
+      exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+      vi.clearAllMocks();
     });
 
     afterEach(() => {
@@ -481,19 +484,19 @@ describe('Completions', () => {
 
     it('installs zsh completions', () => {
       process.env.SHELL = '/bin/zsh';
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      (fs.existsSync as Mock).mockReturnValue(false);
 
       installCompletions();
 
       expect(fs.appendFileSync).toHaveBeenCalled();
-      const appendCall = (fs.appendFileSync as jest.Mock).mock.calls[0];
+      const appendCall = (fs.appendFileSync as Mock).mock.calls[0];
       expect(appendCall[0]).toContain('.zshrc');
       expect(appendCall[1]).toContain('ccli completions zsh');
     });
 
     it('installs bash completions on Linux', () => {
       process.env.SHELL = '/bin/bash';
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      (fs.existsSync as Mock).mockReturnValue(false);
       // Mock platform as linux
       const originalPlatformValue = process.platform;
       Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
@@ -501,7 +504,7 @@ describe('Completions', () => {
       installCompletions();
 
       expect(fs.appendFileSync).toHaveBeenCalled();
-      const appendCall = (fs.appendFileSync as jest.Mock).mock.calls[0];
+      const appendCall = (fs.appendFileSync as Mock).mock.calls[0];
       expect(appendCall[0]).toContain('.bashrc');
 
       Object.defineProperty(process, 'platform', { value: originalPlatformValue, configurable: true });
@@ -510,15 +513,15 @@ describe('Completions', () => {
     it('installs bash completions on macOS using .bash_profile', () => {
       process.env.SHELL = '/bin/bash';
       // .bash_profile exists on macOS
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue('# existing content');
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue('# existing content');
       const originalPlatformValue = process.platform;
       Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
 
       installCompletions();
 
       expect(fs.appendFileSync).toHaveBeenCalled();
-      const appendCall = (fs.appendFileSync as jest.Mock).mock.calls[0];
+      const appendCall = (fs.appendFileSync as Mock).mock.calls[0];
       expect(appendCall[0]).toContain('.bash_profile');
 
       Object.defineProperty(process, 'platform', { value: originalPlatformValue, configurable: true });
@@ -535,8 +538,8 @@ describe('Completions', () => {
 
     it('skips if completions and history exclusion already installed', () => {
       process.env.SHELL = '/bin/zsh';
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue('eval "$(ccli completions zsh)"\n_codexcli_history_filter');
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue('eval "$(ccli completions zsh)"\n_codexcli_history_filter');
 
       installCompletions();
 
@@ -550,20 +553,20 @@ describe('Completions', () => {
 
     it('migrates from old HISTORY_IGNORE to zshaddhistory hook', () => {
       process.env.SHELL = '/bin/zsh';
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
+      (fs.existsSync as Mock).mockReturnValue(true);
       const oldContent = 'eval "$(ccli completions zsh)"\n\n# CodexCLI - exclude from shell history\nHISTORY_IGNORE="(ccli *)"';
-      (fs.readFileSync as jest.Mock).mockReturnValue(oldContent);
+      (fs.readFileSync as Mock).mockReturnValue(oldContent);
 
       installCompletions();
 
       // Should have written the file to remove old HISTORY_IGNORE
       expect(fs.writeFileSync).toHaveBeenCalled();
-      const writeCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
       expect(writeCall[1]).not.toContain('HISTORY_IGNORE');
 
       // Should have appended the new hook
       expect(fs.appendFileSync).toHaveBeenCalled();
-      const appendCall = (fs.appendFileSync as jest.Mock).mock.calls[0];
+      const appendCall = (fs.appendFileSync as Mock).mock.calls[0];
       expect(appendCall[1]).toContain('_codexcli_history_filter');
       expect(appendCall[1]).toContain('add-zsh-hook zshaddhistory');
 

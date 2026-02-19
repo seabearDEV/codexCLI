@@ -1,27 +1,30 @@
 import * as fs from 'fs';
 import { loadConfig, saveConfig, getConfigSetting, setConfigSetting, clearConfigCache } from '../config';
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  mkdirSync: jest.fn(),
-  statSync: jest.fn()
-}));
+vi.mock('fs', () => {
+  const mock = {
+    existsSync: vi.fn(),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+    statSync: vi.fn()
+  };
+  return { default: mock, ...mock };
+});
 
-jest.mock('../utils/paths', () => ({
-  getConfigFilePath: jest.fn(() => '/mock/config.json'),
-  ensureDataDirectoryExists: jest.fn()
+vi.mock('../utils/paths', () => ({
+  getConfigFilePath: vi.fn(() => '/mock/config.json'),
+  ensureDataDirectoryExists: vi.fn()
 }));
 
 describe('Config', () => {
   const originalConsoleError = console.error;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     clearConfigCache();
-    console.error = jest.fn();
-    (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 1000 });
+    console.error = vi.fn();
+    (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
   });
 
   afterEach(() => {
@@ -30,8 +33,8 @@ describe('Config', () => {
 
   describe('loadConfig', () => {
     it('returns config from valid JSON file', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(
         JSON.stringify({ colors: false, theme: 'dark' })
       );
 
@@ -41,7 +44,7 @@ describe('Config', () => {
     });
 
     it('creates default config when file does not exist', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      (fs.existsSync as Mock).mockReturnValue(false);
 
       const config = loadConfig();
 
@@ -52,8 +55,8 @@ describe('Config', () => {
     });
 
     it('returns defaults and logs error for malformed JSON', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue('not valid json');
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue('not valid json');
 
       const config = loadConfig();
 
@@ -66,8 +69,8 @@ describe('Config', () => {
     });
 
     it('fills missing fields with defaults', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(
         JSON.stringify({ colors: false })
       );
 
@@ -91,7 +94,7 @@ describe('Config', () => {
     });
 
     it('logs error when writeFileSync throws', () => {
-      (fs.writeFileSync as jest.Mock).mockImplementationOnce(() => {
+      (fs.writeFileSync as Mock).mockImplementationOnce(() => {
         throw new Error('write failed');
       });
 
@@ -106,8 +109,8 @@ describe('Config', () => {
 
   describe('getConfigSetting', () => {
     beforeEach(() => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(
         JSON.stringify({ colors: false, theme: 'dark' })
       );
     });
@@ -121,7 +124,7 @@ describe('Config', () => {
     });
 
     it('returns backend value', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValue(
+      (fs.readFileSync as Mock).mockReturnValue(
         JSON.stringify({ colors: true, theme: 'default', backend: 'sqlite' })
       );
       clearConfigCache();
@@ -138,8 +141,8 @@ describe('Config', () => {
 
   describe('setConfigSetting', () => {
     beforeEach(() => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(
         JSON.stringify({ colors: true, theme: 'default' })
       );
     });
@@ -147,7 +150,7 @@ describe('Config', () => {
     it('sets theme string value', () => {
       setConfigSetting('theme', 'dark');
 
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedConfig = JSON.parse(savedCall[1]);
       expect(savedConfig.theme).toBe('dark');
     });
@@ -155,7 +158,7 @@ describe('Config', () => {
     it('converts "true" string to boolean for colors', () => {
       setConfigSetting('colors', 'true');
 
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedConfig = JSON.parse(savedCall[1]);
       expect(savedConfig.colors).toBe(true);
     });
@@ -163,7 +166,7 @@ describe('Config', () => {
     it('converts "false" string to false for colors', () => {
       setConfigSetting('colors', 'false');
 
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedConfig = JSON.parse(savedCall[1]);
       expect(savedConfig.colors).toBe(false);
     });
@@ -171,7 +174,7 @@ describe('Config', () => {
     it('sets backend to sqlite', () => {
       setConfigSetting('backend', 'sqlite');
 
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedConfig = JSON.parse(savedCall[1]);
       expect(savedConfig.backend).toBe('sqlite');
     });
@@ -179,13 +182,13 @@ describe('Config', () => {
     it('sets backend to json', () => {
       setConfigSetting('backend', 'json');
 
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedConfig = JSON.parse(savedCall[1]);
       expect(savedConfig.backend).toBe('json');
     });
 
     it('warns when switching backend without migration', () => {
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation();
       // default backend in the mock is 'json', switching to 'sqlite'
       setConfigSetting('backend', 'sqlite');
 
@@ -197,7 +200,7 @@ describe('Config', () => {
 
     it('does not warn when setting backend to same value', () => {
       // The mock returns config with backend defaulting to 'json'
-      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation();
       setConfigSetting('backend', 'json');
 
       expect(warnSpy).not.toHaveBeenCalled();
@@ -225,16 +228,16 @@ describe('Config', () => {
     it('accepts all valid theme values', () => {
       for (const theme of ['default', 'dark', 'light']) {
         clearConfigCache();
-        jest.clearAllMocks();
-        (fs.existsSync as jest.Mock).mockReturnValue(true);
-        (fs.readFileSync as jest.Mock).mockReturnValue(
+        vi.clearAllMocks();
+        (fs.existsSync as Mock).mockReturnValue(true);
+        (fs.readFileSync as Mock).mockReturnValue(
           JSON.stringify({ colors: true, theme: 'default' })
         );
-        (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: Date.now() });
+        (fs.statSync as Mock).mockReturnValue({ mtimeMs: Date.now() });
 
         setConfigSetting('theme', theme);
 
-        const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+        const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
         const savedConfig = JSON.parse(savedCall[1]);
         expect(savedConfig.theme).toBe(theme);
       }
@@ -250,11 +253,11 @@ describe('Config', () => {
 
   describe('caching', () => {
     it('returns cached config on second call with same mtime', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(
         JSON.stringify({ colors: false, theme: 'dark' })
       );
-      (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 1000 });
+      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
 
       const first = loadConfig();
       const second = loadConfig();
@@ -265,11 +268,11 @@ describe('Config', () => {
     });
 
     it('re-reads when mtime changes', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock)
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock)
         .mockReturnValueOnce(JSON.stringify({ colors: true, theme: 'default' }))
         .mockReturnValueOnce(JSON.stringify({ colors: false, theme: 'dark' }));
-      (fs.statSync as jest.Mock)
+      (fs.statSync as Mock)
         .mockReturnValueOnce({ mtimeMs: 1000 })
         .mockReturnValueOnce({ mtimeMs: 2000 });
 
@@ -282,8 +285,8 @@ describe('Config', () => {
     });
 
     it('updates cache on saveConfig (write-through)', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 2000 });
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 2000 });
 
       saveConfig({ colors: false, theme: 'dark', backend: 'json' });
       const loaded = loadConfig();

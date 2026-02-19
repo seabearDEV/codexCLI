@@ -1,45 +1,51 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { jest } from '@jest/globals';
 
-// Capture tool registrations
+// Hoist all mutable state so it's available inside vi.mock factories
 type ToolHandler = (params: any) => Promise<any>;
-const toolHandlers: Record<string, ToolHandler> = {};
+const {
+  toolHandlers, mockExecSync, mockFiles, mockWrittenFiles,
+  mockData, mockAliases, mockConfig,
+} = vi.hoisted(() => ({
+  toolHandlers: {} as Record<string, ToolHandler>,
+  mockExecSync: vi.fn(),
+  mockFiles: {} as Record<string, boolean>,
+  mockWrittenFiles: {} as Record<string, string>,
+  mockData: {} as Record<string, any>,
+  mockAliases: {} as Record<string, string>,
+  mockConfig: { colors: true, theme: 'default' } as Record<string, any>,
+}));
 
-jest.mock('@modelcontextprotocol/sdk/server/mcp.js', () => ({
-  McpServer: jest.fn().mockImplementation(() => ({
-    tool: jest.fn((name: string, _desc: string, _schema: any, handler?: ToolHandler) => {
+vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => {
+  class MockMcpServer {
+    tool = vi.fn((name: string, _desc: string, _schema: any, handler?: ToolHandler) => {
       // Handle both 3-arg (no schema) and 4-arg overloads
       const fn = handler ?? _schema;
       toolHandlers[name] = fn;
-    }),
-    connect: jest.fn().mockResolvedValue(undefined as never),
-  })),
-}));
+    });
+    connect = vi.fn().mockResolvedValue(undefined as never);
+  }
+  return { McpServer: MockMcpServer };
+});
 
-jest.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
-  StdioServerTransport: jest.fn(),
+vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
+  StdioServerTransport: vi.fn(),
 }));
 
 // Mock child_process
-const mockExecSync = jest.fn();
-jest.mock('child_process', () => ({
+vi.mock('child_process', () => ({
   execSync: (...args: any[]) => mockExecSync(...args),
 }));
 
 // Mock fs — track written files
-const mockFiles: Record<string, boolean> = {};
-const mockWrittenFiles: Record<string, string> = {};
-const fsMockImpl = {
-  existsSync: jest.fn((p: string) => mockFiles[p] === true),
-  writeFileSync: jest.fn((p: string, content: string) => {
-    mockWrittenFiles[p] = content;
-  }),
-};
-jest.mock('fs', () => ({
-  __esModule: true,
-  default: fsMockImpl,
-  ...fsMockImpl,
-}));
+vi.mock('fs', () => {
+  const mock = {
+    existsSync: vi.fn((p: string) => mockFiles[p] === true),
+    writeFileSync: vi.fn((p: string, content: string) => {
+      mockWrittenFiles[p] = content;
+    }),
+  };
+  return { default: mock, ...mock };
+});
 
 // Mock storage — helpers for nested dot-path operations
 function getNestedMock(obj: any, path: string): any {
@@ -74,54 +80,51 @@ function removeNestedMock(obj: any, path: string): boolean {
   delete cur[parts[parts.length - 1]];
   return true;
 }
-const mockData: Record<string, any> = {};
-jest.mock('../storage', () => ({
-  loadData: jest.fn(() => ({ ...mockData })),
-  saveData: jest.fn((d: any) => {
+vi.mock('../storage', () => ({
+  loadData: vi.fn(() => ({ ...mockData })),
+  saveData: vi.fn((d: any) => {
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
   }),
-  getValue: jest.fn((key: string) => getNestedMock(mockData, key)),
-  setValue: jest.fn((key: string, value: string) => setNestedMock(mockData, key, value)),
-  removeValue: jest.fn((key: string) => removeNestedMock(mockData, key)),
-  getEntriesFlat: jest.fn(() => flattenMock(mockData)),
+  getValue: vi.fn((key: string) => getNestedMock(mockData, key)),
+  setValue: vi.fn((key: string, value: string) => setNestedMock(mockData, key, value)),
+  removeValue: vi.fn((key: string) => removeNestedMock(mockData, key)),
+  getEntriesFlat: vi.fn(() => flattenMock(mockData)),
 }));
 
 // Mock alias
-const mockAliases: Record<string, string> = {};
-jest.mock('../alias', () => ({
-  loadAliases: jest.fn(() => ({ ...mockAliases })),
-  saveAliases: jest.fn((a: any) => {
+vi.mock('../alias', () => ({
+  loadAliases: vi.fn(() => ({ ...mockAliases })),
+  saveAliases: vi.fn((a: any) => {
     Object.keys(mockAliases).forEach(k => delete mockAliases[k]);
     Object.assign(mockAliases, a);
   }),
-  resolveKey: jest.fn((k: string) => {
+  resolveKey: vi.fn((k: string) => {
     const aliases = { ...mockAliases };
     return aliases[k] ?? k;
   }),
-  buildKeyToAliasMap: jest.fn(() => ({})),
+  buildKeyToAliasMap: vi.fn(() => ({})),
 }));
 
-jest.mock('../utils/paths', () => ({
-  ensureDataDirectoryExists: jest.fn(),
-  getDataFilePath: jest.fn(() => '/mock/data.json'),
-  getAliasFilePath: jest.fn(() => '/mock/aliases.json'),
-  getConfigFilePath: jest.fn(() => '/mock/config.json'),
+vi.mock('../utils/paths', () => ({
+  ensureDataDirectoryExists: vi.fn(),
+  getDataFilePath: vi.fn(() => '/mock/data.json'),
+  getAliasFilePath: vi.fn(() => '/mock/aliases.json'),
+  getConfigFilePath: vi.fn(() => '/mock/config.json'),
 }));
 
-jest.mock('../formatting', () => ({
-  formatTree: jest.fn(() => 'tree-output'),
+vi.mock('../formatting', () => ({
+  formatTree: vi.fn(() => 'tree-output'),
 }));
 
 // Mock config
-const mockConfig: Record<string, any> = { colors: true, theme: 'default' };
-jest.mock('../config', () => ({
-  loadConfig: jest.fn(() => ({ ...mockConfig })),
-  getConfigSetting: jest.fn((key: string) => {
+vi.mock('../config', () => ({
+  loadConfig: vi.fn(() => ({ ...mockConfig })),
+  getConfigSetting: vi.fn((key: string) => {
     if (key === 'colors' || key === 'theme' || key === 'backend') return mockConfig[key];
     return null;
   }),
-  setConfigSetting: jest.fn((key: string, value: any) => {
+  setConfigSetting: vi.fn((key: string, value: any) => {
     mockConfig[key] = value;
   }),
   VALID_CONFIG_KEYS: ['colors', 'theme', 'backend'],
@@ -130,17 +133,17 @@ jest.mock('../config', () => ({
 }));
 
 // Mock deepMerge — use real implementation
-jest.mock('../utils/deepMerge', () => ({
-  deepMerge: jest.fn((target: Record<string, any>, source: Record<string, any>) => {
+vi.mock('../utils/deepMerge', () => ({
+  deepMerge: vi.fn((target: Record<string, any>, source: Record<string, any>) => {
     return { ...target, ...source };
   }),
 }));
 
 // Mock commands/init
-jest.mock('../commands/init', () => ({
-  getExampleData: jest.fn(() => ({ example: 'data' })),
-  getExampleAliases: jest.fn(() => ({ ex: 'example' })),
-  getExampleConfig: jest.fn(() => ({ colors: true, theme: 'default' })),
+vi.mock('../commands/init', () => ({
+  getExampleData: vi.fn(() => ({ example: 'data' })),
+  getExampleAliases: vi.fn(() => ({ ex: 'example' })),
+  getExampleConfig: vi.fn(() => ({ colors: true, theme: 'default' })),
 }));
 
 // Helper to reset mock data between tests

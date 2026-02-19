@@ -3,7 +3,7 @@ import { debug } from '../utils/debug';
 import { deepMerge } from '../utils/deepMerge';
 
 // Mock formatting so debug() doesn't depend on config/fs
-jest.mock('../formatting', () => ({
+vi.mock('../formatting', () => ({
   color: {
     boldColors: { yellow: (t: string) => t },
     gray: (t: string) => t,
@@ -102,11 +102,11 @@ describe('Utils', () => {
   });
 
   describe('debug', () => {
-    let consoleSpy: jest.SpyInstance;
+    let consoleSpy: SpyInstance;
     const originalDebug = process.env.DEBUG;
 
     beforeEach(() => {
-      consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      consoleSpy = vi.spyOn(console, 'log').mockImplementation();
     });
 
     afterEach(() => {

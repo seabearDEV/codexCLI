@@ -1,15 +1,15 @@
 import { execSync } from 'child_process';
 import { copyToClipboard } from '../utils/clipboard';
 
-jest.mock('child_process', () => ({
-  execSync: jest.fn(),
+vi.mock('child_process', () => ({
+  execSync: vi.fn(),
 }));
 
 describe('copyToClipboard', () => {
   const originalPlatform = process.platform;
 
   afterEach(() => {
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     Object.defineProperty(process, 'platform', { value: originalPlatform });
   });
 
@@ -24,7 +24,7 @@ describe('copyToClipboard', () => {
   it('uses xclip on Linux when available', () => {
     Object.defineProperty(process, 'platform', { value: 'linux' });
     // First call is `which xclip` — succeed
-    (execSync as jest.Mock).mockImplementationOnce(() => '/usr/bin/xclip');
+    (execSync as Mock).mockImplementationOnce(() => '/usr/bin/xclip');
 
     copyToClipboard('hello');
 
@@ -35,7 +35,7 @@ describe('copyToClipboard', () => {
   it('falls back to xsel on Linux when xclip is missing', () => {
     Object.defineProperty(process, 'platform', { value: 'linux' });
     // First call is `which xclip` — fail
-    (execSync as jest.Mock).mockImplementationOnce(() => { throw new Error('not found'); });
+    (execSync as Mock).mockImplementationOnce(() => { throw new Error('not found'); });
 
     copyToClipboard('hello');
 

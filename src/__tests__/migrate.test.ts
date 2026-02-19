@@ -5,7 +5,7 @@ import os from 'os';
 // Skip entire suite if better-sqlite3 can't be loaded (native module mismatch, not installed, etc.)
 let sqliteAvailable = false;
 try {
-  const Sqlite3 = require('better-sqlite3');
+  const Sqlite3 = (await import('better-sqlite3')).default;
   // Instantiate an in-memory DB to verify the native binary actually loads
   const testDb = new Sqlite3(':memory:');
   testDb.close();
@@ -17,7 +17,7 @@ try {
 // Use a temp directory for each test run
 let tmpDir: string;
 
-jest.mock('../utils/paths', () => ({
+vi.mock('../utils/paths', () => ({
   getDataDirectory: () => tmpDir,
   getDataFilePath: () => path.join(tmpDir, 'data.json'),
   getAliasFilePath: () => path.join(tmpDir, 'aliases.json'),
@@ -32,7 +32,7 @@ jest.mock('../utils/paths', () => ({
 
 // Clear all module caches so config reads from the temp dir
 beforeEach(() => {
-  jest.resetModules();
+  vi.resetModules();
 });
 
 function setupTmpDir() {
@@ -56,24 +56,24 @@ function readJsonConfig(): Record<string, unknown> {
     setupTmpDir();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     // Close any open sqlite connection
     try {
-      const { closeSqlite } = require('../sqlite-backend');
+      const { closeSqlite } = await import('../sqlite-backend');
       closeSqlite();
     } catch { /* ok */ }
     teardownTmpDir();
   });
 
   describe('migrateToSqlite', () => {
-    it('migrates JSON data and aliases to SQLite', () => {
+    it('migrates JSON data and aliases to SQLite', async () => {
       const testData = { server: { ip: '1.2.3.4' } };
       const testAliases = { prodip: 'server.ip' };
       fs.writeFileSync(path.join(tmpDir, 'data.json'), JSON.stringify(testData), 'utf8');
       fs.writeFileSync(path.join(tmpDir, 'aliases.json'), JSON.stringify(testAliases), 'utf8');
       writeJsonConfig({ colors: true, theme: 'default', backend: 'json' });
 
-      const { migrateToSqlite } = require('../commands/migrate');
+      const { migrateToSqlite } = await import('../commands/migrate');
       migrateToSqlite();
 
       // Verify config was updated
@@ -81,7 +81,7 @@ function readJsonConfig(): Record<string, unknown> {
       expect(config.backend).toBe('sqlite');
 
       // Verify data is in SQLite
-      const { loadDataSqlite, loadAliasesSqlite } = require('../sqlite-backend');
+      const { loadDataSqlite, loadAliasesSqlite } = await import('../sqlite-backend');
       expect(loadDataSqlite()).toEqual(testData);
       expect(loadAliasesSqlite()).toEqual(testAliases);
 
@@ -90,46 +90,46 @@ function readJsonConfig(): Record<string, unknown> {
       expect(fs.existsSync(path.join(tmpDir, 'aliases.json'))).toBe(true);
     });
 
-    it('skips migration if already on sqlite without --force', () => {
+    it('skips migration if already on sqlite without --force', async () => {
       writeJsonConfig({ colors: true, theme: 'default', backend: 'sqlite' });
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation();
 
-      const { migrateToSqlite } = require('../commands/migrate');
+      const { migrateToSqlite } = await import('../commands/migrate');
       migrateToSqlite();
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('already set to "sqlite"'));
       consoleSpy.mockRestore();
     });
 
-    it('allows re-migration with --force', () => {
+    it('allows re-migration with --force', async () => {
       const testData = { key: 'value' };
       fs.writeFileSync(path.join(tmpDir, 'data.json'), JSON.stringify(testData), 'utf8');
       fs.writeFileSync(path.join(tmpDir, 'aliases.json'), '{}', 'utf8');
       writeJsonConfig({ colors: true, theme: 'default', backend: 'sqlite' });
 
-      const { migrateToSqlite } = require('../commands/migrate');
+      const { migrateToSqlite } = await import('../commands/migrate');
       migrateToSqlite({ force: true });
 
       const config = readJsonConfig();
       expect(config.backend).toBe('sqlite');
 
-      const { loadDataSqlite } = require('../sqlite-backend');
+      const { loadDataSqlite } = await import('../sqlite-backend');
       expect(loadDataSqlite()).toEqual(testData);
     });
   });
 
   describe('migrateToJson', () => {
-    it('migrates SQLite data and aliases to JSON', () => {
+    it('migrates SQLite data and aliases to JSON', async () => {
       writeJsonConfig({ colors: true, theme: 'default', backend: 'sqlite' });
 
       // Seed SQLite with data
-      const { saveDataSqlite, saveAliasesSqlite } = require('../sqlite-backend');
+      const { saveDataSqlite, saveAliasesSqlite } = await import('../sqlite-backend');
       const testData = { server: { ip: '10.0.0.1' } };
       const testAliases = { devip: 'server.ip' };
       saveDataSqlite(testData);
       saveAliasesSqlite(testAliases);
 
-      const { migrateToJson } = require('../commands/migrate');
+      const { migrateToJson } = await import('../commands/migrate');
       migrateToJson();
 
       // Verify config was updated
@@ -143,25 +143,25 @@ function readJsonConfig(): Record<string, unknown> {
       expect(aliases).toEqual(testAliases);
     });
 
-    it('skips migration if already on json without --force', () => {
+    it('skips migration if already on json without --force', async () => {
       writeJsonConfig({ colors: true, theme: 'default', backend: 'json' });
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation();
 
-      const { migrateToJson } = require('../commands/migrate');
+      const { migrateToJson } = await import('../commands/migrate');
       migrateToJson();
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('already set to "json"'));
       consoleSpy.mockRestore();
     });
 
-    it('preserves SQLite database file as backup', () => {
+    it('preserves SQLite database file as backup', async () => {
       writeJsonConfig({ colors: true, theme: 'default', backend: 'sqlite' });
 
-      const { saveDataSqlite, saveAliasesSqlite } = require('../sqlite-backend');
+      const { saveDataSqlite, saveAliasesSqlite } = await import('../sqlite-backend');
       saveDataSqlite({ key: 'val' });
       saveAliasesSqlite({});
 
-      const { migrateToJson } = require('../commands/migrate');
+      const { migrateToJson } = await import('../commands/migrate');
       migrateToJson();
 
       expect(fs.existsSync(path.join(tmpDir, 'codexcli.db'))).toBe(true);

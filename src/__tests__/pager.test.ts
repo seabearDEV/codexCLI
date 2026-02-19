@@ -2,11 +2,11 @@ import { withPager } from '../utils/pager';
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 
-jest.mock('child_process', () => ({
-  spawn: jest.fn(),
+vi.mock('child_process', () => ({
+  spawn: vi.fn(),
 }));
 
-const mockedSpawn = spawn as jest.MockedFunction<typeof spawn>;
+const mockedSpawn = spawn as MockedFunction<typeof spawn>;
 
 // Helper: generate lines via process.stdout.write (not console.log, which Jest intercepts)
 function writeLines(count: number): void {
@@ -26,7 +26,7 @@ describe('withPager', () => {
     Object.defineProperty(process.stdout, 'rows', { value: originalRows, configurable: true });
     delete process.env.CCLI_PAGER;
     delete process.env.PAGER;
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it('writes short output directly without spawning a pager', async () => {
@@ -53,8 +53,8 @@ describe('withPager', () => {
     Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
     Object.defineProperty(process.stdout, 'rows', { value: 10, configurable: true });
 
-    const stdinStream = new EventEmitter() as EventEmitter & { end: jest.Mock };
-    stdinStream.end = jest.fn();
+    const stdinStream = new EventEmitter() as EventEmitter & { end: Mock };
+    stdinStream.end = vi.fn();
 
     const child = new EventEmitter() as EventEmitter & { stdin: typeof stdinStream };
     child.stdin = stdinStream;
@@ -101,8 +101,8 @@ describe('withPager', () => {
     Object.defineProperty(process.stdout, 'rows', { value: 5, configurable: true });
     process.env.CCLI_PAGER = 'more -s';
 
-    const stdinStream = new EventEmitter() as EventEmitter & { end: jest.Mock };
-    stdinStream.end = jest.fn();
+    const stdinStream = new EventEmitter() as EventEmitter & { end: Mock };
+    stdinStream.end = vi.fn();
 
     const child = new EventEmitter() as EventEmitter & { stdin: typeof stdinStream };
     child.stdin = stdinStream;
@@ -123,8 +123,8 @@ describe('withPager', () => {
     Object.defineProperty(process.stdout, 'rows', { value: 5, configurable: true });
     process.env.PAGER = 'bat --paging=always';
 
-    const stdinStream = new EventEmitter() as EventEmitter & { end: jest.Mock };
-    stdinStream.end = jest.fn();
+    const stdinStream = new EventEmitter() as EventEmitter & { end: Mock };
+    stdinStream.end = vi.fn();
 
     const child = new EventEmitter() as EventEmitter & { stdin: typeof stdinStream };
     child.stdin = stdinStream;
@@ -153,8 +153,8 @@ describe('withPager', () => {
       return true;
     }) as typeof process.stdout.write;
 
-    const stdinStream = new EventEmitter() as EventEmitter & { end: jest.Mock };
-    stdinStream.end = jest.fn();
+    const stdinStream = new EventEmitter() as EventEmitter & { end: Mock };
+    stdinStream.end = vi.fn();
 
     const child = new EventEmitter() as EventEmitter & { stdin: typeof stdinStream };
     child.stdin = stdinStream;

@@ -30,7 +30,7 @@ import {
 // Use a temp directory for each test run
 let tmpDir: string;
 
-jest.mock('../utils/paths', () => ({
+vi.mock('../utils/paths', () => ({
   getDbFilePath: () => path.join(tmpDir, 'codexcli.db'),
   ensureDataDirectoryExists: () => {
     if (!fs.existsSync(tmpDir)) {
@@ -188,7 +188,7 @@ jest.mock('../utils/paths', () => ({
       // Write garbage to the database file
       fs.writeFileSync(path.join(tmpDir, 'codexcli.db'), 'not a database');
 
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation();
       const data = loadDataSqlite();
       expect(data).toEqual({});
       expect(consoleSpy).toHaveBeenCalled();
@@ -198,7 +198,7 @@ jest.mock('../utils/paths', () => ({
     it('loadAliasesSqlite returns {} and logs error on corrupted database', () => {
       fs.writeFileSync(path.join(tmpDir, 'codexcli.db'), 'not a database');
 
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation();
       const aliases = loadAliasesSqlite();
       expect(aliases).toEqual({});
       expect(consoleSpy).toHaveBeenCalled();

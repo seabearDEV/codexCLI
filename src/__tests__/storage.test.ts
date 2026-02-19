@@ -1,22 +1,25 @@
 import * as fs from 'fs';
 import { handleError, handleOperation, loadData, saveData, getErrorMessage, clearDataCache } from '../storage';
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  statSync: jest.fn()
-}));
+vi.mock('fs', () => {
+  const mock = {
+    existsSync: vi.fn(),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    statSync: vi.fn()
+  };
+  return { default: mock, ...mock };
+});
 
-jest.mock('../formatting', () => ({
+vi.mock('../formatting', () => ({
   color: {
-    red: jest.fn((text: string) => `[red]${text}[/red]`),
-    gray: jest.fn((text: string) => `[gray]${text}[/gray]`)
+    red: vi.fn((text: string) => `[red]${text}[/red]`),
+    gray: vi.fn((text: string) => `[gray]${text}[/gray]`)
   }
 }));
 
-jest.mock('../utils/paths', () => ({
-  getDataFilePath: jest.fn(() => '/mock/data.json')
+vi.mock('../utils/paths', () => ({
+  getDataFilePath: vi.fn(() => '/mock/data.json')
 }));
 
 describe('Storage', () => {
@@ -24,11 +27,11 @@ describe('Storage', () => {
   const originalDebug = process.env.DEBUG;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     clearDataCache();
-    console.error = jest.fn();
+    console.error = vi.fn();
     delete process.env.DEBUG;
-    (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 1000 });
+    (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
   });
 
   afterEach(() => {
@@ -104,15 +107,15 @@ describe('Storage', () => {
 
   describe('loadData', () => {
     it('returns {} when file does not exist', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      (fs.existsSync as Mock).mockReturnValue(false);
 
       const data = loadData();
       expect(data).toEqual({});
     });
 
     it('returns parsed data for valid JSON', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(
         JSON.stringify({ server: { ip: '1.2.3.4' } })
       );
 
@@ -121,8 +124,8 @@ describe('Storage', () => {
     });
 
     it('returns {} for invalid JSON', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue('not json');
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue('not json');
 
       const data = loadData();
       expect(data).toEqual({});
@@ -142,7 +145,7 @@ describe('Storage', () => {
     });
 
     it('handles writeFileSync errors gracefully', () => {
-      (fs.writeFileSync as jest.Mock).mockImplementationOnce(() => {
+      (fs.writeFileSync as Mock).mockImplementationOnce(() => {
         throw new Error('disk error');
       });
 
@@ -168,9 +171,9 @@ describe('Storage', () => {
 
   describe('caching', () => {
     it('returns cached data on second call with same mtime', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify({ key: 'value' }));
-      (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 1000 });
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify({ key: 'value' }));
+      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
 
       const first = loadData();
       const second = loadData();
@@ -181,11 +184,11 @@ describe('Storage', () => {
     });
 
     it('re-reads when mtime changes', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.readFileSync as jest.Mock)
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.readFileSync as Mock)
         .mockReturnValueOnce(JSON.stringify({ key: 'old' }))
         .mockReturnValueOnce(JSON.stringify({ key: 'new' }));
-      (fs.statSync as jest.Mock)
+      (fs.statSync as Mock)
         .mockReturnValueOnce({ mtimeMs: 1000 })
         .mockReturnValueOnce({ mtimeMs: 2000 });
 
@@ -198,8 +201,8 @@ describe('Storage', () => {
     });
 
     it('updates cache on saveData (write-through)', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(true);
-      (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 2000 });
+      (fs.existsSync as Mock).mockReturnValue(true);
+      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 2000 });
 
       saveData({ saved: 'data' });
       const loaded = loadData();

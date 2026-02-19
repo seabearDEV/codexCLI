@@ -10,16 +10,19 @@ import {
   clearAliasCache
 } from '../alias';
 
-jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  readFileSync: jest.fn(),
-  writeFileSync: jest.fn(),
-  mkdirSync: jest.fn(),
-  statSync: jest.fn()
-}));
+vi.mock('fs', () => {
+  const mock = {
+    existsSync: vi.fn(),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+    statSync: vi.fn()
+  };
+  return { default: mock, ...mock };
+});
 
-jest.mock('../config', () => ({
-  loadConfig: jest.fn(() => ({ colors: true, theme: 'default', backend: 'json' }))
+vi.mock('../config', () => ({
+  loadConfig: vi.fn(() => ({ colors: true, theme: 'default', backend: 'json' }))
 }));
 
 describe('Alias Management', () => {
@@ -28,14 +31,14 @@ describe('Alias Management', () => {
   
   beforeEach(() => {
     // Reset mocks
-    jest.resetAllMocks();
+    vi.resetAllMocks();
     clearAliasCache();
-    console.log = jest.fn();
-    console.error = jest.fn();
+    console.log = vi.fn();
+    console.error = vi.fn();
 
     // Mock existsSync to return true
-    (fs.existsSync as jest.Mock).mockReturnValue(true);
-    (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 1000 });
+    (fs.existsSync as Mock).mockReturnValue(true);
+    (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
 
     // Mock initial aliases
     const mockAliases = {
@@ -44,7 +47,7 @@ describe('Alias Management', () => {
     };
 
     // Mock readFileSync to return test aliases
-    (fs.readFileSync as jest.Mock).mockReturnValue(JSON.stringify(mockAliases));
+    (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockAliases));
   });
   
   afterEach(() => {
@@ -61,14 +64,14 @@ describe('Alias Management', () => {
     });
     
     it('returns empty object if aliases file does not exist', () => {
-      (fs.existsSync as jest.Mock).mockReturnValueOnce(false);
+      (fs.existsSync as Mock).mockReturnValueOnce(false);
       
       const aliases = loadAliases();
       expect(Object.keys(aliases).length).toBe(0);
     });
     
     it('handles invalid JSON gracefully', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValueOnce('invalid json');
+      (fs.readFileSync as Mock).mockReturnValueOnce('invalid json');
       
       const aliases = loadAliases();
       expect(Object.keys(aliases).length).toBe(0);
@@ -84,7 +87,7 @@ describe('Alias Management', () => {
       expect(fs.writeFileSync).toHaveBeenCalled();
       
       // Get the saved data
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedAliases = JSON.parse(savedCall[1]);
       
       // Verify new alias was added
@@ -96,7 +99,7 @@ describe('Alias Management', () => {
       setAlias('prod-ip', 'new.path.to.ip');
       
       // Get the saved data
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedAliases = JSON.parse(savedCall[1]);
       
       // Verify alias was updated
@@ -112,7 +115,7 @@ describe('Alias Management', () => {
       expect(fs.writeFileSync).toHaveBeenCalled();
       
       // Get the saved data
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedAliases = JSON.parse(savedCall[1]);
       
       // Verify alias was removed
@@ -141,7 +144,7 @@ describe('Alias Management', () => {
       expect(result).toBe(true);
       expect(fs.writeFileSync).toHaveBeenCalled();
 
-      const savedCall = (fs.writeFileSync as jest.Mock).mock.calls[0];
+      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedAliases = JSON.parse(savedCall[1]);
 
       expect(savedAliases['production-ip']).toBe('server.production.ip');
@@ -166,7 +169,7 @@ describe('Alias Management', () => {
 
   describe('loadAliases - additional branches', () => {
     it('returns {} silently for SyntaxError with "Unexpected end"', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValueOnce('{"key":');
+      (fs.readFileSync as Mock).mockReturnValueOnce('{"key":');
 
       const aliases = loadAliases();
       expect(aliases).toEqual({});
@@ -174,14 +177,14 @@ describe('Alias Management', () => {
     });
 
     it('returns {} for empty file content', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValueOnce('');
+      (fs.readFileSync as Mock).mockReturnValueOnce('');
 
       const aliases = loadAliases();
       expect(aliases).toEqual({});
     });
 
     it('returns {} for whitespace-only file content', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValueOnce('   \n  ');
+      (fs.readFileSync as Mock).mockReturnValueOnce('   \n  ');
 
       const aliases = loadAliases();
       expect(aliases).toEqual({});
@@ -190,7 +193,7 @@ describe('Alias Management', () => {
 
   describe('saveAliases', () => {
     it('creates directory when it does not exist', () => {
-      (fs.existsSync as jest.Mock).mockReturnValue(false);
+      (fs.existsSync as Mock).mockReturnValue(false);
 
       saveAliases({ myAlias: 'some.path' });
 
@@ -199,7 +202,7 @@ describe('Alias Management', () => {
     });
 
     it('logs error when writeFileSync throws', () => {
-      (fs.writeFileSync as jest.Mock).mockImplementationOnce(() => {
+      (fs.writeFileSync as Mock).mockImplementationOnce(() => {
         throw new Error('disk full');
       });
 
@@ -223,7 +226,7 @@ describe('Alias Management', () => {
         'a2': 'target.path',
         'a3': 'other.path'
       };
-      (fs.readFileSync as jest.Mock).mockReturnValueOnce(JSON.stringify(multiAliases));
+      (fs.readFileSync as Mock).mockReturnValueOnce(JSON.stringify(multiAliases));
 
       const map = buildKeyToAliasMap();
       expect(map['target.path']).toEqual(['a1', 'a2']);
@@ -231,7 +234,7 @@ describe('Alias Management', () => {
     });
 
     it('returns empty object when no aliases exist', () => {
-      (fs.readFileSync as jest.Mock).mockReturnValueOnce(JSON.stringify({}));
+      (fs.readFileSync as Mock).mockReturnValueOnce(JSON.stringify({}));
 
       const map = buildKeyToAliasMap();
       expect(map).toEqual({});
@@ -250,7 +253,7 @@ describe('Alias Management', () => {
 
   describe('caching', () => {
     it('returns cached aliases on second call with same mtime', () => {
-      (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 1000 });
+      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
 
       const first = loadAliases();
       const second = loadAliases();
@@ -260,10 +263,10 @@ describe('Alias Management', () => {
     });
 
     it('re-reads when mtime changes', () => {
-      (fs.statSync as jest.Mock)
+      (fs.statSync as Mock)
         .mockReturnValueOnce({ mtimeMs: 1000 })
         .mockReturnValueOnce({ mtimeMs: 2000 });
-      (fs.readFileSync as jest.Mock)
+      (fs.readFileSync as Mock)
         .mockReturnValueOnce(JSON.stringify({ a: 'path.a' }))
         .mockReturnValueOnce(JSON.stringify({ b: 'path.b' }));
 
@@ -276,7 +279,7 @@ describe('Alias Management', () => {
     });
 
     it('updates cache on saveAliases (write-through)', () => {
-      (fs.statSync as jest.Mock).mockReturnValue({ mtimeMs: 2000 });
+      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 2000 });
 
       saveAliases({ saved: 'alias.path' });
       const loaded = loadAliases();
