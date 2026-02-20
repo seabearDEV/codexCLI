@@ -2,9 +2,9 @@
 
 import { Command } from 'commander';
 import * as commands from './commands';
-import { setAlias, removeAlias, renameAlias, loadAliases, resolveKey } from './alias';
+import { removeAlias, resolveKey } from './alias';
 import { showHelp, showExamples } from './formatting';
-import { displayAliases, askPassword, askConfirmation, printError } from './commands/helpers';
+import { askPassword, askConfirmation, printError } from './commands/helpers';
 import { version } from '../package.json';
 import { getCompletions, generateBashScript, generateZshScript, installCompletions } from './completions';
 import { withPager } from './utils/pager';
@@ -58,7 +58,7 @@ codexCLI
   .option('-s, --show', 'Show input when using --prompt (default is masked)')
   .option('-c, --clear', 'Clear terminal and scrollback after setting (removes sensitive input from history)')
   .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean }) => {
-    let value: string;
+    let value: string | undefined;
     if (options.prompt) {
       if (!process.stdin.isTTY) {
         printError('--prompt requires an interactive terminal.');
@@ -77,9 +77,13 @@ codexCLI
         }
       }
     } else if (valueArray.length === 0) {
-      printError('Missing value. Provide a value or use --prompt (-p) to enter it interactively.');
-      process.exitCode = 1;
-      return;
+      // Allow no value when -a is provided (alias-only update)
+      if (!options.alias) {
+        printError('Missing value. Provide a value or use --prompt (-p) to enter it interactively.');
+        process.exitCode = 1;
+        return;
+      }
+      value = undefined;
     } else {
       value = valueArray.join(' ');
     }
@@ -95,11 +99,11 @@ codexCLI
   .alias('g')
   .description('Retrieve entries or specific data')
   .option('-t, --tree', 'Display data in a hierarchical tree structure')
-  .option('-r, --raw', 'Output raw values without formatting')
-  .option('-k, --keys-only', 'Only show keys')
+  .option('-r, --raw', 'Output plain text without colors (for scripting)')
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
   .option('-c, --copy', 'Copy value to clipboard')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, keysOnly?: boolean, decrypt?: boolean, copy?: boolean }) => {
+  .option('-a, --aliases', 'Show aliases only')
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }
@@ -125,17 +129,13 @@ codexCLI
   .command('find <term>')
   .alias('f')
   .description('Find entries by key or value')
-  .option('-k, --keys-only', 'Only search in keys')
-  .option('-v, --values-only', 'Only search in values')
-  .option('-e, --entries-only', 'Search only in data entries')
-  .option('-a, --aliases-only', 'Search only in aliases')
+  .option('-e, --entries', 'Search only in data entries')
+  .option('-a, --aliases', 'Search only in aliases')
   .option('-t, --tree', 'Display results in a hierarchical tree structure')
-  .action(async (term: string, options: { keysOnly?: boolean, valuesOnly?: boolean, entriesOnly?: boolean, aliasesOnly?: boolean, tree?: boolean }) => {
+  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean }) => {
     await withPager(() => commands.searchEntries(term, {
-      keysOnly: options.keysOnly,
-      valuesOnly: options.valuesOnly,
-      entriesOnly: options.entriesOnly,
-      aliasesOnly: options.aliasesOnly,
+      entries: options.entries,
+      aliases: options.aliases,
       tree: options.tree
     }));
   });
@@ -145,73 +145,19 @@ codexCLI
   .command('remove <key>')
   .alias('rm')
   .description('Remove an entry')
-  .action((key: string) => {
-    commands.removeEntry(resolveKey(key.replace(/:$/, '')));
-  });
-
-// Alias management commands
-const aliasCommand = codexCLI
-  .command('alias')
-  .alias('al')
-  .description('Manage command aliases')
-  .action(async () => {
-    await withPager(() => {
-      const aliases = loadAliases();
-      displayAliases(aliases);
-    });
-  });
-
-aliasCommand
-  .command('set <name> <command...>')
-  .alias('s')
-  .description('Set a command alias')
-  .action((name: string, commandArray: string[]) => {
-    setAlias(name, commandArray.join(' '));
-  });
-
-aliasCommand
-  .command('remove <name>')
-  .alias('rm')
-  .description('Remove an alias')
-  .action((name: string) => {
-    const removed = removeAlias(name);
-    if (removed) {
-      console.log(`Alias '${name}' removed successfully.`);
-    } else {
-      console.error(`Alias '${name}' not found.`);
-      process.exitCode = 1;
-    }
-  });
-
-aliasCommand
-  .command('rename <old-name> <new-name>')
-  .alias('rn')
-  .description('Rename an alias')
-  .action((oldName: string, newName: string) => {
-    const renamed = renameAlias(oldName, newName);
-    if (renamed) {
-      console.log(`Alias '${oldName}' renamed to '${newName}'.`);
-    } else {
-      const aliases = loadAliases();
-      if (!(oldName in aliases)) {
-        console.error(`Alias '${oldName}' not found.`);
+  .option('-a, --alias', 'Remove the alias only (keep the entry)')
+  .action((key: string, options: { alias?: boolean }) => {
+    if (options.alias) {
+      const removed = removeAlias(key);
+      if (removed) {
+        console.log(`Alias '${key}' removed successfully.`);
       } else {
-        console.error(`Alias '${newName}' already exists.`);
+        console.error(`Alias '${key}' not found.`);
+        process.exitCode = 1;
       }
-      process.exitCode = 1;
+    } else {
+      commands.removeEntry(resolveKey(key.replace(/:$/, '')));
     }
-  });
-
-aliasCommand
-  .command('get [name]')
-  .alias('g')
-  .description('List all aliases or get a specific alias')
-  .option('-t, --tree', 'Display data in a hierarchical tree structure')
-  .action(async (name: string, options: { tree?: boolean }) => {
-    await withPager(() => {
-      const aliases = loadAliases();
-      displayAliases(aliases, { tree: options.tree, name });
-    });
   });
 
 // Configuration commands

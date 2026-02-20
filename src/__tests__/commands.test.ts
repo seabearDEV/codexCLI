@@ -273,15 +273,15 @@ describe('Commands', () => {
   
   describe('searchEntries', () => {
     it('finds entries by key', () => {
-      searchEntries('production', { keysOnly: true });
-      
+      searchEntries('production', {});
+
       // Verify results were found and displayed
       expect(console.log).toHaveBeenCalled();
       expect(console.error).not.toHaveBeenCalled();
     });
-    
+
     it('finds entries by value', () => {
-      searchEntries('192.168', { valuesOnly: true });
+      searchEntries('192.168', {});
       
       // Verify results were found
       expect(console.log).toHaveBeenCalled();

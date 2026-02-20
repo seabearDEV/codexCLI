@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { loadConfig } from './config';
 import { isEncrypted } from './utils/crypto';
+import { interpolate } from './utils/interpolate';
 import { interpretEscapes, visibleLength, wordWrap } from './utils/wordWrap';
 
 export function isColorEnabled(): boolean {
@@ -107,33 +108,28 @@ export function showHelp(): void {
   console.log('  ccli <command> [parameters] [options]');
   console.log();
   console.log('COMMANDS:');
-  console.log('  set        <key> <value>              Set an entry (prompts before overwriting)');
-  console.log('  get        [key]                      Retrieve entries or specific data');
-  console.log('  run        <key>                      Execute a stored command');
-  console.log('  find       <term>                     Find entries by key or value');
-  console.log('  remove     <key>                      Remove an entry');
-  console.log('  alias      <action> [name] [path]     Manage aliases for paths');
-  console.log('  config     [setting] [value]          View or change configuration settings');
-  console.log('  export     <type>                     Export data or aliases to a file');
-  console.log('  import     <type> <file>              Import data or aliases from a file');
-  console.log('  reset      <type>                     Reset data or aliases to empty state');
-  console.log('  info                                  Show version, stats, and storage info');
-  console.log('  init                                  Initialize with example data');
-  console.log('  examples                              Show usage examples');
+  const cmd = (name: string, shortcut: string, args: string, desc: string) => {
+    const nameCol = name.padEnd(12);
+    const shortcutCol = shortcut.padEnd(4);
+    const argsCol = args.padEnd(20);
+    console.log(`  ${color.green(nameCol)} ${color.yellow(shortcutCol)} ${argsCol} ${desc}`);
+  };
+  cmd('set',      's',  '<key> [value]',      'Set an entry (value optional with -a)');
+  cmd('get',      'g',  '[key]',              'Retrieve entries or specific data');
+  cmd('run',      'r',  '<key>',              'Execute a stored command');
+  cmd('find',     'f',  '<term>',             'Find entries by key or value');
+  cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
+  cmd('config',   '',   '[setting] [value]',  'View or change configuration settings');
+  cmd('export',   '',   '<type>',             'Export data or aliases to a file');
+  cmd('import',   '',   '<type> <file>',      'Import data or aliases from a file');
+  cmd('reset',    '',   '<type>',             'Reset data or aliases to empty state');
+  cmd('completions', '', '<bash|zsh|install>', 'Generate shell completion scripts');
+  cmd('migrate',  '',   '<sqlite|json>',      'Migrate storage backend');
+  cmd('info',     'i',  '',                   'Show version, stats, and storage info');
+  cmd('init',     '',   '',                   'Initialize with example data');
+  cmd('examples', 'ex', '',                   'Show usage examples');
   console.log();
   console.log('  Use --help with any command for details (e.g. ccli set --help)');
-
-  console.log('\n' + color.boldColors.magenta('SHORTCUTS:'));
-  console.log(`  ${color.yellow('s')}            ${color.gray('=')} ${color.green('set')}                 ${color.gray('ccli s server.ip 192.168.1.1')}`);
-  console.log(`  ${color.yellow('g')}            ${color.gray('=')} ${color.green('get')}                 ${color.gray('ccli g server.ip')}`);
-  console.log(`  ${color.yellow('r')}            ${color.gray('=')} ${color.green('run')}                 ${color.gray('ccli r my.command')}`);
-  console.log(`  ${color.yellow('f')}            ${color.gray('=')} ${color.green('find')}                ${color.gray('ccli f 192.168')}`);
-  console.log(`  ${color.yellow('rm')}           ${color.gray('=')} ${color.green('remove')}              ${color.gray('ccli rm server.old')}`);
-  console.log(`  ${color.yellow('i')}            ${color.gray('=')} ${color.green('info')}                ${color.gray('ccli i')}`);
-  console.log(`  ${color.yellow('al')} ${color.gray('g')}         ${color.gray('=')} ${color.green('alias get')}           ${color.gray('ccli al g')}`);
-  console.log(`  ${color.yellow('al')} ${color.gray('s')}         ${color.gray('=')} ${color.green('alias set')}           ${color.gray('ccli al s myip server.ip')}`);
-  console.log(`  ${color.yellow('al')} ${color.gray('rm')}        ${color.gray('=')} ${color.green('alias remove')}        ${color.gray('ccli al rm myip')}`);
-  console.log(`  ${color.yellow('al')} ${color.gray('rn')}        ${color.gray('=')} ${color.green('alias rename')}        ${color.gray('ccli al rn myip newip')}`);
 
   // Align all option descriptions at the same column
   const optDescCol = 26; // description starts this many chars after the 2-space indent
@@ -145,16 +141,17 @@ export function showHelp(): void {
   console.log('\n' + color.boldColors.magenta('OPTIONS (set):'));
   opt(`${color.yellow('--force')}, ${color.yellow('-f')}`, 'Overwrite existing entries without confirmation');
   opt(`${color.yellow('--encrypt')}, ${color.yellow('-e')}`, 'Encrypt the value with a password');
-  opt(`${color.yellow('--alias')} <name>`, 'Create an alias for this key');
+  opt(`${color.yellow('--alias')} <name>, ${color.yellow('-a')}`, 'Create or change an alias (value optional)');
   opt(`${color.yellow('--prompt')}, ${color.yellow('-p')}`, 'Read value interactively (avoids shell expansion)');
   opt(`${color.yellow('--show')}, ${color.yellow('-s')}`, 'Show input when using --prompt (default is masked)');
+  opt(`${color.yellow('--clear')}, ${color.yellow('-c')}`, 'Clear terminal and scrollback after setting');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (get):'));
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display data in a hierarchical tree structure');
-  opt(`${color.yellow('--raw')}, ${color.yellow('-r')}`, 'Output raw values without formatting (for scripting)');
-  opt(`${color.yellow('--keys-only')}, ${color.yellow('-k')}`, 'Show only keys');
+  opt(`${color.yellow('--raw')}, ${color.yellow('-r')}`, 'Output plain text without colors (for scripting)');
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value');
   opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard');
+  opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Show aliases only');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (run):'));
   opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt');
@@ -162,11 +159,12 @@ export function showHelp(): void {
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted command before running');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (find):'));
-  opt(`${color.yellow('--keys-only')}, ${color.yellow('-k')}`, 'Show only keys');
-  opt(`${color.yellow('--values-only')}, ${color.yellow('-v')}`, 'Search only in values');
-  opt(`${color.yellow('--entries-only')}, ${color.yellow('-e')}`, 'Search only in data entries');
-  opt(`${color.yellow('--aliases-only')}, ${color.yellow('-a')}`, 'Search only in aliases');
+  opt(`${color.yellow('--entries')}, ${color.yellow('-e')}`, 'Search only in data entries');
+  opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Search only in aliases');
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display results in a tree structure');
+
+  console.log('\n' + color.boldColors.magenta('OPTIONS (remove):'));
+  opt(`${color.yellow('--alias')}, ${color.yellow('-a')}`, 'Remove the alias only (keep the entry)');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (global):'));
   opt(`${color.yellow('--debug')}`, 'Enable debug output for troubleshooting');
@@ -199,15 +197,17 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('set')} ${c('api.key')} "sk-abc123" ${y('-e')}`, '# Encrypt a secret with a password');
   ex(`${y('ccli')} ${g('set')} ${c('db.host')} "mydb.local" ${y('-f')}`, '# Overwrite without confirmation');
   ex(`${y('ccli')} ${g('set')} ${c('db.host')} "mydb.local" ${y('-a')} ${c('dbh')}`, '# Store and create alias "dbh" at once');
+  ex(`${y('ccli')} ${g('set')} ${c('db.host')} ${y('-a')} ${c('newdbh')}`, '# Change alias without re-setting value');
 
   section('RETRIEVING DATA:');
-  ex(`${y('ccli')} ${g('get')}`, '# List all entries');
+  ex(`${y('ccli')} ${g('get')}`, '# List all entries and aliases');
+  ex(`${y('ccli')} ${g('get')} ${y('-e')}`, '# List entries only (no aliases)');
+  ex(`${y('ccli')} ${g('get')} ${y('-a')}`, '# List aliases only');
   ex(`${y('ccli')} ${g('get')} ${c('server.ip')}`, '# Get a specific value');
   ex(`${y('ccli')} ${g('get')} ${c('server')}`, '# Get everything under a namespace');
   ex(`${y('ccli')} ${g('get')} ${y('-t')}`, '# Show all data as a tree');
   ex(`${y('ccli')} ${g('get')} ${c('server')} ${y('--tree')}`, '# Show a namespace as a tree');
   ex(`${y('ccli')} ${g('get')} ${c('server.ip')} ${y('--raw')}`, '# Raw value, no formatting (for scripts)');
-  ex(`${y('ccli')} ${g('get')} ${y('--keys-only')}`, '# List just the keys');
   ex(`${y('ccli')} ${g('get')} ${c('api.key')} ${y('-d')}`, '# Decrypt an encrypted value');
   ex(`${y('ccli')} ${g('get')} ${c('server.ip')} ${y('-c')}`, '# Copy value to clipboard');
 
@@ -226,16 +226,16 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('find')} server ${y('-t')}`, '# Show results as a tree');
 
   section('ALIASES:');
-  ex(`${y('ccli')} ${g('alias set')} ${c('prod')} ${c('server.production.ip')}`, '# Create alias "prod"');
-  ex(`${y('ccli')} ${g('alias get')}`, '# List all aliases');
-  ex(`${y('ccli')} ${g('alias get')} ${c('prod')}`, '# Show where "prod" points');
-  ex(`${y('ccli')} ${g('alias get')} ${y('-t')}`, '# Display aliases as a tree');
-  ex(`${y('ccli')} ${g('alias rename')} ${c('prod')} ${c('production')}`, '# Rename an alias');
-  ex(`${y('ccli')} ${g('alias remove')} ${c('prod')}`, '# Remove an alias');
-  ex(`${y('ccli')} ${g('get')} ${c('prod')}`, '# Use alias in place of full key path');
+  ex(`${y('ccli')} ${g('set')} ${c('server.ip')} "192.168.1.100" ${y('-a')} ${c('ip')}`, '# Create entry with alias');
+  ex(`${y('ccli')} ${g('set')} ${c('server.ip')} ${y('-a')} ${c('sip')}`, '# Change alias (keep value)');
+  ex(`${y('ccli')} ${g('get')} ${y('-a')}`, '# List all aliases');
+  ex(`${y('ccli')} ${g('get')} ${c('ip')}`, '# Use alias in place of full key path');
+  ex(`${y('ccli')} ${g('remove')} ${c('ip')} ${y('-a')}`, '# Remove alias only (keep entry)');
+  ex(`${y('ccli')} ${g('remove')} ${c('server.ip')}`, '# Remove entry and its alias');
 
   section('REMOVING DATA:');
-  ex(`${y('ccli')} ${g('remove')} ${c('server.old')}`, '# Remove an entry');
+  ex(`${y('ccli')} ${g('remove')} ${c('server.old')}`, '# Remove an entry (and its alias)');
+  ex(`${y('ccli')} ${g('remove')} ${c('myalias')} ${y('-a')}`, '# Remove alias only (keep the entry)');
 
   section('IMPORT & EXPORT:');
   ex(`${y('ccli')} ${g('export')} data`, '# Export data to a timestamped file');
@@ -272,7 +272,7 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('set')} ${c('paths.github')} "/Users/me/Projects/github.com"`, '# Store a base path');
   ex(`${y('ccli')} ${g('set')} ${c('paths.myproject')} "cd \\$\{paths.github}/myproject"`, '# Reference it with ${key}');
   ex(`${y('ccli')} ${g('get')} ${c('paths.myproject')}`, '# Resolves: cd /Users/me/Projects/github.com/myproject');
-  ex(`${y('ccli')} ${g('get')} ${c('paths.myproject')} ${y('--raw')}`, '# Shows template: cd ${paths.github}/myproject');
+  ex(`${y('ccli')} ${g('get')} ${c('paths.myproject')} ${y('--raw')}`, '# Plain text, no colors (for scripting)');
   ex(`${y('ccli')} ${g('run')} ${c('paths.myproject')} ${y('--dry -y')}`, '# Preview interpolated command');
   ex(`${y('ccli')} ${g('set')} ${c('paths.myproject')} ${y('-p')}`, '# Use --prompt to avoid escaping ${}');
 
@@ -281,50 +281,6 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('get')} ${c('api.key')} ${y('-d -c')}`, '# Decrypt and copy to clipboard');
   ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')} ${y('-d -y')}`, '# Decrypt and run without prompt');
 
-  console.log();
-}
-
-export function showAliasHelp(): void {
-  console.log();
-  console.log('┌─────────────────────────────┐');
-  console.log('│ CodexCLI - Alias Management │');
-  console.log('└─────────────────────────────┘');
-  console.log();
-  console.log('USAGE:');
-  console.log('  ccli alias <command> [options]');
-  console.log();
-  console.log('COMMANDS:');
-  console.log('  set        <name> <path>          Create or update an alias');
-  console.log('  get        [name]                 List all aliases or get a specific one');
-  console.log('  remove     <name>                 Remove an alias');
-  console.log('  rename     <old> <new>            Rename an alias');
-
-  console.log('\n' + color.boldColors.magenta('SHORTCUTS:'));
-  console.log(`  ${color.yellow('al s')}         ${color.gray('=')} ${color.green('alias set')}           ${color.gray('ccli al s myip server.ip')}`);
-  console.log(`  ${color.yellow('al g')}         ${color.gray('=')} ${color.green('alias get')}           ${color.gray('ccli al g')}`);
-  console.log(`  ${color.yellow('al rm')}        ${color.gray('=')} ${color.green('alias remove')}        ${color.gray('ccli al rm myip')}`);
-  console.log(`  ${color.yellow('al rn')}        ${color.gray('=')} ${color.green('alias rename')}        ${color.gray('ccli al rn myip newip')}`);
-
-  const alOpt = (flag: string, desc: string) => {
-    const pad = ' '.repeat(Math.max(2, 26 - visibleLength(flag)));
-    console.log(`  ${flag}${pad}${desc}`);
-  };
-  console.log('\n' + color.boldColors.magenta('OPTIONS:'));
-  alOpt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display aliases in a hierarchical tree structure');
-  alOpt(`${color.yellow('--keys-only')}, ${color.yellow('-k')}`, 'Only show alias names');
-
-  const alEx = (cmd: string, comment: string) => {
-    const pad = ' '.repeat(Math.max(2, 38 - visibleLength(cmd)));
-    console.log(`  ${cmd}${pad}${color.gray(comment)}`);
-  };
-  console.log('\n' + color.boldColors.magenta('EXAMPLES:'));
-  alEx(`${color.yellow('ccli')} ${color.green('alias set')} ${color.cyan('myip')} server.ip`, '# Create alias "myip" for "server.ip"');
-  alEx(`${color.yellow('ccli')} ${color.green('alias get')}`, '# List all aliases');
-  alEx(`${color.yellow('ccli')} ${color.green('alias get')} ${color.cyan('myip')}`, '# Show where "myip" points');
-  alEx(`${color.yellow('ccli')} ${color.green('alias get')} ${color.yellow('-t')}`, '# Display aliases as a tree');
-  alEx(`${color.yellow('ccli')} ${color.green('alias rename')} ${color.cyan('myip')} ${color.cyan('prodip')}`, '# Rename "myip" to "prodip"');
-  alEx(`${color.yellow('ccli')} ${color.green('alias remove')} ${color.cyan('myip')}`, '# Remove the "myip" alias');
-  alEx(`${color.yellow('ccli')} ${color.green('get')} ${color.cyan('myip')}`, '# Use alias in place of key');
   console.log();
 }
 
@@ -372,11 +328,12 @@ export function showConfigHelp(): void {
  */
 export function formatTree(
   data: Record<string, unknown>,
-  keyToAliasMap: Record<string, string[]> = {},
+  keyToAliasMap: Record<string, string> = {},
   prefix = '',
   path = '',
   colorize?: boolean,
-  raw = false
+  raw = false,
+  searchTerm?: string
 ): string {
   const colorEnabled = colorize ?? isColorEnabled();
   const lines: string[] = [];
@@ -386,31 +343,38 @@ export function formatTree(
     const connector = isLast ? '└── ' : '├── ';
     const fullPrefix = prefix + connector;
 
-    const displayKey = colorEnabled ? color.cyan(key) : key;
+    let displayKey = colorEnabled ? color.cyan(key) : key;
+    if (searchTerm) displayKey = highlightMatch(displayKey, searchTerm);
 
     const fullPath = path ? `${path}.${key}` : key;
 
-    const aliases = keyToAliasMap[fullPath];
-    const aliasDisplay = aliases && aliases.length > 0 ? ` (${aliases[0]})` : '';
+    const alias = keyToAliasMap[fullPath];
+    const aliasDisplay = alias ? ` (${alias})` : '';
 
     if (typeof value === 'object' && value !== null) {
       lines.push(`${fullPrefix}${displayKey}${aliasDisplay}`);
       const childPrefix = prefix + (isLast ? ' '.repeat(4) : '│   ');
-      lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, raw));
+      lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, raw, searchTerm));
     } else {
       const rawValue = String(value);
-      const masked = isEncrypted(rawValue) ? '[encrypted]' : (raw ? rawValue : interpretEscapes(rawValue));
+      let resolved = rawValue;
+      if (!isEncrypted(rawValue)) {
+        try { resolved = interpolate(rawValue); } catch { /* use raw */ }
+      }
+      const masked = isEncrypted(rawValue) ? '[encrypted]' : (raw ? resolved : interpretEscapes(resolved));
       const valueLines = masked.split('\n');
       const continuationPrefix = prefix + (isLast ? '    ' : '│   ') + '  ';
 
       if (valueLines.length > 1) {
         lines.push(`${fullPrefix}${displayKey}${aliasDisplay}:`);
         for (const vl of valueLines) {
-          const displayLine = colorEnabled ? color.white(vl) : vl;
+          let displayLine = colorEnabled ? color.white(vl) : vl;
+          if (searchTerm) displayLine = highlightMatch(displayLine, searchTerm);
           lines.push(`${continuationPrefix}${displayLine}`);
         }
       } else {
-        const displayValue = colorEnabled ? color.white(valueLines[0]) : valueLines[0];
+        let displayValue = colorEnabled ? color.white(valueLines[0]) : valueLines[0];
+        if (searchTerm) displayValue = highlightMatch(displayValue, searchTerm);
         lines.push(`${fullPrefix}${displayKey}${aliasDisplay}: ${displayValue}`);
       }
     }
@@ -422,7 +386,7 @@ export function formatTree(
 /**
  * Display data in a tree format (prints to stdout)
  */
-export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string[]> = {}, prefix = '', path = '', raw = false): void {
-  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, raw));
+export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string> = {}, prefix = '', path = '', raw = false, searchTerm?: string): void {
+  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, raw, searchTerm));
 }
 

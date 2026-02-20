@@ -216,11 +216,11 @@ describe('Alias Management', () => {
     it('builds inverted map correctly', () => {
       const map = buildKeyToAliasMap();
 
-      expect(map['server.production.ip']).toEqual(['prod-ip']);
-      expect(map['server.development.ip']).toEqual(['dev-ip']);
+      expect(map['server.production.ip']).toEqual('prod-ip');
+      expect(map['server.development.ip']).toEqual('dev-ip');
     });
 
-    it('groups multiple aliases sharing a target', () => {
+    it('last alias wins when multiple aliases share a target', () => {
       const multiAliases = {
         'a1': 'target.path',
         'a2': 'target.path',
@@ -229,8 +229,8 @@ describe('Alias Management', () => {
       (fs.readFileSync as Mock).mockReturnValueOnce(JSON.stringify(multiAliases));
 
       const map = buildKeyToAliasMap();
-      expect(map['target.path']).toEqual(['a1', 'a2']);
-      expect(map['other.path']).toEqual(['a3']);
+      expect(map['target.path']).toEqual('a2');
+      expect(map['other.path']).toEqual('a3');
     });
 
     it('returns empty object when no aliases exist', () => {
@@ -294,7 +294,7 @@ describe('Alias Management', () => {
       const preloaded = { myalias: 'target.path' };
       const map = buildKeyToAliasMap(preloaded);
 
-      expect(map['target.path']).toEqual(['myalias']);
+      expect(map['target.path']).toEqual('myalias');
       expect(fs.readFileSync).not.toHaveBeenCalled();
     });
   });

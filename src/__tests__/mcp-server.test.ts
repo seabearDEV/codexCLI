@@ -104,6 +104,7 @@ vi.mock('../alias', () => ({
     return aliases[k] ?? k;
   }),
   buildKeyToAliasMap: vi.fn(() => ({})),
+  removeAliasesForKey: vi.fn(),
 }));
 
 vi.mock('../utils/paths', () => ({
@@ -258,32 +259,9 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { server: { ip: '10.0.0.1' } });
       const result = await toolHandlers['codex_search']({
         searchTerm: 'server',
-        keysOnly: undefined, valuesOnly: undefined,
         aliasesOnly: undefined, entriesOnly: undefined,
       });
       expect(result.content[0].text).toContain('server.ip');
-    });
-
-    it('respects keysOnly', async () => {
-      Object.assign(mockData, { abc: 'xyz' });
-      const result = await toolHandlers['codex_search']({
-        searchTerm: 'xyz',
-        keysOnly: true, valuesOnly: undefined,
-        aliasesOnly: undefined, entriesOnly: undefined,
-      });
-      // 'xyz' is only in value, keysOnly should not match
-      expect(result.content[0].text).toContain('No results');
-    });
-
-    it('respects valuesOnly', async () => {
-      Object.assign(mockData, { abc: 'xyz' });
-      const result = await toolHandlers['codex_search']({
-        searchTerm: 'abc',
-        keysOnly: undefined, valuesOnly: true,
-        aliasesOnly: undefined, entriesOnly: undefined,
-      });
-      // 'abc' is only in key, valuesOnly should not match
-      expect(result.content[0].text).toContain('No results');
     });
 
     it('respects aliasesOnly — skips data entries', async () => {
@@ -291,7 +269,6 @@ describe('MCP Server Tools', () => {
       Object.assign(mockAliases, { srv: 'server.ip' });
       const result = await toolHandlers['codex_search']({
         searchTerm: 'server',
-        keysOnly: undefined, valuesOnly: undefined,
         aliasesOnly: true, entriesOnly: undefined,
       });
       // Should find alias but not the data entry
@@ -304,7 +281,6 @@ describe('MCP Server Tools', () => {
       Object.assign(mockAliases, { srv: 'server.ip' });
       const result = await toolHandlers['codex_search']({
         searchTerm: 'server',
-        keysOnly: undefined, valuesOnly: undefined,
         aliasesOnly: undefined, entriesOnly: true,
       });
       // Should find data entry but not the alias
@@ -315,7 +291,6 @@ describe('MCP Server Tools', () => {
     it('returns no results message', async () => {
       const result = await toolHandlers['codex_search']({
         searchTerm: 'nonexistent',
-        keysOnly: undefined, valuesOnly: undefined,
         aliasesOnly: undefined, entriesOnly: undefined,
       });
       expect(result.content[0].text).toContain("No results found for 'nonexistent'");
@@ -326,7 +301,6 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { api: { key: encrypted } });
       const result = await toolHandlers['codex_search']({
         searchTerm: 'api',
-        keysOnly: undefined, valuesOnly: undefined,
         aliasesOnly: undefined, entriesOnly: undefined,
       });
       expect(result.content[0].text).toContain('api.key: [encrypted]');
@@ -337,7 +311,6 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { api: { key: encrypted } });
       const result = await toolHandlers['codex_search']({
         searchTerm: 'findme',
-        keysOnly: undefined, valuesOnly: true,
         aliasesOnly: undefined, entriesOnly: undefined,
       });
       expect(result.content[0].text).toContain('No results');

@@ -83,9 +83,15 @@ export function saveAliases(aliases: AliasMap): void {
   }
 }
 
-// Create or update an alias
+// Create or update an alias (one alias per entry — replaces any existing alias for the same target)
 export function setAlias(alias: string, path: string): void {
   const aliases = loadAliases();
+  // Enforce one alias per entry: remove any existing alias pointing to the same target
+  for (const [existingAlias, target] of Object.entries(aliases)) {
+    if (target === path && existingAlias !== alias) {
+      delete aliases[existingAlias];
+    }
+  }
   aliases[alias] = path;
   saveAliases(aliases);
   console.log(`Alias '${alias}' added successfully.`);
@@ -127,15 +133,28 @@ export function resolveKey(key: string): string {
   return resolved;
 }
 
-// Build inverted map from target paths to alias names
-export function buildKeyToAliasMap(aliases?: Record<string, string>): Record<string, string[]> {
-  const resolved = aliases ?? loadAliases();
-  const keyToAliasMap: Record<string, string[]> = {};
-  for (const [alias, target] of Object.entries(resolved)) {
-    if (!keyToAliasMap[target]) {
-      keyToAliasMap[target] = [];
+// Remove any aliases whose target matches `key` or is a child of `key` (cascade delete)
+export function removeAliasesForKey(key: string): void {
+  const aliases = loadAliases();
+  const prefix = key + '.';
+  let changed = false;
+  for (const [alias, target] of Object.entries(aliases)) {
+    if (typeof target === 'string' && (target === key || target.startsWith(prefix))) {
+      delete aliases[alias];
+      changed = true;
     }
-    keyToAliasMap[target].push(alias);
+  }
+  if (changed) {
+    saveAliases(aliases);
+  }
+}
+
+// Build inverted map from target paths to alias name (one alias per entry)
+export function buildKeyToAliasMap(aliases?: Record<string, string>): Record<string, string> {
+  const resolved = aliases ?? loadAliases();
+  const keyToAliasMap: Record<string, string> = {};
+  for (const [alias, target] of Object.entries(resolved)) {
+    keyToAliasMap[target] = alias;
   }
   return keyToAliasMap;
 }

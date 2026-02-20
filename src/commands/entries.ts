@@ -6,10 +6,10 @@ import { displayTree } from '../formatting';
 import { color } from '../formatting';
 import { execSync } from 'child_process';
 import { ensureDataDirectoryExists } from '../utils/paths';
-import { buildKeyToAliasMap, setAlias } from '../alias';
+import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases } from '../alias';
 import { debug } from '../utils/debug';
 import { GetOptions } from '../types';
-import { printSuccess, printWarning, printError, displayEntries, askConfirmation, askPassword } from './helpers';
+import { printSuccess, printWarning, printError, displayEntries, displayAliases, askConfirmation, askPassword } from './helpers';
 import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
@@ -91,10 +91,27 @@ export async function runCommand(key: string, options: { yes?: boolean, dry?: bo
   }
 }
 
-export async function setEntry(key: string, value: string, force: boolean = false, encrypt: boolean = false, alias?: string): Promise<void> {
+export async function setEntry(key: string, value: string | undefined, force: boolean = false, encrypt: boolean = false, alias?: string): Promise<void> {
   debug('setEntry called', { key, force, encrypt, alias });
   try {
     ensureDataDirectoryExists();
+
+    // Alias-only update: no value provided, just update the alias on an existing entry
+    if (value === undefined) {
+      if (!alias) {
+        printError('Missing value. Provide a value or use --alias (-a) to update an alias.');
+        process.exitCode = 1;
+        return;
+      }
+      const existing = getValue(key);
+      if (existing === undefined) {
+        printError(`Entry '${key}' not found. Cannot set alias on a non-existent entry.`);
+        process.exitCode = 1;
+        return;
+      }
+      setAlias(alias, key);
+      return;
+    }
 
     const existing = getValue(key);
     if (existing !== undefined && !force && process.stdin.isTTY) {
@@ -134,7 +151,7 @@ export async function setEntry(key: string, value: string, force: boolean = fals
   }
 }
 
-function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string[]>, options: GetOptions): void {
+function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (Object.keys(data).length === 0) {
     if (options.raw) return;
     console.log('\n' + color.boldColors.magenta('Entries:'));
@@ -143,41 +160,27 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
     return;
   }
 
-  if (options.keysOnly) {
-    const flat = flattenObject(data);
-    for (const k of Object.keys(flat)) {
-      console.log(k);
-    }
-    return;
-  }
-
   if (options.tree) {
     displayTree(data, aliasMap, '', '', !!options.raw);
     return;
   }
 
+  const flat = flattenObject(data);
+  const interpolated = interpolateObject(flat as Record<string, CodexValue>);
+
   if (options.raw) {
-    const flat = flattenObject(data);
-    for (const [k, v] of Object.entries(flat)) {
+    for (const [k, v] of Object.entries(interpolated)) {
       console.log(`${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
     }
     return;
   }
 
-  displayEntries(flattenObject(data), aliasMap);
+  displayEntries(interpolated as Record<string, string>, aliasMap);
 }
 
-function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string[]>, options: GetOptions): void {
+function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (options.tree) {
     displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw);
-    return;
-  }
-
-  if (options.raw) {
-    const flat = flattenObject({ [key]: value });
-    for (const [k, v] of Object.entries(flat)) {
-      console.log(`${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
-    }
     return;
   }
 
@@ -188,7 +191,16 @@ function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap
     return;
   }
 
-  displayEntries(filteredEntries, aliasMap);
+  const interpolated = interpolateObject(filteredEntries as Record<string, CodexValue>);
+
+  if (options.raw) {
+    for (const [k, v] of Object.entries(interpolated)) {
+      console.log(`${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
+    }
+    return;
+  }
+
+  displayEntries(interpolated as Record<string, string>, aliasMap);
 }
 
 export async function getEntry(key?: string, options: GetOptions = {}): Promise<void> {
@@ -197,6 +209,13 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   const aliasMap = buildKeyToAliasMap();
 
   if (!key) {
+    // -a → aliases only
+    if (options.aliases) {
+      const aliases = loadAliases();
+      displayAliases(aliases);
+      return;
+    }
+
     const data = loadData();
     displayAllEntries(data, aliasMap, options);
     return;
@@ -239,14 +258,12 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
       return;
     }
     let decryptedDisplay = decrypted;
-    if (!options.raw) {
-      try {
-        decryptedDisplay = interpolate(decrypted);
-      } catch (err) {
-        printError(err instanceof Error ? err.message : String(err));
-        process.exitCode = 1;
-        return;
-      }
+    try {
+      decryptedDisplay = interpolate(decrypted);
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+      return;
     }
     if (options.copy) {
       try {
@@ -258,16 +275,16 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
       }
     }
     if (options.raw) {
-      console.log(decrypted);
+      console.log(decryptedDisplay);
     } else {
       displayEntries({ [key]: decryptedDisplay }, aliasMap);
     }
     return;
   }
 
-  // Interpolate unless --raw or encrypted
+  // Interpolate unless encrypted
   let displayValue = strValue;
-  if (!options.raw && !isEncrypted(strValue)) {
+  if (!isEncrypted(strValue)) {
     try {
       displayValue = interpolate(strValue);
     } catch (err) {
@@ -289,7 +306,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   }
 
   if (options.raw) {
-    console.log(isEncrypted(strValue) ? '[encrypted]' : value);
+    console.log(isEncrypted(strValue) ? '[encrypted]' : displayValue);
     return;
   }
 
@@ -304,6 +321,9 @@ export function removeEntry(key: string): void {
     printWarning(`Entry '${key}' not found.`);
     return;
   }
+
+  // Cascade delete: remove any aliases pointing to this key or its children
+  removeAliasesForKey(key);
 
   printSuccess(`Entry '${key}' removed successfully.`);
 }

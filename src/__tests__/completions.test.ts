@@ -42,7 +42,7 @@ describe('Completions', () => {
       expect(v).toContain('run');
       expect(v).toContain('find');
       expect(v).toContain('remove');
-      expect(v).toContain('alias');
+      expect(v).toContain('config');
       expect(v).toContain('config');
     });
 
@@ -154,22 +154,6 @@ describe('Completions', () => {
       const results = getCompletions('ccli r -', 8);
       const v = values(results);
       expect(v).toContain('--source');
-    });
-
-    it('returns subcommands for alias', () => {
-      const results = getCompletions('ccli alias ', 11);
-      const v = values(results);
-      expect(v).toContain('set');
-      expect(v).toContain('remove');
-      expect(v).toContain('get');
-    });
-
-    it('returns subcommands with descriptions and group', () => {
-      const results = getCompletions('ccli alias ', 11);
-      const setItem = findItem(results, 'set');
-      expect(setItem).toBeDefined();
-      expect(setItem!.description).toBe('Set an alias');
-      expect(setItem!.group).toBe('subcommands');
     });
 
     it('returns subcommands for config', () => {
@@ -331,32 +315,6 @@ describe('Completions', () => {
       expect(aliasItem!.description).toBe('Alias');
     });
 
-    it('returns alias names for aliasName commands', () => {
-      const mockAliases = { myip: 'server.ip', prod: 'server.prod' };
-      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
-        return JSON.stringify({});
-      });
-
-      const results = getCompletions('ccli alias remove ', 18);
-      const v = values(results);
-      expect(v).toContain('myip');
-      expect(v).toContain('prod');
-    });
-
-    it('returns alias names for alias rename command', () => {
-      const mockAliases = { myip: 'server.ip', prod: 'server.prod' };
-      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
-        return JSON.stringify({});
-      });
-
-      const results = getCompletions('ccli alias rename ', 18);
-      const v = values(results);
-      expect(v).toContain('myip');
-      expect(v).toContain('prod');
-    });
-
     it('returns config keys for configKey commands', () => {
       const results = getCompletions('ccli config set ', 16);
       const v = values(results);
@@ -479,10 +437,10 @@ describe('Completions', () => {
     });
 
     it('returns subcommands when typing partial subcommand', () => {
-      const results = getCompletions('ccli alias s', 12);
+      const results = getCompletions('ccli config s', 13);
       const v = values(results);
       expect(v).toContain('set');
-      expect(v).not.toContain('remove');
+      expect(v).not.toContain('get');
     });
 
     it('returns subcommand list with trailing space', () => {
@@ -509,10 +467,8 @@ describe('Completions', () => {
     it('returns flags for find command when typing a dash', () => {
       const results = getCompletions('ccli find -', 11);
       const v = values(results);
-      expect(v).toContain('--keys-only');
-      expect(v).toContain('--values-only');
-      expect(v).toContain('--entries-only');
-      expect(v).toContain('--aliases-only');
+      expect(v).toContain('--entries');
+      expect(v).toContain('--aliases');
       expect(v).toContain('--debug');
     });
 
@@ -520,14 +476,14 @@ describe('Completions', () => {
       const results = getCompletions('ccli find ', 10);
       const v = values(results);
       // find has argType: null, so no data keys or flags
-      expect(v).not.toContain('--keys-only');
+      expect(v).not.toContain('--entries');
       expect(v).not.toContain('server.ip');
     });
   });
 
   describe('partial subcommand that matches nothing', () => {
     it('returns empty result for unmatched subcommand prefix', () => {
-      const results = getCompletions('ccli alias x', 12);
+      const results = getCompletions('ccli config x', 13);
       expect(results).toEqual([]);
     });
   });
@@ -561,8 +517,10 @@ describe('Completions', () => {
       });
       (fs.existsSync as Mock).mockReturnValue(true);
 
-      const results = getCompletions('ccli alias remove ', 18);
+      // rm uses dataKey which loads both entries and aliases
+      const results = getCompletions('ccli rm ', 8);
       expect(Array.isArray(results)).toBe(true);
+      expect(results).toHaveLength(0);
     });
   });
 

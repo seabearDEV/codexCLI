@@ -6,36 +6,33 @@ import { loadAliases, buildKeyToAliasMap } from '../alias';
 import { SearchOptions } from '../types';
 import { isEncrypted } from '../utils/crypto';
 import { debug } from '../utils/debug';
+import { interpolate } from '../utils/interpolate';
 
-function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: string, options: SearchOptions): Record<string, string> {
+function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: string): Record<string, string> {
   const matches: Record<string, string> = {};
   Object.entries(flattenedData).forEach(([key, value]) => {
     const encrypted = isEncrypted(value);
+    let resolved = value;
+    if (!encrypted) {
+      try { resolved = interpolate(value); } catch { /* use raw */ }
+    }
     const keyMatches = key.toLowerCase().includes(lcSearchTerm);
-    const valueMatches = !encrypted && typeof value === 'string' && value.toLowerCase().includes(lcSearchTerm);
+    const valueMatches = !encrypted && resolved.toLowerCase().includes(lcSearchTerm);
 
-    if (
-      (!options.keysOnly && !options.valuesOnly && (keyMatches || valueMatches)) ||
-      (options.keysOnly && keyMatches) ||
-      (options.valuesOnly && valueMatches)
-    ) {
-      matches[key] = encrypted ? '[encrypted]' : value;
+    if (keyMatches || valueMatches) {
+      matches[key] = encrypted ? '[encrypted]' : resolved;
     }
   });
   return matches;
 }
 
-function searchAliasEntries(aliases: Record<string, string>, lcSearchTerm: string, options: SearchOptions): Record<string, string> {
+function searchAliasEntries(aliases: Record<string, string>, lcSearchTerm: string): Record<string, string> {
   const matches: Record<string, string> = {};
   Object.entries(aliases).forEach(([aliasName, targetPath]) => {
     const nameMatches = aliasName.toLowerCase().includes(lcSearchTerm);
     const pathMatches = String(targetPath).toLowerCase().includes(lcSearchTerm);
 
-    if (
-      (!options.keysOnly && !options.valuesOnly && (nameMatches || pathMatches)) ||
-      (options.keysOnly && nameMatches) ||
-      (options.valuesOnly && pathMatches)
-    ) {
+    if (nameMatches || pathMatches) {
       matches[aliasName] = String(targetPath);
     }
   });
@@ -62,7 +59,7 @@ function displaySearchResults(
       dataMatchKeys.forEach(key => {
         setNestedValue(matchesObj, key, dataMatches[key]);
       });
-      displayTree(matchesObj, buildKeyToAliasMap(aliases));
+      displayTree(matchesObj, buildKeyToAliasMap(aliases), '', '', false, searchTerm);
     } else {
       Object.entries(dataMatches).forEach(([key, value]) => {
         formatKeyValue(key, value, searchTerm);
@@ -83,9 +80,9 @@ function displaySearchResults(
 
 export function searchEntries(searchTerm: string, options: SearchOptions = {}): void {
   debug('searchEntries called', { searchTerm, options });
-  const flattenedData = options.aliasesOnly ? {} : getEntriesFlat();
+  const flattenedData = options.aliases ? {} : getEntriesFlat();
 
-  if (Object.keys(flattenedData).length === 0 && !options.aliasesOnly) {
+  if (Object.keys(flattenedData).length === 0 && !options.aliases) {
     console.log('No entries to search in.');
     return;
   }
@@ -93,8 +90,8 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
   const lcSearchTerm = searchTerm.toLowerCase();
 
   const aliases = loadAliases();
-  const dataMatches = options.aliasesOnly ? {} : searchDataEntries(flattenedData, lcSearchTerm, options);
-  const aliasMatches = options.entriesOnly ? {} : searchAliasEntries(aliases, lcSearchTerm, options);
+  const dataMatches = options.aliases ? {} : searchDataEntries(flattenedData, lcSearchTerm);
+  const aliasMatches = options.entries ? {} : searchAliasEntries(aliases, lcSearchTerm);
 
   const totalMatches = Object.keys(dataMatches).length + Object.keys(aliasMatches).length;
 

@@ -17,16 +17,16 @@ export function printWarning(message: string): void {
   console.log(color.yellow('⚠ ') + message);
 }
 
-export function displayEntries(entries: Record<string, string>, keyToAliasMap?: Record<string, string[]>): void {
+export function displayEntries(entries: Record<string, string>, keyToAliasMap?: Record<string, string>): void {
   const aliasMap = keyToAliasMap ?? buildKeyToAliasMap();
   Object.entries(entries).forEach(([key, value]) => {
     const colorizedPath = colorizePathByLevels(key);
-    const aliases = aliasMap[key];
+    const alias = aliasMap[key];
     const displayed = isEncrypted(value) ? '[encrypted]' : interpretEscapes(value);
     const lines = displayed.split('\n');
 
-    const prefix = aliases && aliases.length > 0
-      ? `${colorizedPath}: ${color.blue('(' + aliases[0] + ')')}`
+    const prefix = alias
+      ? `${colorizedPath}: ${color.blue('(' + alias + ')')}`
       : `${colorizedPath}:`;
 
     const termWidth = process.stdout.columns || 80;

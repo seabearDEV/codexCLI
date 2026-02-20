@@ -24,7 +24,7 @@ function getMaxCompletionItems(): number {
 }
 
 // Argument types for dynamic completion
-type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'aliasName' | 'configKey' | 'exportType' | null;
+type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'configKey' | 'exportType' | null;
 
 interface CommandDef {
   flags: Record<string, string>;
@@ -50,17 +50,11 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--yes': 'Skip confirmation',
   '-y': 'Skip confirmation',
   '--dry': 'Print without executing',
-  '--keys-only': 'Search only keys',
-  '-k': 'Search only keys',
-  '--values-only': 'Search only values',
-  '-v': 'Search only values',
-  '--entries-only': 'Search only data entries',
-  '--aliases-only': 'Search only aliases',
-  '-a': 'Search only aliases',
+  '--entries': 'Show entries only',
+  '--aliases': 'Show aliases only',
   '--output': 'Output file path',
   '-o': 'Output file path',
   '--encrypt': 'Encrypt the value',
-  '-e': 'Encrypt the value',
   '--alias': 'Create an alias for this key',
   '--decrypt': 'Decrypt an encrypted value',
   '-d': 'Decrypt an encrypted value',
@@ -91,9 +85,9 @@ const CLI_TREE: Record<string, CommandDef> = {
     flags: {
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
       '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
-      '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
+      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
     },
     argType: 'dataKey',
     description: 'Retrieve entries',
@@ -102,9 +96,9 @@ const CLI_TREE: Record<string, CommandDef> = {
     flags: {
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
       '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
-      '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
+      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
     },
     argType: 'dataKey',
     description: 'Retrieve entries',
@@ -131,10 +125,8 @@ const CLI_TREE: Record<string, CommandDef> = {
   },
   find: {
     flags: {
-      '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
-      '--values-only': FLAG_DESCRIPTIONS['--values-only'], '-v': FLAG_DESCRIPTIONS['-v'],
-      '--entries-only': FLAG_DESCRIPTIONS['--entries-only'], '-e': FLAG_DESCRIPTIONS['--entries-only'],
-      '--aliases-only': FLAG_DESCRIPTIONS['--aliases-only'], '-a': FLAG_DESCRIPTIONS['-a'],
+      '--entries': FLAG_DESCRIPTIONS['--entries'], '-e': FLAG_DESCRIPTIONS['--entries'],
+      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
     },
     argType: null,
@@ -142,78 +134,22 @@ const CLI_TREE: Record<string, CommandDef> = {
   },
   f: {
     flags: {
-      '--keys-only': FLAG_DESCRIPTIONS['--keys-only'], '-k': FLAG_DESCRIPTIONS['-k'],
-      '--values-only': FLAG_DESCRIPTIONS['--values-only'], '-v': FLAG_DESCRIPTIONS['-v'],
-      '--entries-only': FLAG_DESCRIPTIONS['--entries-only'], '-e': FLAG_DESCRIPTIONS['--entries-only'],
-      '--aliases-only': FLAG_DESCRIPTIONS['--aliases-only'], '-a': FLAG_DESCRIPTIONS['-a'],
+      '--entries': FLAG_DESCRIPTIONS['--entries'], '-e': FLAG_DESCRIPTIONS['--entries'],
+      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
     },
     argType: null,
     description: 'Find entries by key or value',
   },
   remove: {
-    flags: {},
+    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only' },
     argType: 'dataKey',
     description: 'Remove an entry',
   },
   rm: {
-    flags: {},
+    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only' },
     argType: 'dataKey',
     description: 'Remove an entry',
-  },
-  alias: {
-    flags: {},
-    argType: null,
-    description: 'Manage aliases',
-    subcommands: {
-      set:    { flags: {}, argType: 'dataKey', description: 'Set an alias' },
-      s:      { flags: {}, argType: 'dataKey', description: 'Set an alias' },
-      remove: { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
-      rm:     { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
-      rename: { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
-      rn:     { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
-      get: {
-        flags: {
-          '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-        },
-        argType: 'aliasName',
-        description: 'List or get aliases',
-      },
-      g: {
-        flags: {
-          '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-        },
-        argType: 'aliasName',
-        description: 'List or get aliases',
-      },
-    },
-  },
-  al: {
-    flags: {},
-    argType: null,
-    description: 'Manage aliases',
-    subcommands: {
-      set:    { flags: {}, argType: 'dataKey', description: 'Set an alias' },
-      s:      { flags: {}, argType: 'dataKey', description: 'Set an alias' },
-      remove: { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
-      rm:     { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
-      rename: { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
-      rn:     { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
-      get: {
-        flags: {
-          '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-        },
-        argType: 'aliasName',
-        description: 'List or get aliases',
-      },
-      g: {
-        flags: {
-          '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-        },
-        argType: 'aliasName',
-        description: 'List or get aliases',
-      },
-    },
   },
   config: {
     flags: {},
@@ -319,8 +255,6 @@ function getDynamicValues(argType: ArgType): CompletionItem[] {
     }
     case 'dataKeyOnly':
       return getDataKeys()        .map(k => ({ value: k, description: '', group: 'data keys' }));
-    case 'aliasName':
-      return getAliasNames()        .map(a => ({ value: a, description: '', group: 'aliases' }));
     case 'configKey':
       return CONFIG_KEYS.map(k => ({ value: k, description: 'Config setting', group: 'config' }));
     case 'exportType':

@@ -5,16 +5,14 @@
 export interface GetOptions {
   tree?: boolean | undefined;
   raw?: boolean | undefined;
-  keysOnly?: boolean | undefined;
   decrypt?: boolean | undefined;
   copy?: boolean | undefined;
+  aliases?: boolean | undefined;
 }
 
 export interface SearchOptions {
-  keysOnly?: boolean | undefined;
-  valuesOnly?: boolean | undefined;
-  entriesOnly?: boolean | undefined;
-  aliasesOnly?: boolean | undefined;
+  entries?: boolean | undefined;
+  aliases?: boolean | undefined;
   tree?: boolean | undefined;
 }
 

@@ -17,6 +17,7 @@ import {
   saveAliases,
   resolveKey,
   buildKeyToAliasMap,
+  removeAliasesForKey,
 } from "./alias";
 import {
   ensureDataDirectoryExists,
@@ -59,6 +60,12 @@ server.tool(
       setValue(key, value);
       if (alias) {
         const aliases = loadAliases();
+        // Enforce one alias per entry: remove any existing alias for the same target
+        for (const [existingAlias, target] of Object.entries(aliases)) {
+          if (target === key && existingAlias !== alias) {
+            delete aliases[existingAlias];
+          }
+        }
         aliases[alias] = key;
         saveAliases(aliases);
         return textResponse(`Set: ${key} = ${value}\nAlias set: ${alias} -> ${key}`);
@@ -77,23 +84,42 @@ server.tool(
   {
     key: z.string().optional().describe("Dot-notation key to retrieve (omit for all entries)"),
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
+    aliases_only: z.boolean().optional().describe("Show aliases only"),
   },
-  async ({ key, format }) => {
+  async ({ key, format, aliases_only }) => {
     try {
       const data = loadData();
       const keyToAliasMap = buildKeyToAliasMap();
 
-      // No key — return all entries
+      // No key — return entries and/or aliases
       if (!key) {
-        if (Object.keys(data).length === 0) {
-          return textResponse("No entries found.");
+        // Aliases only
+        if (aliases_only) {
+          const aliases = loadAliases();
+          const entries = Object.entries(aliases);
+          if (entries.length === 0) {
+            return textResponse("No aliases defined.");
+          }
+          const lines = entries.map(([a, t]) => `${a} -> ${t}`);
+          return textResponse(lines.join("\n"));
         }
-        if (format === "tree") {
-          return textResponse(formatTree(data, keyToAliasMap, '', '', false));
+
+        const sections: string[] = [];
+
+        // Entries
+        if (Object.keys(data).length > 0) {
+          if (format === "tree") {
+            sections.push(formatTree(data, keyToAliasMap, '', '', false));
+          } else {
+            const flat = flattenObject(data);
+            const lines = Object.entries(flat).map(([k, v]) => `${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
+            sections.push(lines.join("\n"));
+          }
+        } else {
+          sections.push("No entries found.");
         }
-        const flat = flattenObject(data);
-        const lines = Object.entries(flat).map(([k, v]) => `${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
-        return textResponse(lines.join("\n"));
+
+        return textResponse(sections.join("\n"));
       }
 
       // Resolve potential alias
@@ -136,14 +162,29 @@ server.tool(
 server.tool(
   "codex_remove",
   "Remove an entry from the CodexCLI data store",
-  { key: z.string().describe("Dot-notation key to remove") },
-  async ({ key }) => {
+  {
+    key: z.string().describe("Dot-notation key to remove"),
+    is_alias: z.boolean().optional().describe("If true, remove the alias only (keep the entry)"),
+  },
+  async ({ key, is_alias }) => {
     try {
+      if (is_alias) {
+        const aliases = loadAliases();
+        if (!(key in aliases)) {
+          return errorResponse(`Alias '${key}' not found.`);
+        }
+        delete aliases[key];
+        saveAliases(aliases);
+        return textResponse(`Alias removed: ${key}`);
+      }
+
       const resolvedKey = resolveKey(key);
       const removed = removeValue(resolvedKey);
       if (!removed) {
         return errorResponse(`Key '${key}' not found.`);
       }
+      // Cascade delete: remove any aliases pointing to this key or its children
+      removeAliasesForKey(resolvedKey);
       return textResponse(`Removed: ${resolvedKey}`);
     } catch (err) {
       return errorResponse(`Error removing entry: ${err}`);
@@ -157,30 +198,24 @@ server.tool(
   "Search entries in the CodexCLI data store",
   {
     searchTerm: z.string().describe("Term to search for (case-insensitive)"),
-    keysOnly: z.boolean().optional().describe("Search only in keys"),
-    valuesOnly: z.boolean().optional().describe("Search only in values"),
     aliasesOnly: z.boolean().optional().describe("Search only in aliases"),
     entriesOnly: z.boolean().optional().describe("Search only in data entries"),
   },
-  async ({ searchTerm, keysOnly, valuesOnly, aliasesOnly, entriesOnly }) => {
+  async ({ searchTerm, aliasesOnly, entriesOnly }) => {
     try {
       const term = searchTerm.toLowerCase();
       const results: string[] = [];
 
       if (!aliasesOnly) {
+
         const flat = getEntriesFlat();
         for (const [k, v] of Object.entries(flat)) {
           const encrypted = isEncrypted(v);
           const keyMatch = k.toLowerCase().includes(term);
           const valueMatch = !encrypted && String(v).toLowerCase().includes(term);
-          const displayValue = encrypted ? '[encrypted]' : v;
 
-          if (keysOnly && keyMatch) {
-            results.push(`${k}: ${displayValue}`);
-          } else if (valuesOnly && valueMatch) {
-            results.push(`${k}: ${displayValue}`);
-          } else if (!keysOnly && !valuesOnly && (keyMatch || valueMatch)) {
-            results.push(`${k}: ${displayValue}`);
+          if (keyMatch || valueMatch) {
+            results.push(`${k}: ${encrypted ? '[encrypted]' : v}`);
           }
         }
       }
@@ -218,6 +253,12 @@ server.tool(
   async ({ alias, path }) => {
     try {
       const aliases = loadAliases();
+      // Enforce one alias per entry: remove any existing alias for the same target
+      for (const [existingAlias, target] of Object.entries(aliases)) {
+        if (target === path && existingAlias !== alias) {
+          delete aliases[existingAlias];
+        }
+      }
       aliases[alias] = path;
       saveAliases(aliases);
       return textResponse(`Alias set: ${alias} -> ${path}`);

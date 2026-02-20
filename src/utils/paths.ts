@@ -20,9 +20,10 @@ let dataFilePathCache: string | null = null;
  */
 export function getDataDirectory(): string {
   if (dataDirectoryCache === null) {
-    dataDirectoryCache = isDev() 
-      ? path.join(path.resolve(__dirname, '..', '..'), 'data')
-      : path.join(os.homedir(), '.codexcli');
+    dataDirectoryCache = process.env.CODEX_DATA_DIR
+      ?? (isDev()
+        ? path.join(path.resolve(__dirname, '..', '..'), 'data')
+        : path.join(os.homedir(), '.codexcli'));
   }
   return dataDirectoryCache;
 }

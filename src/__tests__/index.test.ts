@@ -13,9 +13,7 @@ const mockExportData = vi.fn();
 const mockImportData = vi.fn().mockResolvedValue(undefined);
 const mockResetData = vi.fn().mockResolvedValue(undefined);
 
-const mockSetAlias = vi.fn();
 const mockRemoveAlias = vi.fn();
-const mockLoadAliases = vi.fn().mockReturnValue({});
 const mockResolveKey = vi.fn((k: string) => k);
 
 const mockShowHelp = vi.fn();
@@ -28,8 +26,6 @@ const mockColor = {
   green: identity,
   red: identity,
 };
-
-const mockDisplayAliases = vi.fn();
 
 const mockGetCompletions = vi.fn().mockReturnValue(['comp1', 'comp2']);
 const mockGenerateBashScript = vi.fn().mockReturnValue('bash-script');
@@ -51,18 +47,13 @@ function setupMocks() {
     resetData: mockResetData,
   }));
   vi.doMock('../alias', () => ({
-    setAlias: mockSetAlias,
     removeAlias: mockRemoveAlias,
-    loadAliases: mockLoadAliases,
     resolveKey: mockResolveKey,
   }));
   vi.doMock('../formatting', () => ({
     showHelp: mockShowHelp,
     showExamples: mockShowExamples,
     color: mockColor,
-  }));
-  vi.doMock('../commands/helpers', () => ({
-    displayAliases: mockDisplayAliases,
   }));
   vi.doMock('../completions', () => ({
     getCompletions: mockGetCompletions,
@@ -83,7 +74,6 @@ beforeEach(() => {
   mockRunCommand.mockResolvedValue(undefined);
   mockImportData.mockResolvedValue(undefined);
   mockResetData.mockResolvedValue(undefined);
-  mockLoadAliases.mockReturnValue({});
   mockResolveKey.mockImplementation((k: string) => k);
   mockGetCompletions.mockReturnValue([
     { value: 'comp1', description: 'First', group: 'commands' },
@@ -167,8 +157,8 @@ describe('CLI Entry Point (index.ts)', () => {
   });
 
   it('find command calls searchEntries with options', async () => {
-    await loadCLI('find', 'myterm', '--keys-only');
-    expect(mockSearchEntries).toHaveBeenCalledWith('myterm', expect.objectContaining({ keysOnly: true }));
+    await loadCLI('find', 'myterm', '--entries');
+    expect(mockSearchEntries).toHaveBeenCalledWith('myterm', expect.objectContaining({ entries: true }));
   });
 
   it('remove command resolves key via resolveKey before calling removeEntry', async () => {
@@ -176,84 +166,6 @@ describe('CLI Entry Point (index.ts)', () => {
     await loadCLI('remove', 'my.key');
     expect(mockResolveKey).toHaveBeenCalledWith('my.key');
     expect(mockRemoveEntry).toHaveBeenCalledWith('resolved.key');
-  });
-
-  // --- Alias commands ---
-
-  it('alias set calls setAlias with joined args', async () => {
-    await loadCLI('alias', 'set', 'myalias', 'my.path');
-    expect(mockSetAlias).toHaveBeenCalledWith('myalias', 'my.path');
-  });
-
-  it('alias remove calls removeAlias', async () => {
-    await loadCLI('alias', 'remove', 'myalias');
-    expect(mockRemoveAlias).toHaveBeenCalledWith('myalias');
-  });
-
-  it('alias get calls displayAliases with all aliases', async () => {
-    mockLoadAliases.mockReturnValueOnce({ srv: 'server.ip' });
-    await loadCLI('alias', 'get');
-    expect(mockDisplayAliases).toHaveBeenCalledWith(
-      { srv: 'server.ip' },
-      { tree: undefined, name: undefined }
-    );
-  });
-
-  it('alias get with no aliases calls displayAliases with empty object', async () => {
-    mockLoadAliases.mockReturnValueOnce({});
-    await loadCLI('alias', 'get');
-    expect(mockDisplayAliases).toHaveBeenCalledWith({}, { tree: undefined, name: undefined });
-  });
-
-  it('alias get with specific name passes name to displayAliases', async () => {
-    mockLoadAliases.mockReturnValueOnce({ myalias: 'some.path' });
-    await loadCLI('alias', 'get', 'myalias');
-    expect(mockDisplayAliases).toHaveBeenCalledWith(
-      { myalias: 'some.path' },
-      { tree: undefined, name: 'myalias' }
-    );
-  });
-
-  it('alias get with missing name passes name to displayAliases', async () => {
-    mockLoadAliases.mockReturnValueOnce({});
-    await loadCLI('alias', 'get', 'missing');
-    expect(mockDisplayAliases).toHaveBeenCalledWith(
-      {},
-      { tree: undefined, name: 'missing' }
-    );
-  });
-
-  it('alias get --tree passes tree option to displayAliases', async () => {
-    mockLoadAliases.mockReturnValueOnce({ srv: 'server.ip' });
-    await loadCLI('alias', 'get', '--tree');
-    expect(mockDisplayAliases).toHaveBeenCalledWith(
-      { srv: 'server.ip' },
-      { tree: true, name: undefined }
-    );
-  });
-
-  it('alias get --tree with no aliases passes tree option to displayAliases', async () => {
-    mockLoadAliases.mockReturnValueOnce({});
-    await loadCLI('alias', 'get', '--tree');
-    expect(mockDisplayAliases).toHaveBeenCalledWith({}, { tree: true, name: undefined });
-  });
-
-  it('alias get --tree with specific name passes both options', async () => {
-    mockLoadAliases.mockReturnValueOnce({ srv: 'server.ip' });
-    await loadCLI('alias', 'get', '--tree', 'srv');
-    expect(mockDisplayAliases).toHaveBeenCalledWith(
-      { srv: 'server.ip' },
-      { tree: true, name: 'srv' }
-    );
-  });
-
-  it('alias get --tree with missing name passes both options', async () => {
-    mockLoadAliases.mockReturnValueOnce({ srv: 'server.ip' });
-    await loadCLI('alias', 'get', '--tree', 'missing');
-    expect(mockDisplayAliases).toHaveBeenCalledWith(
-      { srv: 'server.ip' },
-      { tree: true, name: 'missing' }
-    );
   });
 
   // --- Config commands ---
@@ -274,11 +186,6 @@ describe('CLI Entry Point (index.ts)', () => {
   });
 
   // --- Other commands ---
-
-  it('get --keys-only calls getEntry with keysOnly option', async () => {
-    await loadCLI('get', '--keys-only');
-    expect(mockGetEntry).toHaveBeenCalledWith(undefined, expect.objectContaining({ keysOnly: true }));
-  });
 
   it('init calls initializeExampleData', async () => {
     await loadCLI('init');

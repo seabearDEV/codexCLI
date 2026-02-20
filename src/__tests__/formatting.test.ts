@@ -77,7 +77,6 @@ describe('showHelp', () => {
     const output = consoleSpy.mock.calls.map(c => c.join(' ')).join('\n');
     expect(output).toContain('USAGE:');
     expect(output).toContain('COMMANDS:');
-    expect(output).toContain('SHORTCUTS:');
     expect(output).toContain('OPTIONS (set):');
     expect(output).toContain('OPTIONS (get):');
     expect(output).toContain('OPTIONS (run):');
