@@ -161,10 +161,29 @@ describe('Completions', () => {
       const v = values(results);
       expect(v).toContain('set');
       expect(v).toContain('get');
+      expect(v).toContain('info');
+      expect(v).toContain('examples');
+      expect(v).toContain('completions');
+    });
+
+    it('returns subcommands for data', () => {
+      const results = getCompletions('ccli data ', 10);
+      const v = values(results);
+      expect(v).toContain('export');
+      expect(v).toContain('import');
+      expect(v).toContain('reset');
+    });
+
+    it('returns nested subcommands for config completions', () => {
+      const results = getCompletions('ccli config completions ', 24);
+      const v = values(results);
+      expect(v).toContain('bash');
+      expect(v).toContain('zsh');
+      expect(v).toContain('install');
     });
 
     it('returns format options after --format flag', () => {
-      const results = getCompletions('ccli export --format ', 21);
+      const results = getCompletions('ccli data export --format ', 26);
       const v = values(results);
       expect(v).toContain('json');
       expect(v).toContain('yaml');
@@ -172,14 +191,14 @@ describe('Completions', () => {
     });
 
     it('returns format options with descriptions', () => {
-      const results = getCompletions('ccli export --format ', 21);
+      const results = getCompletions('ccli data export --format ', 26);
       const jsonItem = findItem(results, 'json');
       expect(jsonItem).toBeDefined();
       expect(jsonItem!.description).toBe('Output format');
     });
 
     it('returns empty array after --output flag (file completion)', () => {
-      const results = getCompletions('ccli export --output ', 21);
+      const results = getCompletions('ccli data export --output ', 26);
       expect(results).toEqual([]);
     });
 
@@ -190,17 +209,17 @@ describe('Completions', () => {
     });
 
     it('filters top-level commands for unknown partial input', () => {
-      // 'r' matches 'run', 'remove', 'reset', etc.
+      // 'r' matches 'run', 'remove', 'r' (alias)
       const results = getCompletions('ccli r', 6);
       const v = values(results);
       expect(v).toContain('run');
       expect(v).toContain('remove');
-      expect(v).toContain('reset');
+      expect(v).not.toContain('reset');
       expect(v).not.toContain('set');
     });
 
-    it('returns export types for export command', () => {
-      const results = getCompletions('ccli export ', 12);
+    it('returns export types for data export command', () => {
+      const results = getCompletions('ccli data export ', 17);
       const v = values(results);
       expect(v).toContain('entries');
       expect(v).toContain('aliases');
@@ -208,7 +227,7 @@ describe('Completions', () => {
     });
 
     it('returns export types with descriptions', () => {
-      const results = getCompletions('ccli export ', 12);
+      const results = getCompletions('ccli data export ', 17);
       const entriesItem = findItem(results, 'entries');
       expect(entriesItem).toBeDefined();
       expect(entriesItem!.description).toBe('Export type');
@@ -330,7 +349,7 @@ describe('Completions', () => {
     });
 
     it('returns export types for exportType commands', () => {
-      const results = getCompletions('ccli export ', 12);
+      const results = getCompletions('ccli data export ', 17);
       const v = values(results);
       expect(v).toContain('entries');
       expect(v).toContain('aliases');
@@ -451,14 +470,14 @@ describe('Completions', () => {
     });
 
     it('returns format options when filtering partial', () => {
-      const results = getCompletions('ccli export --format j', 22);
+      const results = getCompletions('ccli data export --format j', 27);
       const v = values(results);
       expect(v).toContain('json');
       expect(v).not.toContain('yaml');
     });
 
     it('returns empty for --output flag (file completion)', () => {
-      const results = getCompletions('ccli export --output ', 21);
+      const results = getCompletions('ccli data export --output ', 26);
       expect(results).toEqual([]);
     });
   });
@@ -558,7 +577,7 @@ describe('Completions', () => {
       expect(fs.appendFileSync).toHaveBeenCalled();
       const appendCall = (fs.appendFileSync as Mock).mock.calls[0];
       expect(appendCall[0]).toContain('.zshrc');
-      expect(appendCall[1]).toContain('ccli completions zsh');
+      expect(appendCall[1]).toContain('ccli config completions zsh');
     });
 
     it('installs bash completions on Linux', () => {

@@ -43,7 +43,7 @@ export function showInfo(): void {
   if (rcFile && fs.existsSync(rcFile) && fs.readFileSync(rcFile, 'utf8').includes('ccli completions')) {
     label('Completions', `${color.green('installed')} (${rcFile})`);
   } else {
-    label('Completions', `${color.yellow('not installed')} (run: ccli completions install)`);
+    label('Completions', `${color.yellow('not installed')} (run: ccli config completions install)`);
   }
 
   console.log();

@@ -5,10 +5,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { execSync } from "child_process";
-import fs from "fs";
 
 import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat } from "./storage";
-import { atomicWriteFileSync } from "./utils/atomicWrite";
 import { CodexData } from "./types";
 import {
   flattenObject,
@@ -22,17 +20,9 @@ import {
 } from "./alias";
 import {
   ensureDataDirectoryExists,
-  getDataFilePath,
-  getAliasFilePath,
-  getConfigFilePath,
 } from "./utils/paths";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
-import {
-  getExampleData,
-  getExampleAliases,
-  getExampleConfig,
-} from "./commands/init";
 import { version } from "../package.json";
 import { formatTree } from "./formatting";
 import { isEncrypted, maskEncryptedValues } from "./utils/crypto";
@@ -531,37 +521,6 @@ server.tool(
       );
     } catch (err) {
       return errorResponse(`Error resetting: ${err}`);
-    }
-  }
-);
-
-// --- codex_init ---
-server.tool(
-  "codex_init",
-  "Initialize example data, aliases, and config",
-  {
-    force: z.boolean().optional().describe("Overwrite existing files (default false)"),
-  },
-  async ({ force }) => {
-    try {
-      const dataExists = fs.existsSync(getDataFilePath());
-      const aliasesExist = fs.existsSync(getAliasFilePath());
-      const configExists = fs.existsSync(getConfigFilePath());
-
-      if ((dataExists || aliasesExist || configExists) && !force) {
-        return errorResponse(
-          "Data files already exist. Use force: true to overwrite."
-        );
-      }
-
-      ensureDataDirectoryExists();
-      atomicWriteFileSync(getDataFilePath(), JSON.stringify(getExampleData(), null, 2));
-      atomicWriteFileSync(getAliasFilePath(), JSON.stringify(getExampleAliases(), null, 2));
-      atomicWriteFileSync(getConfigFilePath(), JSON.stringify(getExampleConfig(), null, 2));
-
-      return textResponse("Example data, aliases, and config initialized.");
-    } catch (err) {
-      return errorResponse(`Error initializing examples: ${err}`);
     }
   }
 );

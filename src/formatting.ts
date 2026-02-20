@@ -116,13 +116,11 @@ export function showHelp(): void {
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
   cmd('config',   '',   '[setting] [value]',  'View or change configuration settings');
-  cmd('export',   '',   '<type>',             'Export data or aliases to a file');
-  cmd('import',   '',   '<type> <file>',      'Import data or aliases from a file');
-  cmd('reset',    '',   '<type>',             'Reset data or aliases to empty state');
-  cmd('completions', '', '<bash|zsh|install>', 'Generate shell completion scripts');
-  cmd('info',     'i',  '',                   'Show version, stats, and storage info');
-  cmd('init',     '',   '',                   'Initialize with example data');
-  cmd('examples', 'ex', '',                   'Show usage examples');
+  cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
+  console.log();
+  console.log('SUBCOMMANDS:');
+  console.log(`  ${color.green('config')}       info, examples, completions <bash|zsh|install>`);
+  console.log(`  ${color.green('data')}         export <type>, import <type> <file>, reset <type>`);
   console.log();
   console.log('  Use --help with any command for details (e.g. ccli set --help)');
 
@@ -231,13 +229,13 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('remove')} ${c('myalias')} ${y('-a')}`, '# Remove alias only (keep the entry)');
 
   section('IMPORT & EXPORT:');
-  ex(`${y('ccli')} ${g('export')} data`, '# Export data to a timestamped file');
-  ex(`${y('ccli')} ${g('export')} aliases ${y('-o')} aliases.json`, '# Export aliases to a specific file');
-  ex(`${y('ccli')} ${g('export')} all ${y('-o')} backup.json`, '# Export everything');
-  ex(`${y('ccli')} ${g('import')} data backup.json`, '# Import data from a file');
-  ex(`${y('ccli')} ${g('import')} all backup.json`, '# Import data and aliases');
-  ex(`${y('ccli')} ${g('reset')} data`, '# Clear all data (prompts first)');
-  ex(`${y('ccli')} ${g('reset')} all ${y('-f')}`, '# Clear everything without confirmation');
+  ex(`${y('ccli')} ${g('data export')} entries`, '# Export data to a timestamped file');
+  ex(`${y('ccli')} ${g('data export')} aliases ${y('-o')} aliases.json`, '# Export aliases to a specific file');
+  ex(`${y('ccli')} ${g('data export')} all ${y('-o')} backup.json`, '# Export everything');
+  ex(`${y('ccli')} ${g('data import')} entries backup.json`, '# Import data from a file');
+  ex(`${y('ccli')} ${g('data import')} all backup.json`, '# Import data and aliases');
+  ex(`${y('ccli')} ${g('data reset')} entries`, '# Clear all data (prompts first)');
+  ex(`${y('ccli')} ${g('data reset')} all ${y('-f')}`, '# Clear everything without confirmation');
 
   section('CONFIGURATION:');
   ex(`${y('ccli')} ${g('config')}`, '# Show all settings');
@@ -246,14 +244,12 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('config set')} ${c('colors')} false`, '# Disable colored output');
 
   section('SHELL COMPLETIONS:');
-  ex(`${y('ccli')} ${g('completions install')}`, '# Auto-detect shell and install');
-  ex(`${y('ccli')} ${g('completions bash')}`, '# Print Bash completion script');
-  ex(`${y('ccli')} ${g('completions zsh')}`, '# Print Zsh completion script');
+  ex(`${y('ccli')} ${g('config completions install')}`, '# Auto-detect shell and install');
+  ex(`${y('ccli')} ${g('config completions bash')}`, '# Print Bash completion script');
+  ex(`${y('ccli')} ${g('config completions zsh')}`, '# Print Zsh completion script');
 
   section('OTHER:');
-  ex(`${y('ccli')} ${g('info')}`, '# Show version, stats, and storage paths');
-  ex(`${y('ccli')} ${g('init')}`, '# Load example data to explore');
-  ex(`${y('ccli')} ${g('init')} ${y('-f')}`, '# Reload examples (overwrites existing)');
+  ex(`${y('ccli')} ${g('config info')}`, '# Show version, stats, and storage paths');
 
   section('INTERPOLATION:');
   ex(`${y('ccli')} ${g('set')} ${c('paths.github')} "/Users/me/Projects/github.com"`, '# Store a base path');

@@ -82,14 +82,18 @@ describe('showHelp', () => {
     expect(output).toContain('OPTIONS (run):');
     expect(output).toContain('OPTIONS (find):');
     expect(output).toContain('OPTIONS (global):');
-    expect(output).toContain('Show usage examples');
+    expect(output).toContain('SUBCOMMANDS:');
   });
 
-  it('lists the info command', () => {
+  it('lists subcommands section with info and examples', () => {
     showHelp();
     const output = consoleSpy.mock.calls.map(c => c.join(' ')).join('\n');
     expect(output).toContain('info');
-    expect(output).toContain('Show version, stats, and storage info');
+    expect(output).toContain('examples');
+    expect(output).toContain('completions');
+    expect(output).toContain('export');
+    expect(output).toContain('import');
+    expect(output).toContain('reset');
   });
 });
 

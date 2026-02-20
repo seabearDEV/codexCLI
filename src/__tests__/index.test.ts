@@ -8,7 +8,7 @@ const mockSearchEntries = vi.fn();
 const mockRemoveEntry = vi.fn();
 const mockHandleConfig = vi.fn();
 const mockConfigSet = vi.fn();
-const mockInitializeExampleData = vi.fn();
+const mockShowInfo = vi.fn();
 const mockExportData = vi.fn();
 const mockImportData = vi.fn().mockResolvedValue(undefined);
 const mockResetData = vi.fn().mockResolvedValue(undefined);
@@ -41,7 +41,7 @@ function setupMocks() {
     removeEntry: mockRemoveEntry,
     handleConfig: mockHandleConfig,
     configSet: mockConfigSet,
-    initializeExampleData: mockInitializeExampleData,
+    showInfo: mockShowInfo,
     exportData: mockExportData,
     importData: mockImportData,
     resetData: mockResetData,
@@ -185,50 +185,60 @@ describe('CLI Entry Point (index.ts)', () => {
     expect(mockHandleConfig).toHaveBeenCalledWith('colors');
   });
 
-  // --- Other commands ---
+  // --- Config subcommands ---
 
-  it('init calls initializeExampleData', async () => {
-    await loadCLI('init');
-    expect(mockInitializeExampleData).toHaveBeenCalled();
+  it('config info calls showInfo', async () => {
+    await loadCLI('config', 'info');
+    expect(mockShowInfo).toHaveBeenCalled();
   });
 
-  it('examples calls showExamples', async () => {
-    await loadCLI('examples');
+  it('config examples calls showExamples', async () => {
+    await loadCLI('config', 'examples');
     expect(mockShowExamples).toHaveBeenCalled();
   });
 
-  it('export calls exportData', async () => {
-    await loadCLI('export', 'data');
-    expect(mockExportData).toHaveBeenCalledWith('data', expect.any(Object));
+  // --- Data subcommands ---
+
+  it('data export calls exportData', async () => {
+    await loadCLI('data', 'export', 'entries');
+    expect(mockExportData).toHaveBeenCalledWith('entries', expect.any(Object));
   });
 
-  it('import calls importData', async () => {
-    await loadCLI('import', 'data', 'file.json');
-    expect(mockImportData).toHaveBeenCalledWith('data', 'file.json', expect.any(Object));
+  it('data import calls importData', async () => {
+    await loadCLI('data', 'import', 'entries', 'file.json');
+    expect(mockImportData).toHaveBeenCalledWith('entries', 'file.json', expect.any(Object));
   });
 
-  it('reset calls resetData', async () => {
-    await loadCLI('reset', 'data');
-    expect(mockResetData).toHaveBeenCalledWith('data', expect.any(Object));
+  it('data reset calls resetData', async () => {
+    await loadCLI('data', 'reset', 'entries');
+    expect(mockResetData).toHaveBeenCalledWith('entries', expect.any(Object));
   });
 
   // --- Completions commands ---
 
-  it('completions bash outputs bash script', async () => {
-    await loadCLI('completions', 'bash');
+  it('config completions bash outputs bash script', async () => {
+    await loadCLI('config', 'completions', 'bash');
     expect(mockGenerateBashScript).toHaveBeenCalled();
     expect(process.stdout.write).toHaveBeenCalledWith('bash-script');
   });
 
-  it('completions zsh outputs zsh script', async () => {
-    await loadCLI('completions', 'zsh');
+  it('config completions zsh outputs zsh script', async () => {
+    await loadCLI('config', 'completions', 'zsh');
     expect(mockGenerateZshScript).toHaveBeenCalled();
     expect(process.stdout.write).toHaveBeenCalledWith('zsh-script');
   });
 
-  it('completions install calls installCompletions', async () => {
-    await loadCLI('completions', 'install');
+  it('config completions install calls installCompletions', async () => {
+    await loadCLI('config', 'completions', 'install');
     expect(mockInstallCompletions).toHaveBeenCalled();
+  });
+
+  // --- Backward-compat completions shim ---
+
+  it('completions zsh backward-compat shim outputs zsh script', async () => {
+    await loadCLI('completions', 'zsh');
+    expect(mockGenerateZshScript).toHaveBeenCalled();
+    expect(process.stdout.write).toHaveBeenCalledWith('zsh-script');
   });
 
   // --- Help command ---

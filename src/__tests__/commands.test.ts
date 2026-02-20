@@ -12,7 +12,6 @@ import {
   exportData,
   handleConfig,
   configSet,
-  initializeExampleData
 } from '../commands';
 import { displayAliases } from '../commands/helpers';
 import { encryptValue, isEncrypted } from '../utils/crypto';
@@ -824,93 +823,6 @@ describe('Commands', () => {
 
       // Should not throw, just log error
       expect(console.log).toHaveBeenCalled();
-    });
-  });
-
-  describe('initializeExampleData', () => {
-    it('creates files when none exist', () => {
-      (fs.existsSync as Mock).mockReturnValue(false);
-
-      initializeExampleData();
-
-      // 3 example files + 1 default config created by loadConfig on first color call
-      expect(fs.writeFileSync).toHaveBeenCalledTimes(4);
-      const logCalls = (console.log as Mock).mock.calls;
-      const showedSuccess = logCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('successfully initialized'))
-      );
-      expect(showedSuccess).toBe(true);
-    });
-
-    it('warns and stops when files exist without --force', () => {
-      (fs.existsSync as Mock).mockReturnValue(true);
-
-      initializeExampleData(false);
-
-      // Should warn about existing files
-      const logCalls = (console.log as Mock).mock.calls;
-      const showedWarning = logCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('already exist'))
-      );
-      expect(showedWarning).toBe(true);
-      // Should not write files (only the mock calls from other modules may exist)
-      // The key check is the warning message
-    });
-
-    it('overwrites when files exist with --force', () => {
-      (fs.existsSync as Mock).mockReturnValue(true);
-
-      initializeExampleData(true);
-
-      expect(fs.writeFileSync).toHaveBeenCalled();
-      const logCalls = (console.log as Mock).mock.calls;
-      const showedForce = logCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Force flag'))
-      );
-      expect(showedForce).toBe(true);
-    });
-
-    it('handles write errors gracefully', () => {
-      (fs.existsSync as Mock).mockReturnValue(false);
-      (fs.writeFileSync as Mock).mockImplementation(() => {
-        throw new Error('disk full');
-      });
-
-      initializeExampleData();
-
-      const errorCalls = (console.error as Mock).mock.calls;
-      const showedError = errorCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Failed to write'))
-      );
-      expect(showedError).toBe(true);
-    });
-
-    it('shows error via handleError when outer catch receives an Error', () => {
-      (fs.mkdirSync as Mock).mockImplementation(() => {
-        throw new Error('permission denied');
-      });
-
-      initializeExampleData();
-
-      const errorCalls = (console.error as Mock).mock.calls;
-      const showedInit = errorCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Error initializing'))
-      );
-      expect(showedInit).toBe(true);
-    });
-
-    it('shows error via handleError when outer catch receives a non-Error', () => {
-      (fs.mkdirSync as Mock).mockImplementation(() => {
-        throw 'something broke';
-      });
-
-      initializeExampleData();
-
-      const errorCalls = (console.error as Mock).mock.calls;
-      const showedInit = errorCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Error initializing'))
-      );
-      expect(showedInit).toBe(true);
     });
   });
 

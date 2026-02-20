@@ -168,59 +168,49 @@ const CLI_TREE: Record<string, CommandDef> = {
     subcommands: {
       set: { flags: {}, argType: 'configKey', description: 'Set a config value' },
       get: { flags: {}, argType: 'configKey', description: 'Get config values' },
+      info: { flags: {}, argType: null, description: 'Show version and stats' },
+      examples: { flags: {}, argType: null, description: 'Show usage examples' },
+      completions: {
+        flags: {},
+        argType: null,
+        description: 'Manage shell completions',
+        subcommands: {
+          bash:    { flags: {}, argType: null, description: 'Output Bash script' },
+          zsh:     { flags: {}, argType: null, description: 'Output Zsh script' },
+          install: { flags: {}, argType: null, description: 'Auto-install completions' },
+        },
+      },
     },
   },
-  info: {
+  data: {
     flags: {},
     argType: null,
-    description: 'Show version, stats, and storage info',
-  },
-  i: {
-    flags: {},
-    argType: null,
-    description: 'Show version, stats, and storage info',
-  },
-  init: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] },
-    argType: null,
-    description: 'Initialize with example data',
-  },
-  examples: {
-    flags: {},
-    argType: null,
-    description: 'Show usage examples',
-  },
-  ex: {
-    flags: {},
-    argType: null,
-    description: 'Show usage examples',
-  },
-  export: {
-    flags: {
-      '--format': FLAG_DESCRIPTIONS['--format'],
-      '--output': FLAG_DESCRIPTIONS['--output'], '-o': FLAG_DESCRIPTIONS['-o'],
-    },
-    argType: 'exportType',
-    description: 'Export data or aliases',
-  },
-  import: {
-    flags: { '--format': FLAG_DESCRIPTIONS['--format'] },
-    argType: 'exportType',
-    description: 'Import data or aliases',
-  },
-  reset: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] },
-    argType: 'exportType',
-    description: 'Reset to empty state',
-  },
-  completions: {
-    flags: {},
-    argType: null,
-    description: 'Manage shell completions',
+    description: 'Manage stored data',
     subcommands: {
-      bash:    { flags: {}, argType: null, description: 'Output Bash script' },
-      zsh:     { flags: {}, argType: null, description: 'Output Zsh script' },
-      install: { flags: {}, argType: null, description: 'Auto-install completions' },
+      export: {
+        flags: {
+          '--format': FLAG_DESCRIPTIONS['--format'],
+          '--output': FLAG_DESCRIPTIONS['--output'], '-o': FLAG_DESCRIPTIONS['-o'],
+          '--pretty': 'Pretty-print output',
+        },
+        argType: 'exportType',
+        description: 'Export data or aliases',
+      },
+      import: {
+        flags: {
+          '--format': FLAG_DESCRIPTIONS['--format'],
+          '--merge': 'Merge with existing',
+          '-m': 'Merge with existing',
+          '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'],
+        },
+        argType: 'exportType',
+        description: 'Import data or aliases',
+      },
+      reset: {
+        flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] },
+        argType: 'exportType',
+        description: 'Reset to empty state',
+      },
     },
   },
 };
@@ -330,26 +320,30 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
     return filterPrefix(topLevel, partial);
   }
 
-  // Check for subcommand context
+  // Walk subcommand tree (supports arbitrary nesting: config -> completions -> bash)
   let activeDef: CommandDef = cmdDef;
+  let depth = 1; // args[0] is the top-level command; walk from args[1] onward
 
-  if (cmdDef.subcommands && args.length > 1) {
-    const subName = args[1];
-    const subDef = cmdDef.subcommands[subName];
+  while (activeDef.subcommands && depth < args.length) {
+    const subName = args[depth];
+    const subDef = activeDef.subcommands[subName];
     if (subDef) {
       activeDef = subDef;
-    } else if (!endsWithSpace && args.length === 2) {
-      // Still typing subcommand name
-      const subs = Object.entries(cmdDef.subcommands).map(
+      depth++;
+    } else if (!endsWithSpace && depth === args.length - 1) {
+      // Still typing a subcommand name at this level
+      const subs = Object.entries(activeDef.subcommands).map(
         ([name, def]) => ({ value: name, description: def.description || '', group: 'subcommands' })
       );
       return filterPrefix(subs, partial);
+    } else {
+      break;
     }
   }
 
-  // If the command has subcommands and we haven't matched one yet, suggest them
-  if (cmdDef.subcommands && args.length === 1) {
-    const subs = Object.entries(cmdDef.subcommands).map(
+  // If the active command has subcommands and we haven't descended further, suggest them
+  if (activeDef.subcommands && depth === args.length) {
+    const subs = Object.entries(activeDef.subcommands).map(
       ([name, def]) => ({ value: name, description: def.description || '', group: 'subcommands' })
     );
     if (endsWithSpace) {
@@ -508,17 +502,17 @@ export function installCompletions(): void {
   const home = os.homedir();
   if (shell.endsWith('/zsh')) {
     rcFile = path.join(home, '.zshrc');
-    scriptCmd = 'eval "$(ccli completions zsh)"';
+    scriptCmd = 'eval "$(ccli config completions zsh)"';
   } else if (shell.endsWith('/bash')) {
     // Prefer .bash_profile on macOS, .bashrc on Linux
     const bashProfile = path.join(home, '.bash_profile');
     const bashrc = path.join(home, '.bashrc');
     rcFile = process.platform === 'darwin' && fs.existsSync(bashProfile) ? bashProfile : bashrc;
-    scriptCmd = 'eval "$(ccli completions bash)"';
+    scriptCmd = 'eval "$(ccli config completions bash)"';
   } else {
     console.error(`Unsupported shell: ${shell || '(unknown)'}`);
     console.error('Supported shells: bash, zsh');
-    console.error('You can manually add completions by running: ccli completions bash  OR  ccli completions zsh');
+    console.error('You can manually add completions by running: ccli config completions bash  OR  ccli config completions zsh');
     process.exit(1);
   }
 

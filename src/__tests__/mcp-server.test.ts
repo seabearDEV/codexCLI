@@ -145,13 +145,6 @@ vi.mock('../utils/deepMerge', () => ({
   }),
 }));
 
-// Mock commands/init
-vi.mock('../commands/init', () => ({
-  getExampleData: vi.fn(() => ({ example: 'data' })),
-  getExampleAliases: vi.fn(() => ({ ex: 'example' })),
-  getExampleConfig: vi.fn(() => ({ colors: true, theme: 'default' })),
-}));
-
 // Helper to reset mock data between tests
 function resetMocks() {
   Object.keys(mockData).forEach(k => delete mockData[k]);
@@ -648,26 +641,4 @@ describe('MCP Server Tools', () => {
     });
   });
 
-  describe('codex_init', () => {
-    it('initializes example data when no files exist', async () => {
-      const result = await toolHandlers['codex_init']({ force: undefined });
-      expect(result.content[0].text).toContain('Example data, aliases, and config initialized');
-      expect(mockWrittenFiles['/mock/entries.json']).toBeDefined();
-      expect(mockWrittenFiles['/mock/aliases.json']).toBeDefined();
-      expect(mockWrittenFiles['/mock/config.json']).toBeDefined();
-    });
-
-    it('returns error when files exist and force is not set', async () => {
-      mockFiles['/mock/entries.json'] = true;
-      const result = await toolHandlers['codex_init']({ force: undefined });
-      expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('already exist');
-    });
-
-    it('overwrites when force is true', async () => {
-      mockFiles['/mock/entries.json'] = true;
-      const result = await toolHandlers['codex_init']({ force: true });
-      expect(result.content[0].text).toContain('Example data, aliases, and config initialized');
-    });
-  });
 });

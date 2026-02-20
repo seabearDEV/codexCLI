@@ -8,6 +8,8 @@ import { askPassword, askConfirmation, printError } from './commands/helpers';
 import { version } from '../package.json';
 import { getCompletions, generateBashScript, generateZshScript, installCompletions } from './completions';
 import { withPager } from './utils/pager';
+import { getDataDirectory } from './utils/paths';
+import fs from 'fs';
 
 // Early-exit handler for shell tab-completion (must run before Commander parses args)
 const completionFlagIndex = process.argv.indexOf('--get-completions');
@@ -175,64 +177,20 @@ configCommand
     await withPager(() => commands.handleConfig(key));
   });
 
-// Info command
-codexCLI
+// Config subcommands: info, examples, completions
+configCommand
   .command('info')
-  .alias('i')
   .description('Show version, stats, and storage info')
   .action(() => {
     commands.showInfo();
   });
 
-// Init command
-codexCLI
-  .command('init')
-  .description('Initialize with example data')
-  .option('-f, --force', 'Skip confirmation prompt')
-  .action((options: { force?: boolean }) => {
-    commands.initializeExampleData(options.force);
-  });
-
-// Examples command
-codexCLI
+configCommand
   .command('examples')
-  .alias('ex')
   .description('Show usage examples')
   .action(() => { withPager(() => showExamples()); });
 
-// Export command
-codexCLI
-  .command('export <type>')
-  .description('Export data or aliases to a file')
-  .option('--format <format>', 'File format (json, yaml)')
-  .option('-o, --output <file>', 'Output file path')
-  .option('--pretty', 'Pretty-print the output')
-  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean }) => {
-    await withPager(() => commands.exportData(type, options));
-  });
-
-// Import command
-codexCLI
-  .command('import <type> <file>')
-  .description('Import data or aliases from a file')
-  .option('--format <format>', 'File format (json, yaml)')
-  .option('-m, --merge', 'Merge with existing data instead of replacing')
-  .option('-f, --force', 'Skip confirmation prompt')
-  .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean }) => {
-    await commands.importData(type, file, options);
-  });
-
-// Reset command
-codexCLI
-  .command('reset <type>')
-  .description('Reset data or aliases to empty state')
-  .option('-f, --force', 'Skip confirmation prompt')
-  .action(async (type: string, options: { force?: boolean }) => {
-    await commands.resetData(type, options);
-  });
-
-// Completions command group
-const completionsCommand = codexCLI
+const completionsCommand = configCommand
   .command('completions')
   .description('Generate shell completion scripts')
   .helpCommand(false);
@@ -257,6 +215,65 @@ completionsCommand
   .action(() => {
     installCompletions();
   });
+
+// Data management command group
+const dataCommand = codexCLI
+  .command('data')
+  .description('Manage stored data (export, import, reset)')
+  .helpCommand(false);
+
+dataCommand
+  .command('export <type>')
+  .description('Export data or aliases to a file')
+  .option('--format <format>', 'File format (json, yaml)')
+  .option('-o, --output <file>', 'Output file path')
+  .option('--pretty', 'Pretty-print the output')
+  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean }) => {
+    await withPager(() => commands.exportData(type, options));
+  });
+
+dataCommand
+  .command('import <type> <file>')
+  .description('Import data or aliases from a file')
+  .option('--format <format>', 'File format (json, yaml)')
+  .option('-m, --merge', 'Merge with existing data instead of replacing')
+  .option('-f, --force', 'Skip confirmation prompt')
+  .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean }) => {
+    await commands.importData(type, file, options);
+  });
+
+dataCommand
+  .command('reset <type>')
+  .description('Reset data or aliases to empty state')
+  .option('-f, --force', 'Skip confirmation prompt')
+  .action(async (type: string, options: { force?: boolean }) => {
+    await commands.resetData(type, options);
+  });
+
+// Hidden backward-compat shim: `ccli completions <bash|zsh|install>` still works
+// (existing users have `eval "$(ccli completions zsh)"` in their RC files)
+const completionsShim = codexCLI
+  .command('completions', { hidden: true })
+  .helpCommand(false);
+
+completionsShim
+  .command('bash')
+  .action(() => { process.stdout.write(generateBashScript()); });
+
+completionsShim
+  .command('zsh')
+  .action(() => { process.stdout.write(generateZshScript()); });
+
+completionsShim
+  .command('install')
+  .action(() => { installCompletions(); });
+
+// First-run welcome message
+if (!fs.existsSync(getDataDirectory())) {
+  console.log();
+  console.log('Welcome to CodexCLI! Run `ccli config examples` to see usage patterns.');
+  console.log();
+}
 
 // Show rich help for: ccli, ccli --help, ccli -h, ccli help (with optional --debug)
 const userArgs = process.argv.slice(2).filter(a => a !== '--debug');
