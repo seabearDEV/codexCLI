@@ -43,6 +43,12 @@ vi.mock('fs', () => {
     writeFileSync: vi.fn((p: string, content: string) => {
       mockWrittenFiles[p] = content;
     }),
+    renameSync: vi.fn((src: string, dest: string) => {
+      if (mockWrittenFiles[src] !== undefined) {
+        mockWrittenFiles[dest] = mockWrittenFiles[src];
+        delete mockWrittenFiles[src];
+      }
+    }),
   };
   return { default: mock, ...mock };
 });
@@ -122,15 +128,14 @@ vi.mock('../formatting', () => ({
 vi.mock('../config', () => ({
   loadConfig: vi.fn(() => ({ ...mockConfig })),
   getConfigSetting: vi.fn((key: string) => {
-    if (key === 'colors' || key === 'theme' || key === 'backend') return mockConfig[key];
+    if (key === 'colors' || key === 'theme') return mockConfig[key];
     return null;
   }),
   setConfigSetting: vi.fn((key: string, value: any) => {
     mockConfig[key] = value;
   }),
-  VALID_CONFIG_KEYS: ['colors', 'theme', 'backend'],
+  VALID_CONFIG_KEYS: ['colors', 'theme'],
   VALID_THEMES: ['default', 'dark', 'light'],
-  VALID_BACKENDS: ['json', 'sqlite'],
 }));
 
 // Mock deepMerge — use real implementation

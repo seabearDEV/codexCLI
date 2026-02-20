@@ -1,22 +1,20 @@
 import fs from 'fs';
 import { getConfigFilePath, ensureDataDirectoryExists } from './utils/paths';
+import { atomicWriteFileSync } from './utils/atomicWrite';
 
 // Define the type for configuration
 export interface Config {
   colors: boolean;
   theme: string;
-  backend: string;
 }
 
 export const VALID_THEMES = ['default', 'dark', 'light'] as const;
-export const VALID_BACKENDS = ['json', 'sqlite'] as const;
-export const VALID_CONFIG_KEYS = ['colors', 'theme', 'backend'] as const;
+export const VALID_CONFIG_KEYS = ['colors', 'theme'] as const;
 
 // Default configuration
 const defaultConfig: Config = {
   colors: true,
-  theme: 'default',
-  backend: 'json'
+  theme: 'default'
 };
 
 // Mtime-based cache for config
@@ -59,7 +57,6 @@ export function loadConfig(): Config {
     const result = {
       colors: config.colors ?? defaultConfig.colors,
       theme: config.theme ?? defaultConfig.theme,
-      backend: config.backend ?? defaultConfig.backend
     };
 
     configCache = result;
@@ -77,7 +74,7 @@ export function saveConfig(config: Config): void {
   try {
     ensureDataDirectoryExists();
     const configPath = getConfigFilePath();
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf8');
+    atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
     const mtime = fs.statSync(configPath).mtimeMs;
     configCache = config;
     configCacheMtime = mtime;
@@ -110,19 +107,7 @@ export function setConfigSetting(key: string, value: string | boolean): void {
     }
     config.theme = val;
     saveConfig(config);
-  } else if (key === 'backend') {
-    const val = String(value);
-    if (!(VALID_BACKENDS as readonly string[]).includes(val)) {
-      console.error(`Invalid backend value: '${val}'. Must be one of: ${VALID_BACKENDS.join(', ')}`);
-      return;
-    }
-    if (val !== config.backend) {
-      console.warn(`Warning: Changing backend without migrating data. Run 'ccli migrate ${val}' to transfer your data.`);
-    }
-    config.backend = val;
-    saveConfig(config);
   } else {
     console.error(`Unknown configuration key: ${key}`);
   }
 }
-

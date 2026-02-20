@@ -8,6 +8,7 @@ import { execSync } from "child_process";
 import fs from "fs";
 
 import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat } from "./storage";
+import { atomicWriteFileSync } from "./utils/atomicWrite";
 import { CodexData } from "./types";
 import {
   flattenObject,
@@ -366,7 +367,7 @@ server.tool(
   "codex_config_get",
   "Get configuration settings",
   {
-    key: z.string().optional().describe("Config key (colors, theme, backend). Omit for all settings."),
+    key: z.string().optional().describe("Config key (colors, theme). Omit for all settings."),
   },
   async ({ key }) => {
     try {
@@ -392,7 +393,7 @@ server.tool(
   "codex_config_set",
   "Set a configuration setting",
   {
-    key: z.string().describe("Config key to set (colors, theme, backend)"),
+    key: z.string().describe("Config key to set (colors, theme)"),
     value: z.string().describe("Value to set"),
   },
   async ({ key, value }) => {
@@ -553,9 +554,9 @@ server.tool(
       }
 
       ensureDataDirectoryExists();
-      fs.writeFileSync(getDataFilePath(), JSON.stringify(getExampleData(), null, 2), "utf8");
-      fs.writeFileSync(getAliasFilePath(), JSON.stringify(getExampleAliases(), null, 2), "utf8");
-      fs.writeFileSync(getConfigFilePath(), JSON.stringify(getExampleConfig(), null, 2), "utf8");
+      atomicWriteFileSync(getDataFilePath(), JSON.stringify(getExampleData(), null, 2));
+      atomicWriteFileSync(getAliasFilePath(), JSON.stringify(getExampleAliases(), null, 2));
+      atomicWriteFileSync(getConfigFilePath(), JSON.stringify(getExampleConfig(), null, 2));
 
       return textResponse("Example data, aliases, and config initialized.");
     } catch (err) {

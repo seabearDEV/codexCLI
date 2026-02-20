@@ -10,6 +10,7 @@ import {
   getAliasFilePath,
   getConfigFilePath
 } from '../utils/paths';
+import { atomicWriteFileSync } from '../utils/atomicWrite';
 
 export function getExampleData(): import('../types').CodexData {
   return {
@@ -126,8 +127,7 @@ export function initializeExampleData(force: boolean = false): void {
     try {
       saveData(getExampleData());
       saveAliases(getExampleAliases());
-      // Config always uses JSON file directly
-      fs.writeFileSync(configFilePath, JSON.stringify(getExampleConfig(), null, 2), 'utf8');
+      atomicWriteFileSync(configFilePath, JSON.stringify(getExampleConfig(), null, 2));
 
       printSuccess('Data initialized');
       printSuccess('Aliases initialized');

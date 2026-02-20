@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { getDataDirectory, getAliasFilePath } from './utils/paths';
-import { useSqlite, loadAliasesSqlite, saveAliasesSqlite } from './sqlite-backend';
 import { debug } from './utils/debug';
+import { atomicWriteFileSync } from './utils/atomicWrite';
 
 // Interface for the aliases storage
 interface AliasMap {
@@ -19,10 +19,6 @@ export function clearAliasCache(): void {
 
 // Load aliases from storage
 export function loadAliases(): AliasMap {
-  if (useSqlite()) {
-    return loadAliasesSqlite();
-  }
-
   const aliasPath = getAliasFilePath();
 
   try {
@@ -58,13 +54,6 @@ export function loadAliases(): AliasMap {
 
 // Save aliases to storage
 export function saveAliases(aliases: AliasMap): void {
-  if (useSqlite()) {
-    saveAliasesSqlite(aliases);
-    aliasCache = aliases;
-    aliasCacheMtime = null;
-    return;
-  }
-
   const aliasPath = getAliasFilePath();
   const dataDir = getDataDirectory();
 
@@ -74,7 +63,7 @@ export function saveAliases(aliases: AliasMap): void {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
-    fs.writeFileSync(aliasPath, JSON.stringify(aliases, null, 2));
+    atomicWriteFileSync(aliasPath, JSON.stringify(aliases, null, 2));
     const mtime = fs.statSync(aliasPath).mtimeMs;
     aliasCache = aliases;
     aliasCacheMtime = mtime;
@@ -100,13 +89,13 @@ export function setAlias(alias: string, path: string): void {
 // Remove an alias
 export function removeAlias(alias: string): boolean {
   const aliases = loadAliases();
-  
+
   if (alias in aliases) {
     delete aliases[alias];
     saveAliases(aliases);
     return true;
   }
-  
+
   return false;
 }
 

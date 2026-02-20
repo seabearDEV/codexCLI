@@ -6,6 +6,7 @@ vi.mock('fs', () => {
     existsSync: vi.fn(),
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
+    renameSync: vi.fn(),
     statSync: vi.fn()
   };
   return { default: mock, ...mock };
@@ -134,13 +135,17 @@ describe('Storage', () => {
   });
 
   describe('saveData', () => {
-    it('writes formatted JSON to data path', () => {
+    it('writes formatted JSON via atomic write (tmp + rename)', () => {
       saveData({ key: 'value' });
 
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        '/mock/data.json',
+        '/mock/data.json.tmp',
         JSON.stringify({ key: 'value' }, null, 2),
         'utf8'
+      );
+      expect(fs.renameSync).toHaveBeenCalledWith(
+        '/mock/data.json.tmp',
+        '/mock/data.json'
       );
     });
 

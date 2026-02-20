@@ -4,13 +4,10 @@ import path from 'path';
 import { version } from '../../package.json';
 import { getEntriesFlat } from '../storage';
 import { loadAliases } from '../alias';
-import { loadConfig } from '../config';
-import { getDataFilePath, getAliasFilePath, getDbFilePath, getConfigFilePath } from '../utils/paths';
+import { getDataFilePath, getAliasFilePath, getConfigFilePath } from '../utils/paths';
 import { color } from '../formatting';
 
 export function showInfo(): void {
-  const config = loadConfig();
-  const backend = config.backend;
   const entryCount = Object.keys(getEntriesFlat()).length;
   const aliasCount = Object.keys(loadAliases()).length;
 
@@ -26,18 +23,13 @@ export function showInfo(): void {
   };
 
   label('Version', color.cyan(version));
-  label('Backend', color.cyan(backend));
   label('Entries', String(entryCount));
   label('Aliases', String(aliasCount));
 
   console.log();
 
-  if (backend === 'sqlite') {
-    label('Database', getDbFilePath());
-  } else {
-    label('Data', getDataFilePath());
-    label('Aliases', getAliasFilePath());
-  }
+  label('Data', getDataFilePath());
+  label('Aliases', getAliasFilePath());
   label('Config', getConfigFilePath());
 
   console.log();

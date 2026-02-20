@@ -8,16 +8,6 @@ import { askPassword, askConfirmation, printError } from './commands/helpers';
 import { version } from '../package.json';
 import { getCompletions, generateBashScript, generateZshScript, installCompletions } from './completions';
 import { withPager } from './utils/pager';
-import { migrateToSqlite, migrateToJson } from './commands/migrate';
-import { closeSqlite } from './sqlite-backend';
-
-// Ensure SQLite connection is closed on exit (guard against duplicate registration)
-if (!(globalThis as Record<string, unknown>).__codexSqliteCleanup) {
-  (globalThis as Record<string, unknown>).__codexSqliteCleanup = true;
-  process.on('exit', () => closeSqlite());
-  process.on('SIGINT', () => { closeSqlite(); process.exit(0); });
-  process.on('SIGTERM', () => { closeSqlite(); process.exit(0); });
-}
 
 // Early-exit handler for shell tab-completion (must run before Commander parses args)
 const completionFlagIndex = process.argv.indexOf('--get-completions');
@@ -259,27 +249,6 @@ completionsCommand
   .description('Auto-detect shell and install completions')
   .action(() => {
     installCompletions();
-  });
-
-// Migrate command group
-const migrateCommand = codexCLI
-  .command('migrate')
-  .description('Migrate storage backend between JSON and SQLite');
-
-migrateCommand
-  .command('sqlite')
-  .description('Migrate from JSON to SQLite backend')
-  .option('-f, --force', 'Force re-migration even if already on target backend')
-  .action((options: { force?: boolean }) => {
-    migrateToSqlite(options);
-  });
-
-migrateCommand
-  .command('json')
-  .description('Migrate from SQLite to JSON backend')
-  .option('-f, --force', 'Force re-migration even if already on target backend')
-  .action((options: { force?: boolean }) => {
-    migrateToJson(options);
   });
 
 // Show rich help for: ccli, ccli --help, ccli -h, ccli help (with optional --debug)

@@ -124,7 +124,6 @@ export function showHelp(): void {
   cmd('import',   '',   '<type> <file>',      'Import data or aliases from a file');
   cmd('reset',    '',   '<type>',             'Reset data or aliases to empty state');
   cmd('completions', '', '<bash|zsh|install>', 'Generate shell completion scripts');
-  cmd('migrate',  '',   '<sqlite|json>',      'Migrate storage backend');
   cmd('info',     'i',  '',                   'Show version, stats, and storage info');
   cmd('init',     '',   '',                   'Initialize with example data');
   cmd('examples', 'ex', '',                   'Show usage examples');
@@ -251,12 +250,6 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('config get')} ${c('theme')}`, '# Get a specific setting');
   ex(`${y('ccli')} ${g('config set')} ${c('theme')} dark`, '# Change theme (default/dark/light)');
   ex(`${y('ccli')} ${g('config set')} ${c('colors')} false`, '# Disable colored output');
-  ex(`${y('ccli')} ${g('config set')} ${c('backend')} sqlite`, '# Switch storage to SQLite');
-
-  section('MIGRATION:');
-  ex(`${y('ccli')} ${g('migrate sqlite')}`, '# Migrate JSON data to SQLite');
-  ex(`${y('ccli')} ${g('migrate json')}`, '# Migrate SQLite data back to JSON');
-  ex(`${y('ccli')} ${g('migrate sqlite')} ${y('-f')}`, '# Force re-migration');
 
   section('SHELL COMPLETIONS:');
   ex(`${y('ccli')} ${g('completions install')}`, '# Auto-detect shell and install');
@@ -307,7 +300,6 @@ export function showConfigHelp(): void {
   };
   cfgOpt('colors', 'Enable/disable colored output (true/false)');
   cfgOpt('theme', `UI theme (${['default', 'dark', 'light'].join('/')})`);
-  cfgOpt('backend', 'Storage backend (json/sqlite)');
 
   const cfgEx = (cmd: string, comment: string) => {
     const pad = ' '.repeat(Math.max(2, 38 - visibleLength(cmd)));
@@ -318,7 +310,6 @@ export function showConfigHelp(): void {
   cfgEx(`${color.yellow('ccli')} ${color.green('config get')} ${color.cyan('theme')}`, '# Get a specific setting');
   cfgEx(`${color.yellow('ccli')} ${color.green('config set')} ${color.cyan('theme')} dark`, '# Set theme to dark');
   cfgEx(`${color.yellow('ccli')} ${color.green('config set')} ${color.cyan('colors')} false`, '# Disable colored output');
-  cfgEx(`${color.yellow('ccli')} ${color.green('config set')} ${color.cyan('backend')} sqlite`, '# Switch to SQLite backend');
   console.log();
 }
 

@@ -11,7 +11,6 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
     console.log('─'.repeat(40));
     console.log(`${color.green('colors'.padEnd(15))}: Enable/disable colored output (true/false)`);
     console.log(`${color.green('theme'.padEnd(15))}: UI theme (default/dark/light)`);
-    console.log(`${color.green('backend'.padEnd(15))}: Storage backend (json/sqlite)`);
     return;
   }
 

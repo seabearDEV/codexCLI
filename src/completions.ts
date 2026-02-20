@@ -213,15 +213,6 @@ const CLI_TREE: Record<string, CommandDef> = {
       install: { flags: {}, argType: null, description: 'Auto-install completions' },
     },
   },
-  migrate: {
-    flags: {},
-    argType: null,
-    description: 'Migrate storage backend',
-    subcommands: {
-      sqlite: { flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] }, argType: null, description: 'Migrate to SQLite' },
-      json:   { flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] }, argType: null, description: 'Migrate to JSON' },
-    },
-  },
 };
 
 // --- Dynamic data loaders ---

@@ -67,15 +67,6 @@ export function getAliasFilePath(): string {
 }
 
 /**
- * Get the path to the SQLite database file
- *
- * @returns {string} Path to the codexcli.db file
- */
-export function getDbFilePath(): string {
-  return path.join(getDataDirectory(), 'codexcli.db');
-}
-
-/**
  * Gets the full path to the configuration file
  * 
  * @returns {string} Absolute path to the JSON config file

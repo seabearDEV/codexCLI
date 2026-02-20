@@ -6,6 +6,7 @@ vi.mock('fs', () => {
     existsSync: vi.fn(),
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
+    renameSync: vi.fn(),
     mkdirSync: vi.fn(),
     statSync: vi.fn()
   };
@@ -50,7 +51,6 @@ describe('Config', () => {
 
       expect(config.colors).toBe(true);
       expect(config.theme).toBe('default');
-      expect(config.backend).toBe('json');
       expect(fs.writeFileSync).toHaveBeenCalled();
     });
 
@@ -78,18 +78,21 @@ describe('Config', () => {
 
       expect(config.colors).toBe(false);
       expect(config.theme).toBe('default');
-      expect(config.backend).toBe('json');
     });
   });
 
   describe('saveConfig', () => {
-    it('writes formatted JSON to config path', () => {
-      saveConfig({ colors: true, theme: 'dark', backend: 'json' });
+    it('writes formatted JSON to config path via atomic write', () => {
+      saveConfig({ colors: true, theme: 'dark' });
 
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        '/mock/config.json',
-        JSON.stringify({ colors: true, theme: 'dark', backend: 'json' }, null, 2),
+        '/mock/config.json.tmp',
+        JSON.stringify({ colors: true, theme: 'dark' }, null, 2),
         'utf8'
+      );
+      expect(fs.renameSync).toHaveBeenCalledWith(
+        '/mock/config.json.tmp',
+        '/mock/config.json'
       );
     });
 
@@ -98,7 +101,7 @@ describe('Config', () => {
         throw new Error('write failed');
       });
 
-      saveConfig({ colors: true, theme: 'default', backend: 'json' });
+      saveConfig({ colors: true, theme: 'default' });
 
       expect(console.error).toHaveBeenCalledWith(
         'Error saving configuration:',
@@ -123,19 +126,18 @@ describe('Config', () => {
       expect(getConfigSetting('theme')).toBe('dark');
     });
 
-    it('returns backend value', () => {
-      (fs.readFileSync as Mock).mockReturnValue(
-        JSON.stringify({ colors: true, theme: 'default', backend: 'sqlite' })
-      );
-      clearConfigCache();
-      expect(getConfigSetting('backend')).toBe('sqlite');
-    });
-
     it('returns null and logs error for unknown key', () => {
       const result = getConfigSetting('unknown');
 
       expect(result).toBeNull();
       expect(console.error).toHaveBeenCalledWith('Unknown configuration key: unknown');
+    });
+
+    it('returns null for backend (no longer a valid key)', () => {
+      const result = getConfigSetting('backend');
+
+      expect(result).toBeNull();
+      expect(console.error).toHaveBeenCalledWith('Unknown configuration key: backend');
     });
   });
 
@@ -171,48 +173,10 @@ describe('Config', () => {
       expect(savedConfig.colors).toBe(false);
     });
 
-    it('sets backend to sqlite', () => {
+    it('rejects backend as unknown key', () => {
       setConfigSetting('backend', 'sqlite');
 
-      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const savedConfig = JSON.parse(savedCall[1]);
-      expect(savedConfig.backend).toBe('sqlite');
-    });
-
-    it('sets backend to json', () => {
-      setConfigSetting('backend', 'json');
-
-      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const savedConfig = JSON.parse(savedCall[1]);
-      expect(savedConfig.backend).toBe('json');
-    });
-
-    it('warns when switching backend without migration', () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation();
-      // default backend in the mock is 'json', switching to 'sqlite'
-      setConfigSetting('backend', 'sqlite');
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Run 'ccli migrate sqlite'")
-      );
-      warnSpy.mockRestore();
-    });
-
-    it('does not warn when setting backend to same value', () => {
-      // The mock returns config with backend defaulting to 'json'
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation();
-      setConfigSetting('backend', 'json');
-
-      expect(warnSpy).not.toHaveBeenCalled();
-      warnSpy.mockRestore();
-    });
-
-    it('rejects invalid backend value', () => {
-      setConfigSetting('backend', 'invalid');
-
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining("Invalid backend value: 'invalid'")
-      );
+      expect(console.error).toHaveBeenCalledWith('Unknown configuration key: backend');
       expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
 
@@ -262,8 +226,8 @@ describe('Config', () => {
       const first = loadConfig();
       const second = loadConfig();
 
-      expect(first).toEqual({ colors: false, theme: 'dark', backend: 'json' });
-      expect(second).toEqual({ colors: false, theme: 'dark', backend: 'json' });
+      expect(first).toEqual({ colors: false, theme: 'dark' });
+      expect(second).toEqual({ colors: false, theme: 'dark' });
       expect(fs.readFileSync).toHaveBeenCalledTimes(1);
     });
 
@@ -288,10 +252,10 @@ describe('Config', () => {
       (fs.existsSync as Mock).mockReturnValue(true);
       (fs.statSync as Mock).mockReturnValue({ mtimeMs: 2000 });
 
-      saveConfig({ colors: false, theme: 'dark', backend: 'json' });
+      saveConfig({ colors: false, theme: 'dark' });
       const loaded = loadConfig();
 
-      expect(loaded).toEqual({ colors: false, theme: 'dark', backend: 'json' });
+      expect(loaded).toEqual({ colors: false, theme: 'dark' });
       expect(fs.readFileSync).not.toHaveBeenCalled();
     });
   });

@@ -5,7 +5,7 @@ import { getEntriesFlat } from '../storage';
 import { loadAliases } from '../alias';
 
 vi.mock('../config', () => ({
-  loadConfig: vi.fn(() => ({ colors: false, theme: 'default', backend: 'json' })),
+  loadConfig: vi.fn(() => ({ colors: false, theme: 'default' })),
 }));
 
 vi.mock('../storage', () => ({
@@ -65,27 +65,12 @@ describe('showInfo', () => {
     expect(getOutput()).toContain('2');
   });
 
-  it('shows backend type', () => {
-    showInfo();
-    expect(getOutput()).toContain('json');
-  });
-
-  it('shows storage paths for json backend', () => {
+  it('shows storage paths', () => {
     showInfo();
     const output = getOutput();
     expect(output).toContain('data.json');
     expect(output).toContain('aliases.json');
     expect(output).toContain('config.json');
-  });
-
-  it('shows database path for sqlite backend', () => {
-    (loadConfig as Mock).mockReturnValue({ colors: false, theme: 'default', backend: 'sqlite' });
-
-    showInfo();
-    const output = getOutput();
-    expect(output).toContain('codexcli.db');
-
-    (loadConfig as Mock).mockReturnValue({ colors: false, theme: 'default', backend: 'json' });
   });
 
   it('shows the box header', () => {
