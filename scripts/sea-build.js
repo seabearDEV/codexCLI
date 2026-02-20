@@ -19,7 +19,7 @@ const platform = os.platform();  // darwin | linux | win32
 const arch = os.arch();          // arm64 | x64
 
 // Resolve output binary name
-const platformName = platform === 'win32' ? 'win' : platform;
+const platformName = platform === 'darwin' ? 'macos' : platform === 'win32' ? 'win' : platform;
 const defaultName = `ccli-${platformName}-${arch}`;
 let outputName = process.argv[2] || defaultName;
 

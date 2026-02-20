@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - runner: macos-latest
-            binary: ccli-darwin-arm64
+            binary: ccli-macos-arm64
           - runner: ubuntu-latest
             binary: ccli-linux-x64
           - runner: ubuntu-24.04-arm
