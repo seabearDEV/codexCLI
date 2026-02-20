@@ -1,6 +1,5 @@
 export function interpretEscapes(str: string): string {
-  if (typeof str !== 'string') return String(str);
-  return str.replace(/\\([nt\\])/g, (_, ch) => {
+  return str.replace(/\\([nt\\])/g, (_, ch: string) => {
     switch (ch) {
       case 'n': return '\n';
       case 't': return '\t';

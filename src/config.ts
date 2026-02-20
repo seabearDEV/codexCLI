@@ -51,12 +51,12 @@ export function loadConfig(): Config {
     }
 
     const currentMtime = fs.statSync(configPath).mtimeMs;
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
 
     // Ensure all required fields exist (handles migrating from old config)
-    const result = {
-      colors: config.colors ?? defaultConfig.colors,
-      theme: config.theme ?? defaultConfig.theme,
+    const result: Config = {
+      colors: typeof config.colors === 'boolean' ? config.colors : defaultConfig.colors,
+      theme: typeof config.theme === 'string' ? config.theme : defaultConfig.theme,
     };
 
     configCache = result;

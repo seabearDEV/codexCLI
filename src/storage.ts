@@ -4,7 +4,7 @@ import { getDataFilePath } from './utils/paths';
 import { getNestedValue, setNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
 import { CodexData, CodexValue } from './types';
 import { debug } from './utils/debug';
-import { atomicWriteFileSync } from './utils/atomicWrite';
+import { saveJsonSorted } from './utils/saveJsonSorted';
 
 // Mtime-based cache for data
 let dataCache: CodexData | null = null;
@@ -76,8 +76,8 @@ export function loadData(): CodexData {
   const currentMtime = fs.statSync(filePath).mtimeMs;
   const result = handleOperation(() => {
     const content = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(content);
-  }, `Failed to load data from ${filePath}`) || {};
+    return JSON.parse(content) as CodexData;
+  }, `Failed to load data from ${filePath}`) ?? {};
 
   dataCache = result;
   dataCacheMtime = currentMtime;
@@ -92,9 +92,7 @@ export function saveData(data: CodexData): void {
   const filePath = getDataFilePath();
 
   const result = handleOperation(() => {
-    const sorted = Object.fromEntries(Object.entries(data).sort(([a], [b]) => a.localeCompare(b)));
-    const content = JSON.stringify(sorted, null, 2);
-    atomicWriteFileSync(filePath, content);
+    saveJsonSorted(filePath, data);
     return true;
   }, `Failed to save data to ${filePath}`);
 

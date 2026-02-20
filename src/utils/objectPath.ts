@@ -86,7 +86,7 @@ export function removeNestedValue(obj: CodexData, path: string): boolean {
  * Flattens nested objects into a flat map with dot-notation keys
  * Example: { user: { name: "John" } } → { "user.name": "John" }
  */
-export function flattenObject(obj: Record<string, unknown>, parentKey: string = ''): Record<string, string> {
+export function flattenObject(obj: Record<string, unknown>, parentKey = ''): Record<string, string> {
   return Object.keys(obj).reduce((acc, key) => {
     const newKey = parentKey ? `${parentKey}.${key}` : key;
 

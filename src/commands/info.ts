@@ -34,7 +34,7 @@ export function showInfo(): void {
 
   console.log();
 
-  const shell = process.env.SHELL || '';
+  const shell = process.env.SHELL ?? '';
   let rcFile: string | null = null;
   const home = os.homedir();
   if (shell.endsWith('/zsh')) {

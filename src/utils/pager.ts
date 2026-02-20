@@ -15,6 +15,7 @@ export async function withPager(fn: () => void | Promise<void>): Promise<void> {
   }
 
   const chunks: (string | Uint8Array)[] = [];
+  // eslint-disable-next-line @typescript-eslint/unbound-method
   const originalWrite = process.stdout.write;
 
   // Monkey-patch stdout.write to capture output
@@ -43,8 +44,8 @@ export async function withPager(fn: () => void | Promise<void>): Promise<void> {
 
   // Count newlines to decide whether to page
   let lineCount = 0;
-  for (let i = 0; i < buffer.length; i++) {
-    if (buffer[i] === '\n') lineCount++;
+  for (const ch of buffer) {
+    if (ch === '\n') lineCount++;
   }
 
   const rows = process.stdout.rows || 24;
@@ -55,7 +56,7 @@ export async function withPager(fn: () => void | Promise<void>): Promise<void> {
   }
 
   // Spawn pager
-  const pagerCmd = process.env.CCLI_PAGER || process.env.PAGER || 'less -FRX';
+  const pagerCmd = process.env.CCLI_PAGER ?? process.env.PAGER ?? 'less -FRX';
   const parts = pagerCmd.split(/\s+/);
   const pagerBin = parts[0];
   const pagerArgs = parts.slice(1);

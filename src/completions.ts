@@ -297,7 +297,7 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
   // Split into words, preserving trailing space info
   const words = lineToPoint.split(/\s+/).filter(Boolean);
   const endsWithSpace = lineToPoint.endsWith(' ') || lineToPoint === '';
-  const partial = endsWithSpace ? '' : (words.pop() || '');
+  const partial = endsWithSpace ? '' : (words.pop() ?? '');
 
   // words[0] is the program name (ccli); skip it
   const args = words.slice(1);
@@ -305,7 +305,7 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
   // No command typed yet — complete top-level commands
   if (args.length === 0) {
     const topLevel = Object.entries(CLI_TREE).map(
-      ([name, def]) => ({ value: name, description: def.description || '', group: 'commands' })
+      ([name, def]) => ({ value: name, description: def.description ?? '', group: 'commands' })
     );
     return filterPrefix(topLevel, partial);
   }
@@ -316,7 +316,7 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
   // Unknown command — still suggest top-level commands
   if (!cmdDef) {
     const topLevel = Object.entries(CLI_TREE).map(
-      ([name, def]) => ({ value: name, description: def.description || '', group: 'commands' })
+      ([name, def]) => ({ value: name, description: def.description ?? '', group: 'commands' })
     );
     return filterPrefix(topLevel, partial);
   }
@@ -334,7 +334,7 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
     } else if (!endsWithSpace && depth === args.length - 1) {
       // Still typing a subcommand name at this level
       const subs = Object.entries(activeDef.subcommands).map(
-        ([name, def]) => ({ value: name, description: def.description || '', group: 'subcommands' })
+        ([name, def]) => ({ value: name, description: def.description ?? '', group: 'subcommands' })
       );
       return filterPrefix(subs, partial);
     } else {
@@ -345,7 +345,7 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
   // If the active command has subcommands and we haven't descended further, suggest them
   if (activeDef.subcommands && depth === args.length) {
     const subs = Object.entries(activeDef.subcommands).map(
-      ([name, def]) => ({ value: name, description: def.description || '', group: 'subcommands' })
+      ([name, def]) => ({ value: name, description: def.description ?? '', group: 'subcommands' })
     );
     if (endsWithSpace) {
       return subs;
@@ -487,7 +487,7 @@ compdef _ccli_completions ccli
 // --- Install helper ---
 
 export function installCompletions(): void {
-  const shell = process.env.SHELL || '';
+  const shell = process.env.SHELL ?? '';
   let rcFile: string;
   let scriptCmd: string;
 
@@ -521,7 +521,7 @@ export function installCompletions(): void {
 
   // Install shell wrapper for `ccli run` / `ccli r` (eval in current shell)
   // Re-read content since completions block may have been appended above
-  let wrapperContent = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
+  const wrapperContent = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
 
   if (wrapperContent.includes('# CodexCLI shell wrapper')) {
     console.log(`Shell wrapper already installed in ${rcFile}`);

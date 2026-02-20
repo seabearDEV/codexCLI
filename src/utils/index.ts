@@ -3,3 +3,5 @@ export { withPager } from './pager';
 export { isEncrypted, encryptValue, decryptValue, maskEncryptedValues } from './crypto';
 export { interpretEscapes, stripAnsi, visibleLength, wordWrap } from './wordWrap';
 export { interpolate, interpolateObject } from './interpolate';
+export { saveJsonSorted } from './saveJsonSorted';
+export { createCachedStore } from './cachedStore';

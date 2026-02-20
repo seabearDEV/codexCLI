@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/require-await */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -64,7 +65,7 @@ server.tool(
       }
       return textResponse(`Set: ${resolved} = ${value}`);
     } catch (err) {
-      return errorResponse(`Error setting entry: ${err}`);
+      return errorResponse(`Error setting entry: ${String(err)}`);
     }
   }
 );
@@ -142,10 +143,13 @@ server.tool(
       }
       const flat = flattenObject(value, resolvedKey);
       const interpFlat = interpolateObject(flat as Record<string, import("./types").CodexValue>);
-      const lines = Object.entries(interpFlat).map(([k, v]) => `${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
+      const lines = Object.entries(interpFlat).map(([k, v]) => {
+        const strVal = typeof v === 'string' ? v : JSON.stringify(v);
+        return `${k}: ${isEncrypted(strVal) ? '[encrypted]' : strVal}`;
+      });
       return textResponse(lines.join("\n"));
     } catch (err) {
-      return errorResponse(`Error retrieving entry: ${err}`);
+      return errorResponse(`Error retrieving entry: ${String(err)}`);
     }
   }
 );
@@ -179,7 +183,7 @@ server.tool(
       removeAliasesForKey(resolvedKey);
       return textResponse(`Removed: ${resolvedKey}`);
     } catch (err) {
-      return errorResponse(`Error removing entry: ${err}`);
+      return errorResponse(`Error removing entry: ${String(err)}`);
     }
   }
 );
@@ -229,7 +233,7 @@ server.tool(
       }
       return textResponse(results.join("\n"));
     } catch (err) {
-      return errorResponse(`Error searching: ${err}`);
+      return errorResponse(`Error searching: ${String(err)}`);
     }
   }
 );
@@ -255,7 +259,7 @@ server.tool(
       saveAliases(aliases);
       return textResponse(`Alias set: ${alias} -> ${path}`);
     } catch (err) {
-      return errorResponse(`Error setting alias: ${err}`);
+      return errorResponse(`Error setting alias: ${String(err)}`);
     }
   }
 );
@@ -275,7 +279,7 @@ server.tool(
       saveAliases(aliases);
       return textResponse(`Alias removed: ${alias}`);
     } catch (err) {
-      return errorResponse(`Error removing alias: ${err}`);
+      return errorResponse(`Error removing alias: ${String(err)}`);
     }
   }
 );
@@ -295,7 +299,7 @@ server.tool(
       const lines = entries.map(([a, t]) => `${a} -> ${t}`);
       return textResponse(lines.join("\n"));
     } catch (err) {
-      return errorResponse(`Error listing aliases: ${err}`);
+      return errorResponse(`Error listing aliases: ${String(err)}`);
     }
   }
 );
@@ -327,7 +331,7 @@ server.tool(
     try {
       command = interpolate(value);
     } catch (err) {
-      return errorResponse(`Interpolation error: ${err instanceof Error ? err.message : err}`);
+      return errorResponse(`Interpolation error: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     if (dry) {
@@ -337,7 +341,7 @@ server.tool(
     try {
       const stdout = execSync(command, {
         encoding: "utf-8",
-        shell: process.env.SHELL || "/bin/sh",
+        shell: process.env.SHELL ?? "/bin/sh",
         timeout: 30000,
       });
       return textResponse(`$ ${command}\n${stdout}`);
@@ -348,7 +352,7 @@ server.tool(
           `$ ${command}\nCommand failed (exit ${execErr.status}): ${execErr.stderr ?? ""}`
         );
       }
-      return errorResponse(`Error running command: ${err}`);
+      return errorResponse(`Error running command: ${String(err)}`);
     }
   }
 );
@@ -374,7 +378,7 @@ server.tool(
       }
       return textResponse(`${key}: ${value}`);
     } catch (err) {
-      return errorResponse(`Error getting config: ${err}`);
+      return errorResponse(`Error getting config: ${String(err)}`);
     }
   }
 );
@@ -398,7 +402,7 @@ server.tool(
       setConfigSetting(key, value);
       return textResponse(`Config set: ${key} = ${value}`);
     } catch (err) {
-      return errorResponse(`Error setting config: ${err}`);
+      return errorResponse(`Error setting config: ${String(err)}`);
     }
   }
 );
@@ -423,7 +427,7 @@ server.tool(
       const content = type === "entries" ? maskEncryptedValues(loadData()) : loadAliases();
       return textResponse(JSON.stringify(content, null, indent));
     } catch (err) {
-      return errorResponse(`Error exporting: ${err}`);
+      return errorResponse(`Error exporting: ${String(err)}`);
     }
   }
 );
@@ -496,7 +500,7 @@ server.tool(
         `${type === "all" ? "Entries and aliases" : type === "entries" ? "Entries" : "Aliases"} ${merge ? "merged" : "imported"} successfully.`
       );
     } catch (err) {
-      return errorResponse(`Error importing: ${err}`);
+      return errorResponse(`Error importing: ${String(err)}`);
     }
   }
 );
@@ -520,7 +524,7 @@ server.tool(
         `${type === "all" ? "Entries and aliases" : type === "entries" ? "Entries" : "Aliases"} reset to empty state.`
       );
     } catch (err) {
-      return errorResponse(`Error resetting: ${err}`);
+      return errorResponse(`Error resetting: ${String(err)}`);
     }
   }
 );

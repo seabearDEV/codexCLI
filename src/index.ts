@@ -203,7 +203,7 @@ configCommand
 configCommand
   .command('examples')
   .description('Show usage examples')
-  .action(() => { withPager(() => showExamples()); });
+  .action(() => { void withPager(() => showExamples()); });
 
 const completionsCommand = configCommand
   .command('completions')
@@ -295,7 +295,7 @@ const isRootHelp = userArgs.length === 0 ||
 
 if (isRootHelp) {
   if (process.argv.includes('--debug')) process.env.DEBUG = 'true';
-  withPager(() => showHelp());
+  void withPager(() => showHelp());
 } else {
   codexCLI.parse(process.argv);
 }

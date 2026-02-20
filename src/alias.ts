@@ -1,86 +1,26 @@
-import fs from 'fs';
-import { getDataDirectory, getAliasFilePath } from './utils/paths';
+import { getAliasFilePath } from './utils/paths';
 import { debug } from './utils/debug';
-import { atomicWriteFileSync } from './utils/atomicWrite';
+import { createCachedStore } from './utils/cachedStore';
 
 // Interface for the aliases storage
-interface AliasMap {
-  [key: string]: string;
-}
+type AliasMap = Record<string, string>;
 
-// Mtime-based cache for aliases
-let aliasCache: AliasMap | null = null;
-let aliasCacheMtime: number | null = null;
-
-export function clearAliasCache(): void {
-  aliasCache = null;
-  aliasCacheMtime = null;
-}
-
-// Load aliases from storage
-export function loadAliases(): AliasMap {
-  const aliasPath = getAliasFilePath();
-
-  try {
-    // Fast path: check cache via mtime before hitting the filesystem
-    if (aliasCache !== null && aliasCacheMtime !== null) {
-      try {
-        if (fs.statSync(aliasPath).mtimeMs === aliasCacheMtime) {
-          return aliasCache;
-        }
-      } catch {
-        aliasCache = null;
-        aliasCacheMtime = null;
-      }
-    }
-
-    if (!fs.existsSync(aliasPath)) return {};
-
-    const currentMtime = fs.statSync(aliasPath).mtimeMs;
-    const data = fs.readFileSync(aliasPath, 'utf8');
-    const result = data && data.trim() ? JSON.parse(data) : {};
-
-    aliasCache = result;
-    aliasCacheMtime = currentMtime;
-
-    return result;
-  } catch (error) {
-    if (!(error instanceof SyntaxError && error.message.includes('Unexpected end'))) {
-      console.error('Error loading aliases:', error);
-    }
-    return {};
-  }
-}
-
-// Save aliases to storage
-export function saveAliases(aliases: AliasMap): void {
-  const aliasPath = getAliasFilePath();
-  const dataDir = getDataDirectory();
-
-  try {
-    // Ensure directory exists
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-
-    const sorted = Object.fromEntries(Object.entries(aliases).sort(([a], [b]) => a.localeCompare(b)));
-    atomicWriteFileSync(aliasPath, JSON.stringify(sorted, null, 2));
-    const mtime = fs.statSync(aliasPath).mtimeMs;
-    aliasCache = aliases;
-    aliasCacheMtime = mtime;
-  } catch (error) {
-    console.error('Error saving aliases:', error);
-  }
-}
+const store = createCachedStore<AliasMap>(getAliasFilePath, 'aliases');
+// eslint-disable-next-line @typescript-eslint/unbound-method
+export const clearAliasCache = store.clear;
+// eslint-disable-next-line @typescript-eslint/unbound-method
+export const loadAliases = store.load;
+// eslint-disable-next-line @typescript-eslint/unbound-method
+export const saveAliases = store.save;
 
 // Create or update an alias (one alias per entry — replaces any existing alias for the same target)
 export function setAlias(alias: string, path: string): void {
   const aliases = loadAliases();
-  // Enforce one alias per entry: remove any existing alias pointing to the same target
-  for (const [existingAlias, target] of Object.entries(aliases)) {
-    if (target === path && existingAlias !== alias) {
-      delete aliases[existingAlias];
-    }
+  // Enforce one alias per entry: O(1) lookup via inverted map
+  const keyToAlias = buildKeyToAliasMap(aliases);
+  const existing = keyToAlias[path];
+  if (existing && existing !== alias) {
+    delete aliases[existing];
   }
   aliases[alias] = path;
   saveAliases(aliases);
@@ -116,7 +56,7 @@ export function renameAlias(oldName: string, newName: string): boolean {
 // Resolve a key that might be an alias
 export function resolveKey(key: string): string {
   const aliases = loadAliases();
-  const resolved = aliases[key] || key;
+  const resolved = aliases[key] ?? key;
   if (resolved !== key) {
     debug(`Alias resolved: "${key}" -> "${resolved}"`);
   }

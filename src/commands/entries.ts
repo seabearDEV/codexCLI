@@ -73,7 +73,7 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
       commands.push(resolvedSegments.join(' '));
     }
 
-    let value = commands.join(' && ');
+    const value = commands.join(' && ');
 
     if (options.source) {
       process.stderr.write(color.gray('$ ') + color.white(value) + '\n');
@@ -103,7 +103,7 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
       process.stdout.write(value + '\n');
     } else {
       try {
-        execSync(value, { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+        execSync(value, { stdio: 'inherit', shell: process.env.SHELL ?? '/bin/sh' });
       } catch (err: unknown) {
         process.exitCode = (err && typeof err === 'object' && 'status' in err ? Number(err.status) : 1) || 1;
       }
@@ -113,7 +113,33 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
   }
 }
 
-export async function setEntry(key: string, value: string | undefined, force: boolean = false, encrypt: boolean = false, alias?: string, confirm?: boolean): Promise<void> {
+async function promptAndEncrypt(value: string): Promise<string | null> {
+  const password = await askPassword('Password: ');
+  const confirmPw = await askPassword('Confirm password: ');
+  const passwordBuf = Buffer.from(password);
+  const confirmBuf = Buffer.from(confirmPw);
+  if (passwordBuf.length !== confirmBuf.length || !crypto.timingSafeEqual(passwordBuf, confirmBuf)) {
+    printError('Passwords do not match.');
+    process.exitCode = 1;
+    return null;
+  }
+  return encryptValue(value, password);
+}
+
+async function handlePostSetConfirm(key: string, confirm: boolean | undefined): Promise<void> {
+  if (confirm === true) {
+    setConfirm(key);
+  } else if (confirm === false) {
+    removeConfirm(key);
+  } else if (process.stdin.isTTY) {
+    const answer = await askConfirmation('Require confirmation to run? [y/N] ');
+    if (answer.toLowerCase() === 'y') {
+      setConfirm(key);
+    }
+  }
+}
+
+export async function setEntry(key: string, value: string | undefined, force = false, encrypt = false, alias?: string, confirm?: boolean): Promise<void> {
   debug('setEntry called', { key, force, encrypt, alias, confirm });
   try {
     ensureDataDirectoryExists();
@@ -170,16 +196,9 @@ export async function setEntry(key: string, value: string | undefined, force: bo
 
     let storedValue = value;
     if (encrypt) {
-      const password = await askPassword('Password: ');
-      const confirm = await askPassword('Confirm password: ');
-      const passwordBuf = Buffer.from(password);
-      const confirmBuf = Buffer.from(confirm);
-      if (passwordBuf.length !== confirmBuf.length || !crypto.timingSafeEqual(passwordBuf, confirmBuf)) {
-        printError('Passwords do not match.');
-        process.exitCode = 1;
-        return;
-      }
-      storedValue = encryptValue(value, password);
+      const encrypted = await promptAndEncrypt(value);
+      if (encrypted === null) return;
+      storedValue = encrypted;
     }
 
     setValue(key, storedValue);
@@ -189,20 +208,26 @@ export async function setEntry(key: string, value: string | undefined, force: bo
       setAlias(alias, key);
     }
 
-    if (confirm === true) {
-      setConfirm(key);
-    } else if (confirm === false) {
-      removeConfirm(key);
-    } else if (process.stdin.isTTY) {
-      // No explicit flag — ask interactively
-      const answer = await askConfirmation('Require confirmation to run? [y/N] ');
-      if (answer.toLowerCase() === 'y') {
-        setConfirm(key);
-      }
-    }
+    await handlePostSetConfirm(key, confirm);
   } catch (error) {
     handleError('Failed to set entry:', error);
   }
+}
+
+function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<string, string>, options: GetOptions): void {
+  const entries = options.source
+    ? flat as Record<string, CodexValue>
+    : interpolateObject(flat as Record<string, CodexValue>);
+
+  if (options.raw) {
+    for (const [k, v] of Object.entries(entries)) {
+      const strVal = typeof v === 'string' ? v : JSON.stringify(v);
+      console.log(`${k}: ${isEncrypted(strVal) ? '[encrypted]' : strVal}`);
+    }
+    return;
+  }
+
+  displayEntries(entries as Record<string, string>, aliasMap);
 }
 
 function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
@@ -218,19 +243,7 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
     return;
   }
 
-  const flat = flattenObject(data);
-  const entries = options.source
-    ? flat as Record<string, CodexValue>
-    : interpolateObject(flat as Record<string, CodexValue>);
-
-  if (options.raw) {
-    for (const [k, v] of Object.entries(entries)) {
-      console.log(`${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
-    }
-    return;
-  }
-
-  displayEntries(entries as Record<string, string>, aliasMap);
+  displayFlatEntries(flattenObject(data), aliasMap, options);
 }
 
 function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
@@ -239,25 +252,14 @@ function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap
     return;
   }
 
-  const filteredEntries = flattenObject({ [key]: value });
+  const flat = flattenObject({ [key]: value });
 
-  if (Object.keys(filteredEntries).length === 0) {
+  if (Object.keys(flat).length === 0) {
     console.log(`No entries found under '${key}'.`);
     return;
   }
 
-  const entries = options.source
-    ? filteredEntries as Record<string, CodexValue>
-    : interpolateObject(filteredEntries as Record<string, CodexValue>);
-
-  if (options.raw) {
-    for (const [k, v] of Object.entries(entries)) {
-      console.log(`${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
-    }
-    return;
-  }
-
-  displayEntries(entries as Record<string, string>, aliasMap);
+  displayFlatEntries(flat, aliasMap, options);
 }
 
 export async function getEntry(key?: string, options: GetOptions = {}): Promise<void> {
@@ -319,7 +321,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
         printSuccess('Copied to clipboard.');
         return;
       } catch (err) {
-        printError(`Failed to copy: ${err instanceof Error ? err.message : err}`);
+        printError(`Failed to copy: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
     if (options.raw) {
@@ -349,7 +351,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
       printSuccess('Copied to clipboard.');
       return;
     } catch (err) {
-      printError(`Failed to copy: ${err instanceof Error ? err.message : err}`);
+      printError(`Failed to copy: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -361,7 +363,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   displayEntries({ [key]: displayValue }, aliasMap);
 }
 
-export async function removeEntry(key: string, force: boolean = false): Promise<void> {
+export async function removeEntry(key: string, force = false): Promise<void> {
   debug('removeEntry called', { key, force });
 
   const existing = getValue(key);
@@ -389,7 +391,7 @@ export async function removeEntry(key: string, force: boolean = false): Promise<
   printSuccess(`Entry '${key}' removed successfully.`);
 }
 
-export function renameEntry(oldKey: string, newKey: string, aliasMode: boolean = false, newAlias?: string): void {
+export function renameEntry(oldKey: string, newKey: string, aliasMode = false, newAlias?: string): void {
   debug('renameEntry called', { oldKey, newKey, aliasMode, newAlias });
 
   if (aliasMode) {

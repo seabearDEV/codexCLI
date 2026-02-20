@@ -6,7 +6,7 @@ import { debug } from '../utils/debug';
 export function handleConfig(setting?: string, value?: string, options?: { list?: boolean }) {
   debug('handleConfig called', { setting, value, options });
   // Handle the --list option
-  if (options && options.list) {
+  if (options?.list) {
     console.log();
     console.log(`${color.green('colors'.padEnd(15))}: Enable/disable colored output (true/false)`);
     console.log(`${color.green('theme'.padEnd(15))}: UI theme (default/dark/light)`);
@@ -52,6 +52,6 @@ export function configSet(setting: string, value: string): void {
     setConfigSetting(setting, value);
     console.log(`${setting} set to ${value}`);
   } catch (error) {
-    printError(`Error setting config ${setting}: ${error}`);
+    printError(`Error setting config ${setting}: ${String(error)}`);
   }
 }

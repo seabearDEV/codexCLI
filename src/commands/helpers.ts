@@ -43,8 +43,8 @@ export function displayEntries(entries: Record<string, string>, keyToAliasMap?: 
           console.log(`${mlIndent}${line}`);
         } else {
           const wrapped = wordWrap(line, mlWidth);
-          for (let i = 0; i < wrapped.length; i++) {
-            console.log(`${mlIndent}${wrapped[i]}`);
+          for (const line of wrapped) {
+            console.log(`${mlIndent}${line}`);
           }
         }
       }
@@ -101,7 +101,7 @@ export function displayAliases(aliases: Record<string, string>, options?: { tree
 }
 
 export function askConfirmation(prompt: string, output?: NodeJS.WritableStream): Promise<string> {
-  const rl = readline.createInterface({ input: process.stdin, output: output || process.stdout });
+  const rl = readline.createInterface({ input: process.stdin, output: output ?? process.stdout });
   return new Promise((resolve) => {
     rl.question(prompt, (answer) => {
       rl.close();

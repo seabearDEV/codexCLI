@@ -6,9 +6,9 @@ import * as fs from 'fs';
  * Determines if the application is running in development mode
  */
 function isDev(): boolean {
-  return process.env.NODE_ENV === 'development' || 
-         Boolean(process.argv[1] && process.argv[1].includes('ts-node')) ||
-         Boolean(process.env.npm_lifecycle_script && process.env.npm_lifecycle_script.includes('ts-node'));
+  return process.env.NODE_ENV === 'development' ||
+         Boolean(process.argv[1]?.includes('ts-node')) ||
+         Boolean(process.env.npm_lifecycle_script?.includes('ts-node'));
 }
 
 // Add caching for path resolution
@@ -19,12 +19,10 @@ let dataFilePathCache: string | null = null;
  * Get the directory where data files should be stored
  */
 export function getDataDirectory(): string {
-  if (dataDirectoryCache === null) {
-    dataDirectoryCache = process.env.CODEX_DATA_DIR
-      ?? (isDev()
-        ? path.join(path.resolve(__dirname, '..', '..'), 'data')
-        : path.join(os.homedir(), '.codexcli'));
-  }
+  dataDirectoryCache ??= process.env.CODEX_DATA_DIR
+    ?? (isDev()
+      ? path.join(path.resolve(__dirname, '..', '..'), 'data')
+      : path.join(os.homedir(), '.codexcli'));
   return dataDirectoryCache;
 }
 

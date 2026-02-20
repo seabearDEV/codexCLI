@@ -12,7 +12,7 @@ const MAX_DEPTH = 10;
  * References are resolved at read time via the data store and alias map.
  * Supports recursive resolution with circular reference detection.
  */
-export function interpolate(value: string, maxDepth: number = MAX_DEPTH, seen: Set<string> = new Set()): string {
+export function interpolate(value: string, maxDepth: number = MAX_DEPTH, seen = new Set<string>()): string {
   if (!value.includes('${')) return value;
 
   return value.replace(INTERPOLATION_REGEX, (_match, ref: string) => {
