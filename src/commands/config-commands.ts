@@ -7,8 +7,7 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
   debug('handleConfig called', { setting, value, options });
   // Handle the --list option
   if (options && options.list) {
-    console.log(color.bold('Available Configuration Settings:'));
-    console.log('─'.repeat(40));
+    console.log();
     console.log(`${color.green('colors'.padEnd(15))}: Enable/disable colored output (true/false)`);
     console.log(`${color.green('theme'.padEnd(15))}: UI theme (default/dark/light)`);
     return;
@@ -18,8 +17,7 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
   if (!setting) {
     const config = loadConfig();
 
-    console.log(color.bold('Current Configuration:'));
-    console.log('─'.repeat(25));
+    console.log();
 
     for (const [key, val] of Object.entries(config)) {
       console.log(`${color.green(key.padEnd(15))}: ${val}`);

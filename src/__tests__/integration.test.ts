@@ -20,7 +20,7 @@ describe('CLI Integration Tests', () => {
 
   it('shows help when run without arguments', () => {
     const result = run('');
-    expect(result).toContain('CodexCLI');
+    expect(result).toContain('ccli');
     expect(result).toContain('COMMANDS');
   });
 

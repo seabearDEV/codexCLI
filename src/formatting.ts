@@ -100,10 +100,6 @@ export function colorizePathByLevels(path: string, searchTerm?: string): string 
  */
 export function showHelp(): void {
   console.log();
-  console.log('┌───────────────────────────────────────────┐');
-  console.log('│ CodexCLI - Command Line Information Store │');
-  console.log('└───────────────────────────────────────────┘');
-  console.log();
   console.log('USAGE:');
   console.log('  ccli <command> [parameters] [options]');
   console.log();
@@ -187,11 +183,6 @@ export function showExamples(): void {
   const g = color.green;
   const c = color.cyan;
   const section = (title: string) => console.log('\n' + color.boldColors.magenta(title));
-
-  console.log();
-  console.log('┌────────────────────────────┐');
-  console.log('│ CodexCLI - Usage Examples  │');
-  console.log('└────────────────────────────┘');
 
   section('STORING DATA:');
   ex(`${y('ccli')} ${g('set')} ${c('server.ip')} "192.168.1.100"`, '# Store a value');
@@ -277,42 +268,6 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('get')} ${c('api.key')} ${y('-d -c')}`, '# Decrypt and copy to clipboard');
   ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')} ${y('-d -y')}`, '# Decrypt and run without prompt');
 
-  console.log();
-}
-
-export function showConfigHelp(): void {
-  console.log();
-  console.log('┌──────────────────────────────────────┐');
-  console.log('│ CodexCLI - Configuration Management  │');
-  console.log('└──────────────────────────────────────┘');
-  console.log();
-  console.log('USAGE:');
-  console.log('  ccli config [command] [options]');
-  console.log();
-  console.log('COMMANDS:');
-  console.log('  set        <key> <value>          Set a configuration value');
-  console.log('  get        [key]                  Get configuration values');
-  console.log();
-  console.log('  Running `ccli config` with no arguments shows all current settings.');
-
-  console.log('\n' + color.boldColors.magenta('SETTINGS:'));
-
-  const cfgOpt = (key: string, desc: string) => {
-    const pad = ' '.repeat(Math.max(2, 14 - visibleLength(key)));
-    console.log(`  ${color.green(key)}${pad}${desc}`);
-  };
-  cfgOpt('colors', 'Enable/disable colored output (true/false)');
-  cfgOpt('theme', `UI theme (${['default', 'dark', 'light'].join('/')})`);
-
-  const cfgEx = (cmd: string, comment: string) => {
-    const pad = ' '.repeat(Math.max(2, 38 - visibleLength(cmd)));
-    console.log(`  ${cmd}${pad}${color.gray(comment)}`);
-  };
-  console.log('\n' + color.boldColors.magenta('EXAMPLES:'));
-  cfgEx(`${color.yellow('ccli')} ${color.green('config')}`, '# Show all current settings');
-  cfgEx(`${color.yellow('ccli')} ${color.green('config get')} ${color.cyan('theme')}`, '# Get a specific setting');
-  cfgEx(`${color.yellow('ccli')} ${color.green('config set')} ${color.cyan('theme')} dark`, '# Set theme to dark');
-  cfgEx(`${color.yellow('ccli')} ${color.green('config set')} ${color.cyan('colors')} false`, '# Disable colored output');
   console.log();
 }
 

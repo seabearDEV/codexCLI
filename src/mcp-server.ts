@@ -416,9 +416,9 @@ server.tool(
 // --- codex_export ---
 server.tool(
   "codex_export",
-  "Export data and/or aliases as JSON text",
+  "Export entries and/or aliases as JSON text",
   {
-    type: z.enum(["data", "aliases", "all"]).describe("What to export"),
+    type: z.enum(["entries", "aliases", "all"]).describe("What to export"),
     pretty: z.boolean().optional().describe("Pretty-print the JSON (default false)"),
   },
   async ({ type, pretty }) => {
@@ -426,11 +426,11 @@ server.tool(
       const indent = pretty ? 2 : 0;
 
       if (type === "all") {
-        const combined = { data: maskEncryptedValues(loadData()), aliases: loadAliases() };
+        const combined = { entries: maskEncryptedValues(loadData()), aliases: loadAliases() };
         return textResponse(JSON.stringify(combined, null, indent));
       }
 
-      const content = type === "data" ? maskEncryptedValues(loadData()) : loadAliases();
+      const content = type === "entries" ? maskEncryptedValues(loadData()) : loadAliases();
       return textResponse(JSON.stringify(content, null, indent));
     } catch (err) {
       return errorResponse(`Error exporting: ${err}`);
@@ -441,9 +441,9 @@ server.tool(
 // --- codex_import ---
 server.tool(
   "codex_import",
-  "Import data and/or aliases from a JSON string",
+  "Import entries and/or aliases from a JSON string",
   {
-    type: z.enum(["data", "aliases", "all"]).describe("What to import"),
+    type: z.enum(["entries", "aliases", "all"]).describe("What to import"),
     json: z.string().describe("JSON string to import"),
     merge: z.boolean().optional().describe("Merge with existing data instead of replacing (default false)"),
   },
@@ -463,14 +463,14 @@ server.tool(
       const obj = parsed as Record<string, unknown>;
 
       if (type === "all") {
-        const dataVal = obj.data;
+        const dataVal = obj.entries;
         const aliasesVal = obj.aliases;
         if (
           typeof dataVal !== "object" || dataVal === null || Array.isArray(dataVal) ||
           typeof aliasesVal !== "object" || aliasesVal === null || Array.isArray(aliasesVal)
         ) {
           return errorResponse(
-            'Import with type "all" requires {"data": {...}, "aliases": {...}}.'
+            'Import with type "all" requires {"entries": {...}, "aliases": {...}}.'
           );
         }
 
@@ -486,7 +486,7 @@ server.tool(
 
         const currentAliases = merge ? loadAliases() : {};
         saveAliases(merge ? { ...currentAliases, ...(aliasesObj as Record<string, string>) } : aliasesObj as Record<string, string>);
-      } else if (type === "data") {
+      } else if (type === "entries") {
         const current = merge ? loadData() : {};
         const newData = merge ? deepMerge(current, obj) : obj;
         saveData(newData as CodexData);
@@ -503,7 +503,7 @@ server.tool(
       }
 
       return textResponse(
-        `${type === "all" ? "Data and aliases" : type === "data" ? "Data" : "Aliases"} ${merge ? "merged" : "imported"} successfully.`
+        `${type === "all" ? "Entries and aliases" : type === "entries" ? "Entries" : "Aliases"} ${merge ? "merged" : "imported"} successfully.`
       );
     } catch (err) {
       return errorResponse(`Error importing: ${err}`);
@@ -514,20 +514,20 @@ server.tool(
 // --- codex_reset ---
 server.tool(
   "codex_reset",
-  "Reset data and/or aliases to empty state",
+  "Reset entries and/or aliases to empty state",
   {
-    type: z.enum(["data", "aliases", "all"]).describe("What to reset"),
+    type: z.enum(["entries", "aliases", "all"]).describe("What to reset"),
   },
   async ({ type }) => {
     try {
-      if (type === "data" || type === "all") {
+      if (type === "entries" || type === "all") {
         saveData({});
       }
       if (type === "aliases" || type === "all") {
         saveAliases({});
       }
       return textResponse(
-        `${type === "all" ? "Data and aliases" : type === "data" ? "Data" : "Aliases"} reset to empty state.`
+        `${type === "all" ? "Entries and aliases" : type === "entries" ? "Entries" : "Aliases"} reset to empty state.`
       );
     } catch (err) {
       return errorResponse(`Error resetting: ${err}`);

@@ -26,7 +26,7 @@ codexCLI.name('ccli');
 codexCLI.version(version);
 codexCLI.description('A CLI tool for storing and retrieving code snippets, commands, and knowledge');
 
-codexCLI.addHelpCommand(false);
+codexCLI.helpCommand(false);
 
 // Add global debug option
 codexCLI.option('--debug', 'Enable debug mode')
@@ -41,7 +41,7 @@ codexCLI
   .command('set <key> [value...]')
   .alias('s')
   .description('Set an entry (prompts before overwriting)')
-  .option('-f, --force', 'Overwrite existing entries without confirmation')
+  .option('-f, --force', 'Skip confirmation prompt')
   .option('-e, --encrypt', 'Encrypt the value with a password')
   .option('-a, --alias <name>', 'Create an alias for this key')
   .option('-p, --prompt', 'Read value interactively (avoids shell expansion of $, !, etc.)')
@@ -188,7 +188,7 @@ codexCLI
 codexCLI
   .command('init')
   .description('Initialize with example data')
-  .option('-f, --force', 'Force overwrite if data already exists')
+  .option('-f, --force', 'Skip confirmation prompt')
   .action((options: { force?: boolean }) => {
     commands.initializeExampleData(options.force);
   });
@@ -204,9 +204,10 @@ codexCLI
 codexCLI
   .command('export <type>')
   .description('Export data or aliases to a file')
-  .option('--format <format>', 'Output format (json, yaml)')
+  .option('--format <format>', 'File format (json, yaml)')
   .option('-o, --output <file>', 'Output file path')
-  .action(async (type: string, options: { format?: string, output?: string }) => {
+  .option('--pretty', 'Pretty-print the output')
+  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean }) => {
     await withPager(() => commands.exportData(type, options));
   });
 
@@ -214,8 +215,10 @@ codexCLI
 codexCLI
   .command('import <type> <file>')
   .description('Import data or aliases from a file')
-  .option('--format <format>', 'Format of input file')
-  .action(async (type: string, file: string, options: { format?: string }) => {
+  .option('--format <format>', 'File format (json, yaml)')
+  .option('-m, --merge', 'Merge with existing data instead of replacing')
+  .option('-f, --force', 'Skip confirmation prompt')
+  .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean }) => {
     await commands.importData(type, file, options);
   });
 
@@ -223,7 +226,7 @@ codexCLI
 codexCLI
   .command('reset <type>')
   .description('Reset data or aliases to empty state')
-  .option('-f, --force', 'Skip confirmation')
+  .option('-f, --force', 'Skip confirmation prompt')
   .action(async (type: string, options: { force?: boolean }) => {
     await commands.resetData(type, options);
   });
@@ -231,7 +234,8 @@ codexCLI
 // Completions command group
 const completionsCommand = codexCLI
   .command('completions')
-  .description('Generate shell completion scripts');
+  .description('Generate shell completion scripts')
+  .helpCommand(false);
 
 completionsCommand
   .command('bash')

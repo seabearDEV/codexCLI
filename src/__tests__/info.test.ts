@@ -73,10 +73,10 @@ describe('showInfo', () => {
     expect(output).toContain('config.json');
   });
 
-  it('shows the box header', () => {
+  it('shows version label', () => {
     showInfo();
     const output = getOutput();
-    expect(output).toContain('CodexCLI - Info');
+    expect(output).toContain('Version:');
   });
 });
 

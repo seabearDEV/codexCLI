@@ -202,16 +202,16 @@ describe('Completions', () => {
     it('returns export types for export command', () => {
       const results = getCompletions('ccli export ', 12);
       const v = values(results);
-      expect(v).toContain('data');
+      expect(v).toContain('entries');
       expect(v).toContain('aliases');
       expect(v).toContain('all');
     });
 
     it('returns export types with descriptions', () => {
       const results = getCompletions('ccli export ', 12);
-      const dataItem = findItem(results, 'data');
-      expect(dataItem).toBeDefined();
-      expect(dataItem!.description).toBe('Export type');
+      const entriesItem = findItem(results, 'entries');
+      expect(entriesItem).toBeDefined();
+      expect(entriesItem!.description).toBe('Export type');
     });
 
     it('includes global flags when typing a dash', () => {
@@ -332,7 +332,7 @@ describe('Completions', () => {
     it('returns export types for exportType commands', () => {
       const results = getCompletions('ccli export ', 12);
       const v = values(results);
-      expect(v).toContain('data');
+      expect(v).toContain('entries');
       expect(v).toContain('aliases');
       expect(v).toContain('all');
     });

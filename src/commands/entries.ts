@@ -157,8 +157,7 @@ export async function setEntry(key: string, value: string | undefined, force: bo
 function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (Object.keys(data).length === 0) {
     if (options.raw) return;
-    console.log('\n' + color.boldColors.magenta('Entries:'));
-    console.log(color.gray('  No entries found. Add one with "ccli set <key> <value>"'));
+    console.log(color.gray('No entries found. Add one with "ccli set <key> <value>"'));
     console.log('');
     return;
   }

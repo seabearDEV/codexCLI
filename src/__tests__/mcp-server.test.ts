@@ -477,7 +477,7 @@ describe('MCP Server Tools', () => {
   describe('codex_export', () => {
     it('exports data only as valid JSON', async () => {
       Object.assign(mockData, { a: '1' });
-      const result = await toolHandlers['codex_export']({ type: 'data', pretty: undefined });
+      const result = await toolHandlers['codex_export']({ type: 'entries', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed).toEqual({ a: '1' });
       expect(result.content[0].text).not.toContain('---');
@@ -496,19 +496,19 @@ describe('MCP Server Tools', () => {
       Object.assign(mockAliases, { x: 'y' });
       const result = await toolHandlers['codex_export']({ type: 'all', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed).toEqual({ data: { a: '1' }, aliases: { x: 'y' } });
+      expect(parsed).toEqual({ entries: { a: '1' }, aliases: { x: 'y' } });
     });
 
     it('pretty-prints when requested', async () => {
       Object.assign(mockData, { a: '1' });
-      const result = await toolHandlers['codex_export']({ type: 'data', pretty: true });
+      const result = await toolHandlers['codex_export']({ type: 'entries', pretty: true });
       expect(result.content[0].text).toContain('  "a": "1"');
     });
 
     it('masks encrypted values in data export', async () => {
       const encrypted = encryptValue('secret', 'pass');
       Object.assign(mockData, { api: { key: encrypted }, plain: 'visible' });
-      const result = await toolHandlers['codex_export']({ type: 'data', pretty: undefined });
+      const result = await toolHandlers['codex_export']({ type: 'entries', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.api.key).toBe('[encrypted]');
       expect(parsed.plain).toBe('visible');
@@ -520,7 +520,7 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { secret: encrypted });
       const result = await toolHandlers['codex_export']({ type: 'all', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed.data.secret).toBe('[encrypted]');
+      expect(parsed.entries.secret).toBe('[encrypted]');
     });
   });
 
@@ -528,18 +528,18 @@ describe('MCP Server Tools', () => {
     it('imports data (replace)', async () => {
       Object.assign(mockData, { old: 'val' });
       const result = await toolHandlers['codex_import']({
-        type: 'data', json: '{"new":"val"}', merge: undefined,
+        type: 'entries', json: '{"new":"val"}', merge: undefined,
       });
-      expect(result.content[0].text).toContain('Data imported successfully');
+      expect(result.content[0].text).toContain('Entries imported successfully');
       expect(mockData).toEqual({ new: 'val' });
     });
 
     it('imports data (merge)', async () => {
       Object.assign(mockData, { old: 'val' });
       const result = await toolHandlers['codex_import']({
-        type: 'data', json: '{"new":"val"}', merge: true,
+        type: 'entries', json: '{"new":"val"}', merge: true,
       });
-      expect(result.content[0].text).toContain('Data merged successfully');
+      expect(result.content[0].text).toContain('Entries merged successfully');
     });
 
     it('imports aliases (replace)', async () => {
@@ -553,7 +553,7 @@ describe('MCP Server Tools', () => {
 
     it('returns error for invalid JSON', async () => {
       const result = await toolHandlers['codex_import']({
-        type: 'data', json: 'not-json', merge: undefined,
+        type: 'entries', json: 'not-json', merge: undefined,
       });
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('Invalid JSON');
@@ -561,7 +561,7 @@ describe('MCP Server Tools', () => {
 
     it('returns error for non-object JSON', async () => {
       const result = await toolHandlers['codex_import']({
-        type: 'data', json: '[1,2,3]', merge: undefined,
+        type: 'entries', json: '[1,2,3]', merge: undefined,
       });
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('must be an object');
@@ -570,11 +570,11 @@ describe('MCP Server Tools', () => {
     it('imports all (replace) with structured JSON', async () => {
       Object.assign(mockData, { old: 'data' });
       Object.assign(mockAliases, { old: 'alias.path' });
-      const json = JSON.stringify({ data: { new: 'data' }, aliases: { new: 'alias.path' } });
+      const json = JSON.stringify({ entries: { new: 'data' }, aliases: { new: 'alias.path' } });
       const result = await toolHandlers['codex_import']({
         type: 'all', json, merge: undefined,
       });
-      expect(result.content[0].text).toContain('Data and aliases imported successfully');
+      expect(result.content[0].text).toContain('Entries and aliases imported successfully');
       expect(mockData).toEqual({ new: 'data' });
       expect(mockAliases).toEqual({ new: 'alias.path' });
     });
@@ -582,11 +582,11 @@ describe('MCP Server Tools', () => {
     it('imports all (merge) with structured JSON', async () => {
       Object.assign(mockData, { existing: 'data' });
       Object.assign(mockAliases, { existing: 'alias.path' });
-      const json = JSON.stringify({ data: { added: 'data' }, aliases: { added: 'alias.path' } });
+      const json = JSON.stringify({ entries: { added: 'data' }, aliases: { added: 'alias.path' } });
       const result = await toolHandlers['codex_import']({
         type: 'all', json, merge: true,
       });
-      expect(result.content[0].text).toContain('Data and aliases merged successfully');
+      expect(result.content[0].text).toContain('Entries and aliases merged successfully');
       expect(mockData).toEqual({ existing: 'data', added: 'data' });
       expect(mockAliases).toEqual({ existing: 'alias.path', added: 'alias.path' });
     });
@@ -596,7 +596,7 @@ describe('MCP Server Tools', () => {
         type: 'all', json: '{"foo":"bar"}', merge: undefined,
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain('requires {"data"');
+      expect(result.content[0].text).toContain('requires {"entries"');
     });
   });
 
@@ -617,7 +617,7 @@ describe('MCP Server Tools', () => {
 
       // Import
       const result = await toolHandlers['codex_import']({ type: 'all', json, merge: undefined });
-      expect(result.content[0].text).toContain('Data and aliases imported successfully');
+      expect(result.content[0].text).toContain('Entries and aliases imported successfully');
       expect(mockData).toEqual({ server: { ip: '10.0.0.1' } });
       expect(mockAliases).toEqual({ srv: 'server.ip' });
     });
@@ -626,8 +626,8 @@ describe('MCP Server Tools', () => {
   describe('codex_reset', () => {
     it('resets data', async () => {
       Object.assign(mockData, { a: '1' });
-      const result = await toolHandlers['codex_reset']({ type: 'data' });
-      expect(result.content[0].text).toContain('Data reset to empty state');
+      const result = await toolHandlers['codex_reset']({ type: 'entries' });
+      expect(result.content[0].text).toContain('Entries reset to empty state');
       expect(mockData).toEqual({});
     });
 
@@ -642,7 +642,7 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { a: '1' });
       Object.assign(mockAliases, { srv: 'server.ip' });
       const result = await toolHandlers['codex_reset']({ type: 'all' });
-      expect(result.content[0].text).toContain('Data and aliases reset to empty state');
+      expect(result.content[0].text).toContain('Entries and aliases reset to empty state');
       expect(mockData).toEqual({});
       expect(mockAliases).toEqual({});
     });

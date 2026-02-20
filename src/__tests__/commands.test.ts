@@ -451,7 +451,7 @@ describe('Commands', () => {
 
   describe('resetData', () => {
     it('resets data with --force without prompting', async () => {
-      await resetData('data', { force: true });
+      await resetData('entries', { force: true });
 
       expect(fs.writeFileSync).toHaveBeenCalled();
       const savedData = JSON.parse((fs.writeFileSync as Mock).mock.calls[0][1]);
@@ -483,7 +483,7 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await resetData('data', {});
+      await resetData('entries', {});
 
       expect(readline.createInterface).toHaveBeenCalled();
       expect(fs.writeFileSync).not.toHaveBeenCalled();
@@ -501,7 +501,7 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await resetData('data', {});
+      await resetData('entries', {});
 
       expect(readline.createInterface).toHaveBeenCalled();
       expect(fs.writeFileSync).toHaveBeenCalled();
@@ -510,7 +510,7 @@ describe('Commands', () => {
     });
 
     it('does not proceed without --force in non-TTY', async () => {
-      await resetData('data', {});
+      await resetData('entries', {});
 
       expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
@@ -535,7 +535,7 @@ describe('Commands', () => {
     });
 
     it('imports data with --force without prompting', async () => {
-      await importData('data', importFile, { force: true });
+      await importData('entries', importFile, { force: true });
 
       expect(fs.writeFileSync).toHaveBeenCalled();
     });
@@ -553,7 +553,7 @@ describe('Commands', () => {
         return true;
       });
 
-      await importData('data', '/tmp/missing.json', { force: true });
+      await importData('entries', '/tmp/missing.json', { force: true });
 
       expect(console.error).toHaveBeenCalled();
       expect(fs.writeFileSync).not.toHaveBeenCalled();
@@ -569,7 +569,7 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await importData('data', importFile, {});
+      await importData('entries', importFile, {});
 
       expect(readline.createInterface).toHaveBeenCalled();
       expect(fs.writeFileSync).not.toHaveBeenCalled();
@@ -587,7 +587,7 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await importData('data', importFile, {});
+      await importData('entries', importFile, {});
 
       expect(readline.createInterface).toHaveBeenCalled();
       expect(fs.writeFileSync).toHaveBeenCalled();
@@ -596,7 +596,7 @@ describe('Commands', () => {
     });
 
     it('does not proceed without --force in non-TTY', async () => {
-      await importData('data', importFile, {});
+      await importData('entries', importFile, {});
 
       expect(fs.writeFileSync).not.toHaveBeenCalled();
     });
@@ -607,7 +607,7 @@ describe('Commands', () => {
         return JSON.stringify({});
       });
 
-      await importData('data', importFile, { force: true });
+      await importData('entries', importFile, { force: true });
 
       expect(console.error).toHaveBeenCalled();
       const errorCalls = (console.error as Mock).mock.calls;
@@ -624,7 +624,7 @@ describe('Commands', () => {
         return JSON.stringify({});
       });
 
-      await importData('data', importFile, { force: true });
+      await importData('entries', importFile, { force: true });
 
       expect(console.error).toHaveBeenCalled();
       const errorCalls = (console.error as Mock).mock.calls;
@@ -642,7 +642,7 @@ describe('Commands', () => {
         return JSON.stringify({ existing: { key: 'old' } });
       });
 
-      await importData('data', importFile, { force: true, merge: true });
+      await importData('entries', importFile, { force: true, merge: true });
 
       expect(fs.writeFileSync).toHaveBeenCalled();
       const savedData = JSON.parse((fs.writeFileSync as Mock).mock.calls[0][1]);
@@ -683,12 +683,12 @@ describe('Commands', () => {
 
   describe('exportData', () => {
     it('exports data to a file', () => {
-      exportData('data', {});
+      exportData('entries', {});
 
       expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
       const logCalls = (console.log as Mock).mock.calls;
       const showedSuccess = logCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Data exported'))
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Entries exported'))
       );
       expect(showedSuccess).toBe(true);
     });
@@ -718,7 +718,7 @@ describe('Commands', () => {
     });
 
     it('uses pretty printing when option is set', () => {
-      exportData('data', { pretty: true });
+      exportData('entries', { pretty: true });
 
       const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
       const written = writeCall[1];
@@ -731,7 +731,7 @@ describe('Commands', () => {
       const mockData = { api: { key: encryptedVal }, plain: { val: 'visible' } };
       (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
 
-      exportData('data', {});
+      exportData('entries', {});
 
       const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
       const written = writeCall[1];
@@ -741,7 +741,7 @@ describe('Commands', () => {
     });
 
     it('writes to custom output path', () => {
-      exportData('data', { output: '/tmp/custom-export.json' });
+      exportData('entries', { output: '/tmp/custom-export.json' });
 
       const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
       expect(writeCall[0]).toBe('/tmp/custom-export.json');
@@ -753,20 +753,20 @@ describe('Commands', () => {
       handleConfig();
 
       const logCalls = (console.log as Mock).mock.calls;
-      const showedHeader = logCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Current Configuration'))
+      const showedColors = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('colors'))
       );
-      expect(showedHeader).toBe(true);
+      expect(showedColors).toBe(true);
     });
 
     it('lists available settings with --list option', () => {
       handleConfig(undefined, undefined, { list: true });
 
       const logCalls = (console.log as Mock).mock.calls;
-      const showedHeader = logCalls.some(call =>
-        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Available Configuration'))
+      const showedColors = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('colors'))
       );
-      expect(showedHeader).toBe(true);
+      expect(showedColors).toBe(true);
     });
 
     it('shows a specific setting value', () => {

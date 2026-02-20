@@ -12,10 +12,6 @@ export function showInfo(): void {
   const aliasCount = Object.keys(loadAliases()).length;
 
   console.log();
-  console.log('┌──────────────────────────┐');
-  console.log('│ CodexCLI - Info          │');
-  console.log('└──────────────────────────┘');
-  console.log();
 
   const label = (name: string, value: string) => {
     const pad = ' '.repeat(Math.max(2, 18 - name.length));

@@ -543,13 +543,15 @@ export function installCompletions(): void {
     const wrapperBlock = `
 # CodexCLI shell wrapper — eval "ccli run" in the current shell so cd/export/alias work
 ccli() {
-  local subcmd=""
+  local subcmd="" has_help=false
   for arg in "$@"; do
-    [[ "$arg" == -* ]] && continue
-    subcmd="$arg"
-    break
+    if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
+      has_help=true
+    elif [[ "$arg" != -* && -z "$subcmd" ]]; then
+      subcmd="$arg"
+    fi
   done
-  if [[ "$subcmd" == "run" || "$subcmd" == "r" ]]; then
+  if [[ "$has_help" == false && ("$subcmd" == "run" || "$subcmd" == "r") ]]; then
     local __ccli_cmd __ccli_exit
     __ccli_cmd="$(command ccli "$@" --source)"
     __ccli_exit=$?

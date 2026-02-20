@@ -21,10 +21,10 @@ export function exportData(type: string, options: ExportOptions): void {
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const indent = options.pretty ? 2 : 0;
 
-    if (type === 'data' || type === 'all') {
-      const outputFile = options.output || path.join(defaultDir, `codexcli-data-${timestamp}.json`);
+    if (type === 'entries' || type === 'all') {
+      const outputFile = options.output || path.join(defaultDir, `codexcli-entries-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData()), null, indent), 'utf8');
-      printSuccess(`Data exported to: ${color.cyan(outputFile)}`);
+      printSuccess(`Entries exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'aliases' || type === 'all') {
@@ -75,7 +75,7 @@ export async function importData(type: string, file: string, options: ImportOpti
 
     const validData = importedData as Record<string, unknown>;
 
-    if (type === 'data' || type === 'all') {
+    if (type === 'entries' || type === 'all') {
       const currentData = options.merge ? loadData() : {};
 
       const newData = options.merge
@@ -83,7 +83,7 @@ export async function importData(type: string, file: string, options: ImportOpti
         : validData;
 
       saveData(newData as CodexData);
-      printSuccess(`Data ${options.merge ? 'merged' : 'imported'} successfully`);
+      printSuccess(`Entries ${options.merge ? 'merged' : 'imported'} successfully`);
     }
 
     if (type === 'aliases' || type === 'all') {
@@ -123,10 +123,10 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
       if (!confirmed) return;
     }
 
-    // Reset data
-    if (type === 'data' || type === 'all') {
+    // Reset entries
+    if (type === 'entries' || type === 'all') {
       saveData({});
-      printSuccess('Data has been reset to an empty state');
+      printSuccess('Entries have been reset to an empty state');
     }
 
     // Reset aliases
