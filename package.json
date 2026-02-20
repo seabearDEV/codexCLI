@@ -21,7 +21,8 @@
 		"prepublish": "npm run build",
 		"lint": "eslint src/",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"sea": "node scripts/sea-build.js"
 	},
 	"keywords": [
 		"cli",
@@ -38,6 +39,8 @@
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.8",
+		"esbuild": "^0.25.0",
+		"postject": "^1.0.0-alpha.6",
 		"ts-node": "^10.9.2",
 		"tslib": "^2.8.1",
 		"typescript": "^5.8.2",
