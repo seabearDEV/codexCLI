@@ -1,6 +1,6 @@
 {
 	"name": "codexcli",
-	"version": "1.0.0",
+	"version": "0.1.0",
 	"description": "A command-line information store for quick reference of frequently used data",
 	"bin": {
 		"ccli": "dist/index.js",

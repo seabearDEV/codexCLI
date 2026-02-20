@@ -281,21 +281,46 @@ completionsShim
   .command('install')
   .action(() => { installCompletions(); });
 
-// First-run welcome message
-if (!fs.existsSync(getDataDirectory())) {
+// First-run: welcome message + optional completions install
+async function handleFirstRun(): Promise<void> {
+  if (fs.existsSync(getDataDirectory())) return;
+
   console.log();
   console.log('Welcome to CodexCLI! Run `ccli config examples` to see usage patterns.');
+
+  if (!process.stdin.isTTY) {
+    console.log();
+    return;
+  }
+
+  const shell = process.env.SHELL ?? '';
+  if (!shell.endsWith('/zsh') && !shell.endsWith('/bash')) {
+    console.log();
+    return;
+  }
+
+  console.log();
+  const answer = await askConfirmation('Install shell completions and wrapper? [Y/n] ');
+  if (answer.toLowerCase() !== 'n') {
+    installCompletions();
+  } else {
+    console.log('Skipped. Run `ccli config completions install` later to set up.');
+  }
   console.log();
 }
 
-// Show rich help for: ccli, ccli --help, ccli -h, ccli help (with optional --debug)
-const userArgs = process.argv.slice(2).filter(a => a !== '--debug');
-const isRootHelp = userArgs.length === 0 ||
-  (userArgs.length === 1 && ['--help', '-h', 'help'].includes(userArgs[0]));
+void (async () => {
+  await handleFirstRun();
 
-if (isRootHelp) {
-  if (process.argv.includes('--debug')) process.env.DEBUG = 'true';
-  void withPager(() => showHelp());
-} else {
-  codexCLI.parse(process.argv);
-}
+  // Show rich help for: ccli, ccli --help, ccli -h, ccli help (with optional --debug)
+  const userArgs = process.argv.slice(2).filter(a => a !== '--debug');
+  const isRootHelp = userArgs.length === 0 ||
+    (userArgs.length === 1 && ['--help', '-h', 'help'].includes(userArgs[0]));
+
+  if (isRootHelp) {
+    if (process.argv.includes('--debug')) process.env.DEBUG = 'true';
+    void withPager(() => showHelp());
+  } else {
+    codexCLI.parse(process.argv);
+  }
+})();

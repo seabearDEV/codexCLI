@@ -47,15 +47,27 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 
 ## Installation
 
-### Prerequisites
+### Download Binary (Recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/seabearDEV/codexCLI/releases/latest).
+
+```bash
+# macOS (Apple Silicon)
+curl -fsSL https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-darwin-arm64 -o ccli
+chmod +x ccli
+sudo mv ccli /usr/local/bin/
+
+# First run will prompt to install shell completions
+ccli
+```
+
+### Install from Source
 
 Ensure npm's global binaries are in your PATH by adding the following to your shell profile (`.bashrc`, `.zshrc`, or equivalent):
 
 ```bash
 export PATH="$(npm config get prefix)/bin:$PATH"
 ```
-
-### Install from Source
 
 ```bash
 git clone https://github.com/seabearDEV/codexCLI.git
@@ -65,22 +77,7 @@ npm run build
 npm install -g .
 ```
 
-### Post-Install Setup
-
-```bash
-# Verify the command is available
-ccli --version
-
-# Install shell completions and the shell wrapper (recommended)
-ccli config completions install
-
-# Reload your shell
-source ~/.zshrc   # or ~/.bashrc
-```
-
-This installs tab-completion, history exclusion for sensitive commands, and a **shell wrapper** that lets stored commands like `cd`, `export`, and `alias` affect your current shell (see [Shell Wrapper](#shell-wrapper)).
-
-If `ccli` is not found, verify that npm's global bin directory is in your PATH:
+If `ccli` is not found after installing, verify that npm's global bin directory is in your PATH:
 
 ```bash
 echo $PATH | grep -o "$(npm config get prefix)/bin"
