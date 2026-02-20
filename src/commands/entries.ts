@@ -214,26 +214,28 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
   }
 
   if (options.tree) {
-    displayTree(data, aliasMap, '', '', !!options.raw);
+    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source);
     return;
   }
 
   const flat = flattenObject(data);
-  const interpolated = interpolateObject(flat as Record<string, CodexValue>);
+  const entries = options.source
+    ? flat as Record<string, CodexValue>
+    : interpolateObject(flat as Record<string, CodexValue>);
 
   if (options.raw) {
-    for (const [k, v] of Object.entries(interpolated)) {
+    for (const [k, v] of Object.entries(entries)) {
       console.log(`${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
     }
     return;
   }
 
-  displayEntries(interpolated as Record<string, string>, aliasMap);
+  displayEntries(entries as Record<string, string>, aliasMap);
 }
 
 function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (options.tree) {
-    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw);
+    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source);
     return;
   }
 
@@ -244,16 +246,18 @@ function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap
     return;
   }
 
-  const interpolated = interpolateObject(filteredEntries as Record<string, CodexValue>);
+  const entries = options.source
+    ? filteredEntries as Record<string, CodexValue>
+    : interpolateObject(filteredEntries as Record<string, CodexValue>);
 
   if (options.raw) {
-    for (const [k, v] of Object.entries(interpolated)) {
+    for (const [k, v] of Object.entries(entries)) {
       console.log(`${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
     }
     return;
   }
 
-  displayEntries(interpolated as Record<string, string>, aliasMap);
+  displayEntries(entries as Record<string, string>, aliasMap);
 }
 
 export async function getEntry(key?: string, options: GetOptions = {}): Promise<void> {
@@ -285,16 +289,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.copy) {
       printWarning('--copy only works with a single value, not a subtree.');
     }
-    if (!options.raw && !options.source) {
-      try {
-        const interpolated = interpolateObject({ [key]: value });
-        displaySubtree(key, interpolated as Record<string, CodexValue>, aliasMap, options);
-      } catch {
-        displaySubtree(key, value, aliasMap, options);
-      }
-    } else {
-      displaySubtree(key, value, aliasMap, options);
-    }
+    displaySubtree(key, value, aliasMap, options);
     return;
   }
 
