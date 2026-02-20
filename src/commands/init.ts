@@ -31,6 +31,10 @@ export function getExampleData(): import('../types').CodexData {
         "description": "Clean all unused Docker resources"
       }
     },
+    "paths": {
+      "github": "/Users/user/Projects/github.com",
+      "codexcli": "cd ${paths.github}/codexCLI"
+    },
     "server": {
       "production": {
         "ip": "192.168.1.100",
@@ -74,6 +78,7 @@ export function getExampleAliases(): Record<string, string> {
     "welcome": "snippets.welcome.content",
     "gitpush": "snippets.git-push.content",
     "dockerclean": "snippets.docker-clean.content",
+    "codexcli": "paths.codexcli",
     "allsnippets": "snippets",
     "allservers": "server"
   };

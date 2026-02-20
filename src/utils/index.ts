@@ -2,3 +2,4 @@ export { setNestedValue, getNestedValue, removeNestedValue, flattenObject } from
 export { withPager } from './pager';
 export { isEncrypted, encryptValue, decryptValue, maskEncryptedValues } from './crypto';
 export { interpretEscapes, stripAnsi, visibleLength, wordWrap } from './wordWrap';
+export { interpolate, interpolateObject } from './interpolate';

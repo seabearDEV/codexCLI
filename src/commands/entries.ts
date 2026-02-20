@@ -12,6 +12,7 @@ import { GetOptions } from '../types';
 import { printSuccess, printWarning, printError, displayEntries, askConfirmation, askPassword } from './helpers';
 import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
+import { interpolate, interpolateObject } from '../utils/interpolate';
 
 export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }): Promise<void> {
   debug('runCommand called', { key, options });
@@ -44,6 +45,14 @@ export async function runCommand(key: string, options: { yes?: boolean, dry?: bo
         process.exitCode = 1;
         return;
       }
+    }
+
+    try {
+      value = interpolate(value);
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+      return;
     }
 
     if (options.source) {
@@ -204,7 +213,16 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.copy) {
       printWarning('--copy only works with a single value, not a subtree.');
     }
-    displaySubtree(key, value, aliasMap, options);
+    if (!options.raw) {
+      try {
+        const interpolated = interpolateObject({ [key]: value });
+        displaySubtree(key, interpolated as Record<string, CodexValue>, aliasMap, options);
+      } catch {
+        displaySubtree(key, value, aliasMap, options);
+      }
+    } else {
+      displaySubtree(key, value, aliasMap, options);
+    }
     return;
   }
 
@@ -220,9 +238,19 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
       process.exitCode = 1;
       return;
     }
+    let decryptedDisplay = decrypted;
+    if (!options.raw) {
+      try {
+        decryptedDisplay = interpolate(decrypted);
+      } catch (err) {
+        printError(err instanceof Error ? err.message : String(err));
+        process.exitCode = 1;
+        return;
+      }
+    }
     if (options.copy) {
       try {
-        copyToClipboard(decrypted);
+        copyToClipboard(decryptedDisplay);
         printSuccess('Copied to clipboard.');
         return;
       } catch (err) {
@@ -232,13 +260,25 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.raw) {
       console.log(decrypted);
     } else {
-      displayEntries({ [key]: decrypted }, aliasMap);
+      displayEntries({ [key]: decryptedDisplay }, aliasMap);
     }
     return;
   }
 
+  // Interpolate unless --raw or encrypted
+  let displayValue = strValue;
+  if (!options.raw && !isEncrypted(strValue)) {
+    try {
+      displayValue = interpolate(strValue);
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   if (options.copy) {
-    const copyValue = isEncrypted(strValue) ? '[encrypted]' : strValue;
+    const copyValue = isEncrypted(strValue) ? '[encrypted]' : displayValue;
     try {
       copyToClipboard(copyValue);
       printSuccess('Copied to clipboard.');
@@ -253,7 +293,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     return;
   }
 
-  displayEntries({ [key]: strValue }, aliasMap);
+  displayEntries({ [key]: displayValue }, aliasMap);
 }
 
 export function removeEntry(key: string): void {

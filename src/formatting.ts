@@ -194,11 +194,11 @@ export function showExamples(): void {
   console.log('└────────────────────────────┘');
 
   section('STORING DATA:');
-  ex(`${y('ccli')} ${g('set')} ${c('server.ip')} 192.168.1.100`, '# Store a value');
-  ex(`${y('ccli')} ${g('set')} ${c('deploy.cmd')} docker compose up -d`, '# Store a multi-word command');
-  ex(`${y('ccli')} ${g('set')} ${c('api.key')} sk-abc123 ${y('-e')}`, '# Encrypt a secret with a password');
-  ex(`${y('ccli')} ${g('set')} ${c('db.host')} mydb.local ${y('-f')}`, '# Overwrite without confirmation');
-  ex(`${y('ccli')} ${g('set')} ${c('db.host')} mydb.local ${y('-a')} ${c('dbh')}`, '# Store and create alias "dbh" at once');
+  ex(`${y('ccli')} ${g('set')} ${c('server.ip')} "192.168.1.100"`, '# Store a value');
+  ex(`${y('ccli')} ${g('set')} ${c('deploy.cmd')} "docker compose up -d"`, '# Store a multi-word command');
+  ex(`${y('ccli')} ${g('set')} ${c('api.key')} "sk-abc123" ${y('-e')}`, '# Encrypt a secret with a password');
+  ex(`${y('ccli')} ${g('set')} ${c('db.host')} "mydb.local" ${y('-f')}`, '# Overwrite without confirmation');
+  ex(`${y('ccli')} ${g('set')} ${c('db.host')} "mydb.local" ${y('-a')} ${c('dbh')}`, '# Store and create alias "dbh" at once');
 
   section('RETRIEVING DATA:');
   ex(`${y('ccli')} ${g('get')}`, '# List all entries');
@@ -267,6 +267,14 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('info')}`, '# Show version, stats, and storage paths');
   ex(`${y('ccli')} ${g('init')}`, '# Load example data to explore');
   ex(`${y('ccli')} ${g('init')} ${y('-f')}`, '# Reload examples (overwrites existing)');
+
+  section('INTERPOLATION:');
+  ex(`${y('ccli')} ${g('set')} ${c('paths.github')} "/Users/me/Projects/github.com"`, '# Store a base path');
+  ex(`${y('ccli')} ${g('set')} ${c('paths.myproject')} "cd \\$\{paths.github}/myproject"`, '# Reference it with ${key}');
+  ex(`${y('ccli')} ${g('get')} ${c('paths.myproject')}`, '# Resolves: cd /Users/me/Projects/github.com/myproject');
+  ex(`${y('ccli')} ${g('get')} ${c('paths.myproject')} ${y('--raw')}`, '# Shows template: cd ${paths.github}/myproject');
+  ex(`${y('ccli')} ${g('run')} ${c('paths.myproject')} ${y('--dry -y')}`, '# Preview interpolated command');
+  ex(`${y('ccli')} ${g('set')} ${c('paths.myproject')} ${y('-p')}`, '# Use --prompt to avoid escaping ${}');
 
   section('SCRIPTING TIPS:');
   ex(`ssh $(${y('ccli')} ${g('get')} ${c('server.ip')} ${y('-r')})`, '# Use raw output in other commands');

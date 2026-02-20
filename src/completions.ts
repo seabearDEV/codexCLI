@@ -24,7 +24,7 @@ function getMaxCompletionItems(): number {
 }
 
 // Argument types for dynamic completion
-type ArgType = 'dataKey' | 'dataKeyPrefix' | 'aliasName' | 'configKey' | 'exportType' | null;
+type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'aliasName' | 'configKey' | 'exportType' | null;
 
 interface CommandDef {
   flags: Record<string, string>;
@@ -188,6 +188,33 @@ const CLI_TREE: Record<string, CommandDef> = {
       },
     },
   },
+  al: {
+    flags: {},
+    argType: null,
+    description: 'Manage aliases',
+    subcommands: {
+      set:    { flags: {}, argType: 'dataKey', description: 'Set an alias' },
+      s:      { flags: {}, argType: 'dataKey', description: 'Set an alias' },
+      remove: { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
+      rm:     { flags: {}, argType: 'aliasName', description: 'Remove an alias' },
+      rename: { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
+      rn:     { flags: {}, argType: 'aliasName', description: 'Rename an alias' },
+      get: {
+        flags: {
+          '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
+        },
+        argType: 'aliasName',
+        description: 'List or get aliases',
+      },
+      g: {
+        flags: {
+          '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
+        },
+        argType: 'aliasName',
+        description: 'List or get aliases',
+      },
+    },
+  },
   config: {
     flags: {},
     argType: null,
@@ -286,12 +313,14 @@ function getDynamicValues(argType: ArgType): CompletionItem[] {
   switch (argType) {
     case 'dataKey':
     case 'dataKeyPrefix': {
-      const keys = getDataKeys()        .map(k => ({ value: k, description: 'Data key', group: 'data keys' }));
+      const keys = getDataKeys()        .map(k => ({ value: k, description: 'Entry', group: 'data keys' }));
       const aliases = getAliasNames()        .map(a => ({ value: a, description: 'Alias', group: 'aliases' }));
       return [...keys, ...aliases];
     }
+    case 'dataKeyOnly':
+      return getDataKeys()        .map(k => ({ value: k, description: '', group: 'data keys' }));
     case 'aliasName':
-      return getAliasNames()        .map(a => ({ value: a, description: 'Alias', group: 'aliases' }));
+      return getAliasNames()        .map(a => ({ value: a, description: '', group: 'aliases' }));
     case 'configKey':
       return CONFIG_KEYS.map(k => ({ value: k, description: 'Config setting', group: 'config' }));
     case 'exportType':
@@ -508,19 +537,25 @@ _ccli_completions() {
     return
   fi
   local grp_name _ccli_val
-  local -a _ccli_items _ccli_dot _ccli_norm
+  local -a _ccli_items _ccli_dot _ccli_desc _ccli_plain
   for grp_name in \${(ko)groups}; do
     _ccli_items=("\${(@s:|:)groups[\$grp_name]}")
     _ccli_dot=()
-    _ccli_norm=()
+    _ccli_desc=()
+    _ccli_plain=()
     for _ccli_val in "\${_ccli_items[@]}"; do
-      if [[ "\${_ccli_val%%:*}" == *. ]]; then
-        _ccli_dot+=("\${_ccli_val%%:*}")
+      local _ccli_key="\${_ccli_val%%:*}"
+      local _ccli_dsc="\${_ccli_val#*:}"
+      if [[ "\$_ccli_key" == *. ]]; then
+        _ccli_dot+=("\$_ccli_key")
+      elif [[ -n "\$_ccli_dsc" ]]; then
+        _ccli_desc+=("\$_ccli_val")
       else
-        _ccli_norm+=("\$_ccli_val")
+        _ccli_plain+=("\$_ccli_key")
       fi
     done
-    (( \${#_ccli_norm} )) && _describe "\$grp_name" _ccli_norm
+    (( \${#_ccli_desc} )) && _describe "\$grp_name" _ccli_desc
+    (( \${#_ccli_plain} )) && compadd -- "\${_ccli_plain[@]}"
     (( \${#_ccli_dot} )) && compadd -S '' -- "\${_ccli_dot[@]}"
   done
 }

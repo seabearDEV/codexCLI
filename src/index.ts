@@ -25,7 +25,7 @@ if (completionFlagIndex !== -1) {
   const compLine = process.argv[completionFlagIndex + 1] || '';
   const compPoint = parseInt(process.argv[completionFlagIndex + 2] || '0', 10) || compLine.length;
   getCompletions(compLine, compPoint).forEach(r =>
-    console.log(r.description ? `${r.value}\t${r.description}\t${r.group}` : r.value)
+    console.log(`${r.value}\t${r.description}\t${r.group}`)
   );
   process.exit(0);
 }

@@ -34,6 +34,7 @@ import {
 import { version } from "../package.json";
 import { formatTree } from "./formatting";
 import { isEncrypted, maskEncryptedValues } from "./utils/crypto";
+import { interpolate, interpolateObject } from "./utils/interpolate";
 
 function textResponse(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -105,16 +106,25 @@ server.tool(
 
       // Leaf value
       if (typeof value !== "object" || value === null) {
-        const display = isEncrypted(String(value)) ? '[encrypted]' : value;
+        const strVal = String(value);
+        let display: string | number | boolean;
+        if (isEncrypted(strVal)) {
+          display = '[encrypted]';
+        } else if (typeof value === 'string') {
+          try { display = interpolate(strVal); } catch { display = value; }
+        } else {
+          display = value;
+        }
         return textResponse(`${resolvedKey}: ${display}`);
       }
 
-      // Object subtree
+      // Object subtree — interpolate leaf values
       if (format === "tree") {
         return textResponse(formatTree(value, keyToAliasMap, '', resolvedKey, false));
       }
       const flat = flattenObject(value, resolvedKey);
-      const lines = Object.entries(flat).map(([k, v]) => `${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
+      const interpFlat = interpolateObject(flat as Record<string, import("./types").CodexValue>);
+      const lines = Object.entries(interpFlat).map(([k, v]) => `${k}: ${isEncrypted(String(v)) ? '[encrypted]' : v}`);
       return textResponse(lines.join("\n"));
     } catch (err) {
       return errorResponse(`Error retrieving entry: ${err}`);
@@ -280,22 +290,29 @@ server.tool(
       return errorResponse(`Value at '${key}' is encrypted. Decryption is not supported via MCP.`);
     }
 
+    let command = value;
+    try {
+      command = interpolate(value);
+    } catch (err) {
+      return errorResponse(`Interpolation error: ${err instanceof Error ? err.message : err}`);
+    }
+
     if (dry) {
-      return textResponse(`$ ${value}`);
+      return textResponse(`$ ${command}`);
     }
 
     try {
-      const stdout = execSync(value, {
+      const stdout = execSync(command, {
         encoding: "utf-8",
         shell: process.env.SHELL || "/bin/sh",
         timeout: 30000,
       });
-      return textResponse(`$ ${value}\n${stdout}`);
+      return textResponse(`$ ${command}\n${stdout}`);
     } catch (err: unknown) {
       if (err && typeof err === "object" && "status" in err) {
         const execErr = err as { status: number; stderr?: string };
         return errorResponse(
-          `$ ${value}\nCommand failed (exit ${execErr.status}): ${execErr.stderr ?? ""}`
+          `$ ${command}\nCommand failed (exit ${execErr.status}): ${execErr.stderr ?? ""}`
         );
       }
       return errorResponse(`Error running command: ${err}`);

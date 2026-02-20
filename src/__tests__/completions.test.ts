@@ -281,7 +281,7 @@ describe('Completions', () => {
       // Iterates groups with sorted keys
       expect(script).toContain('${(ko)groups}');
       // Uses _describe per group for normal items
-      expect(script).toContain('_describe "$grp_name" _ccli_norm');
+      expect(script).toContain('_describe "$grp_name" _ccli_desc');
       // Uses $'\t' for tab
       expect(script).toContain("$'\\t'");
     });
@@ -308,14 +308,14 @@ describe('Completions', () => {
       expect(v).toContain('myip');
     });
 
-    it('returns data keys with "Data key" description', () => {
+    it('returns data keys with "Entry" description', () => {
       const mockData = { server: { ip: '1.2.3.4' } };
       (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
 
       const results = getCompletions('ccli get ', 9);
       const keyItem = findItem(results, 'server.ip');
       expect(keyItem).toBeDefined();
-      expect(keyItem!.description).toBe('Data key');
+      expect(keyItem!.description).toBe('Entry');
     });
 
     it('returns alias names with "Alias" description', () => {
