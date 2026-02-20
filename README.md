@@ -53,9 +53,19 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 ```bash
 # macOS (Apple Silicon)
-curl -fsSL https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-darwin-arm64 -o ccli
-chmod +x ccli
-sudo mv ccli /usr/local/bin/
+curl -fsSL https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-macos-arm64 -o ccli
+chmod +x ccli && sudo mv ccli /usr/local/bin/
+
+# Linux (x64)
+curl -fsSL https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-linux-x64 -o ccli
+chmod +x ccli && sudo mv ccli /usr/local/bin/
+
+# Linux (ARM64)
+curl -fsSL https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-linux-arm64 -o ccli
+chmod +x ccli && sudo mv ccli /usr/local/bin/
+
+# Windows (x64) — download from:
+# https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-win-x64.exe
 
 # First run will prompt to install shell completions
 ccli
