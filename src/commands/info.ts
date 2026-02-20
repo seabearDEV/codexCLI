@@ -28,7 +28,7 @@ export function showInfo(): void {
 
   console.log();
 
-  label('Data', getDataFilePath());
+  label('Entries', getDataFilePath());
   label('Aliases', getAliasFilePath());
   label('Config', getConfigFilePath());
 

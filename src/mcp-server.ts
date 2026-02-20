@@ -58,20 +58,21 @@ server.tool(
   async ({ key, value, alias }) => {
     try {
       ensureDataDirectoryExists();
-      setValue(key, value);
+      const resolved = resolveKey(key);
+      setValue(resolved, value);
       if (alias) {
         const aliases = loadAliases();
         // Enforce one alias per entry: remove any existing alias for the same target
         for (const [existingAlias, target] of Object.entries(aliases)) {
-          if (target === key && existingAlias !== alias) {
+          if (target === resolved && existingAlias !== alias) {
             delete aliases[existingAlias];
           }
         }
-        aliases[alias] = key;
+        aliases[alias] = resolved;
         saveAliases(aliases);
-        return textResponse(`Set: ${key} = ${value}\nAlias set: ${alias} -> ${key}`);
+        return textResponse(`Set: ${resolved} = ${value}\nAlias set: ${alias} -> ${resolved}`);
       }
-      return textResponse(`Set: ${key} = ${value}`);
+      return textResponse(`Set: ${resolved} = ${value}`);
     } catch (err) {
       return errorResponse(`Error setting entry: ${err}`);
     }

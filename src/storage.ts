@@ -92,7 +92,8 @@ export function saveData(data: CodexData): void {
   const filePath = getDataFilePath();
 
   const result = handleOperation(() => {
-    const content = JSON.stringify(data, null, 2);
+    const sorted = Object.fromEntries(Object.entries(data).sort(([a], [b]) => a.localeCompare(b)));
+    const content = JSON.stringify(sorted, null, 2);
     atomicWriteFileSync(filePath, content);
     return true;
   }, `Failed to save data to ${filePath}`);

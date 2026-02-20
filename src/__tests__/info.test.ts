@@ -68,7 +68,7 @@ describe('showInfo', () => {
   it('shows storage paths', () => {
     showInfo();
     const output = getOutput();
-    expect(output).toContain('data.json');
+    expect(output).toContain('entries.json');
     expect(output).toContain('aliases.json');
     expect(output).toContain('config.json');
   });

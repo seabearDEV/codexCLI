@@ -45,13 +45,20 @@ export function ensureDataDirectoryExists(): string {
 }
 
 /**
- * Returns the path to the data file
- * 
- * @returns {string} Path to the data.json file
+ * Returns the path to the entries file
+ *
+ * @returns {string} Path to the entries.json file
  */
 export function getDataFilePath(): string {
   if (dataFilePathCache === null) {
-    dataFilePathCache = path.join(getDataDirectory(), 'data.json');
+    const dir = getDataDirectory();
+    const newPath = path.join(dir, 'entries.json');
+    const oldPath = path.join(dir, 'data.json');
+    // Auto-migrate: rename data.json -> entries.json if the old file exists
+    if (!fs.existsSync(newPath) && fs.existsSync(oldPath)) {
+      fs.renameSync(oldPath, newPath);
+    }
+    dataFilePathCache = newPath;
   }
   return dataFilePathCache;
 }

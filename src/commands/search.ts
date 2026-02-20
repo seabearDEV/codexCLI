@@ -52,7 +52,7 @@ function displaySearchResults(
   const hasAliasMatches = aliasMatchKeys.length > 0;
 
   if (hasDataMatches) {
-    console.log(`\nData entries (${dataMatchKeys.length}):`);
+    console.log(`\nEntries (${dataMatchKeys.length}):`);
 
     if (options.tree) {
       const matchesObj = {};

@@ -115,7 +115,7 @@ vi.mock('../alias', () => ({
 
 vi.mock('../utils/paths', () => ({
   ensureDataDirectoryExists: vi.fn(),
-  getDataFilePath: vi.fn(() => '/mock/data.json'),
+  getDataFilePath: vi.fn(() => '/mock/entries.json'),
   getAliasFilePath: vi.fn(() => '/mock/aliases.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
 }));
@@ -652,20 +652,20 @@ describe('MCP Server Tools', () => {
     it('initializes example data when no files exist', async () => {
       const result = await toolHandlers['codex_init']({ force: undefined });
       expect(result.content[0].text).toContain('Example data, aliases, and config initialized');
-      expect(mockWrittenFiles['/mock/data.json']).toBeDefined();
+      expect(mockWrittenFiles['/mock/entries.json']).toBeDefined();
       expect(mockWrittenFiles['/mock/aliases.json']).toBeDefined();
       expect(mockWrittenFiles['/mock/config.json']).toBeDefined();
     });
 
     it('returns error when files exist and force is not set', async () => {
-      mockFiles['/mock/data.json'] = true;
+      mockFiles['/mock/entries.json'] = true;
       const result = await toolHandlers['codex_init']({ force: undefined });
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain('already exist');
     });
 
     it('overwrites when force is true', async () => {
-      mockFiles['/mock/data.json'] = true;
+      mockFiles['/mock/entries.json'] = true;
       const result = await toolHandlers['codex_init']({ force: true });
       expect(result.content[0].text).toContain('Example data, aliases, and config initialized');
     });

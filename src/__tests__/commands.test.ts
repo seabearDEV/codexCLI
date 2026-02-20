@@ -1139,7 +1139,7 @@ describe('Commands', () => {
 
       const logCalls = (console.log as Mock).mock.calls;
       const output = logCalls.map(c => c.join(' ')).join('\n');
-      expect(output).toContain('Data entries');
+      expect(output).toContain('Entries (');
       expect(output).toContain('Aliases');
     });
 

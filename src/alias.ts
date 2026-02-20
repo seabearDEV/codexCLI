@@ -63,7 +63,8 @@ export function saveAliases(aliases: AliasMap): void {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
-    atomicWriteFileSync(aliasPath, JSON.stringify(aliases, null, 2));
+    const sorted = Object.fromEntries(Object.entries(aliases).sort(([a], [b]) => a.localeCompare(b)));
+    atomicWriteFileSync(aliasPath, JSON.stringify(sorted, null, 2));
     const mtime = fs.statSync(aliasPath).mtimeMs;
     aliasCache = aliases;
     aliasCacheMtime = mtime;

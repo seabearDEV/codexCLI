@@ -77,7 +77,7 @@ codexCLI
     } else {
       value = valueArray.join(' ');
     }
-    await commands.setEntry(key.replace(/:$/, ''), value, options.force, options.encrypt, options.alias);
+    await commands.setEntry(resolveKey(key.replace(/:$/, '')), value, options.force, options.encrypt, options.alias);
     if (options.clear) {
       process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
     }

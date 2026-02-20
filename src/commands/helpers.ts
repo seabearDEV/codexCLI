@@ -26,7 +26,7 @@ export function displayEntries(entries: Record<string, string>, keyToAliasMap?: 
     const lines = displayed.split('\n');
 
     const prefix = alias
-      ? `${colorizedPath}: ${color.blue('(' + alias + ')')}`
+      ? `${colorizedPath} ${color.blue('(' + alias + ')')}:`
       : `${colorizedPath}:`;
 
     const termWidth = process.stdout.columns || 80;

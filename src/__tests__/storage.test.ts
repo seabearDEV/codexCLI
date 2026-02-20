@@ -20,7 +20,7 @@ vi.mock('../formatting', () => ({
 }));
 
 vi.mock('../utils/paths', () => ({
-  getDataFilePath: vi.fn(() => '/mock/data.json')
+  getDataFilePath: vi.fn(() => '/mock/entries.json')
 }));
 
 describe('Storage', () => {
@@ -139,13 +139,13 @@ describe('Storage', () => {
       saveData({ key: 'value' });
 
       expect(fs.writeFileSync).toHaveBeenCalledWith(
-        '/mock/data.json.tmp',
+        '/mock/entries.json.tmp',
         JSON.stringify({ key: 'value' }, null, 2),
         'utf8'
       );
       expect(fs.renameSync).toHaveBeenCalledWith(
-        '/mock/data.json.tmp',
-        '/mock/data.json'
+        '/mock/entries.json.tmp',
+        '/mock/entries.json'
       );
     });
 
