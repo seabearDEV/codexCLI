@@ -14,7 +14,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
 
-export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }): Promise<void> {
+export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, prefix?: string, suffix?: string, source?: boolean }): Promise<void> {
   debug('runCommand called', { key, options });
   try {
     let value = getValue(key);
@@ -54,6 +54,9 @@ export async function runCommand(key: string, options: { yes?: boolean, dry?: bo
       process.exitCode = 1;
       return;
     }
+
+    if (options.prefix) value = interpolate(options.prefix) + value;
+    if (options.suffix) value = value + interpolate(options.suffix);
 
     if (options.source) {
       process.stderr.write(color.gray('$ ') + color.white(value) + '\n');
@@ -232,7 +235,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.copy) {
       printWarning('--copy only works with a single value, not a subtree.');
     }
-    if (!options.raw) {
+    if (!options.raw && !options.source) {
       try {
         const interpolated = interpolateObject({ [key]: value });
         displaySubtree(key, interpolated as Record<string, CodexValue>, aliasMap, options);
@@ -282,9 +285,9 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     return;
   }
 
-  // Interpolate unless encrypted
+  // Interpolate unless encrypted or --source
   let displayValue = strValue;
-  if (!isEncrypted(strValue)) {
+  if (!isEncrypted(strValue) && !options.source) {
     try {
       displayValue = interpolate(strValue);
     } catch (err) {

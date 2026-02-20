@@ -90,10 +90,11 @@ codexCLI
   .description('Retrieve entries or specific data')
   .option('-t, --tree', 'Display data in a hierarchical tree structure')
   .option('-r, --raw', 'Output plain text without colors (for scripting)')
+  .option('-s, --source', 'Show stored value before interpolation')
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
   .option('-c, --copy', 'Copy value to clipboard')
   .option('-a, --aliases', 'Show aliases only')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean }) => {
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }
@@ -108,8 +109,10 @@ codexCLI
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry', 'Print the command without executing')
   .option('-d, --decrypt', 'Decrypt an encrypted command before running')
+  .option('-p, --prefix <cmd>', 'Prepend to the command before executing')
+  .option('--suffix <cmd>', 'Append to the command before executing')
   .option('--source', 'Output command to stdout for shell eval (used by shell wrapper)')
-  .action(async (key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }) => {
+  .action(async (key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, prefix?: string, suffix?: string, source?: boolean }) => {
     key = resolveKey(key.replace(/:$/, ''));
     await commands.runCommand(key, options);
   });

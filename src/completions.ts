@@ -44,6 +44,7 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '-t': 'Display as tree',
   '--raw': 'Output raw values',
   '-r': 'Output raw values',
+  '-s': 'Show before interpolation',
   '--format': 'Set output format',
   '--force': 'Skip confirmation',
   '-f': 'Skip confirmation',
@@ -61,7 +62,10 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--copy': 'Copy value to clipboard',
   '-c': 'Copy value to clipboard',
   '--clear': 'Clear terminal after setting',
-  '--source': 'Output for shell eval',
+  '--source': 'Show source/raw output',
+  '--prefix': 'Prepend to command',
+  '-p': 'Prepend to command',
+  '--suffix': 'Append to command',
 };
 
 const GLOBAL_FLAGS: Record<string, string> = {
@@ -85,6 +89,7 @@ const CLI_TREE: Record<string, CommandDef> = {
     flags: {
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
       '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
+      '--source': FLAG_DESCRIPTIONS['--source'], '-s': FLAG_DESCRIPTIONS['-s'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
@@ -96,6 +101,7 @@ const CLI_TREE: Record<string, CommandDef> = {
     flags: {
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
       '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
+      '--source': FLAG_DESCRIPTIONS['--source'], '-s': FLAG_DESCRIPTIONS['-s'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
@@ -108,6 +114,8 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
       '--dry': FLAG_DESCRIPTIONS['--dry'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--prefix': FLAG_DESCRIPTIONS['--prefix'], '-p': FLAG_DESCRIPTIONS['-p'],
+      '--suffix': FLAG_DESCRIPTIONS['--suffix'],
       '--source': FLAG_DESCRIPTIONS['--source'],
     },
     argType: 'dataKey',
@@ -118,6 +126,8 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
       '--dry': FLAG_DESCRIPTIONS['--dry'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--prefix': FLAG_DESCRIPTIONS['--prefix'], '-p': FLAG_DESCRIPTIONS['-p'],
+      '--suffix': FLAG_DESCRIPTIONS['--suffix'],
       '--source': FLAG_DESCRIPTIONS['--source'],
     },
     argType: 'dataKey',

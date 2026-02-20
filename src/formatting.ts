@@ -148,6 +148,7 @@ export function showHelp(): void {
   console.log('\n' + color.boldColors.magenta('OPTIONS (get):'));
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display data in a hierarchical tree structure');
   opt(`${color.yellow('--raw')}, ${color.yellow('-r')}`, 'Output plain text without colors (for scripting)');
+  opt(`${color.yellow('--source')}, ${color.yellow('-s')}`, 'Show stored value before interpolation');
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value');
   opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard');
   opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Show aliases only');
@@ -156,6 +157,8 @@ export function showHelp(): void {
   opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt');
   opt(`${color.yellow('--dry')}`, 'Print the command without executing');
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted command before running');
+  opt(`${color.yellow('--prefix')} <cmd>, ${color.yellow('-p')}`, 'Prepend to the command before executing');
+  opt(`${color.yellow('--suffix')} <cmd>`, 'Append to the command before executing');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (find):'));
   opt(`${color.yellow('--entries')}, ${color.yellow('-e')}`, 'Search only in data entries');
