@@ -6,7 +6,7 @@ import { displayTree } from '../formatting';
 import { color } from '../formatting';
 import { execSync } from 'child_process';
 import { ensureDataDirectoryExists } from '../utils/paths';
-import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases } from '../alias';
+import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, resolveKey } from '../alias';
 import { debug } from '../utils/debug';
 import { GetOptions } from '../types';
 import { printSuccess, printWarning, printError, displayEntries, displayAliases, askConfirmation, askPassword } from './helpers';
@@ -14,49 +14,63 @@ import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
 
-export async function runCommand(key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, prefix?: string, suffix?: string, source?: boolean }): Promise<void> {
-  debug('runCommand called', { key, options });
+export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }): Promise<void> {
+  debug('runCommand called', { keys, options });
   try {
-    let value = getValue(key);
+    const commands: string[] = [];
 
-    if (value === undefined) {
-      printError(`Entry '${key}' not found.`);
-      process.exitCode = 1;
-      return;
-    }
+    for (const keyGroup of keys) {
+      // Split on : for composition (e.g. "cd:codexcli" → "cd /path")
+      const segments = keyGroup.replace(/:$/, '').split(':');
+      const resolvedSegments: string[] = [];
 
-    if (typeof value !== 'string') {
-      printError(`Entry '${key}' is not a string command (got ${typeof value}).`);
-      process.exitCode = 1;
-      return;
-    }
+      for (const segment of segments) {
+        const resolvedKey = resolveKey(segment);
+        let value = getValue(resolvedKey);
 
-    if (isEncrypted(value)) {
-      if (!options.decrypt) {
-        printError(`Entry '${key}' is encrypted. Use --decrypt to decrypt and run.`);
-        process.exitCode = 1;
-        return;
+        if (value === undefined) {
+          printError(`Entry '${segment}' not found.`);
+          process.exitCode = 1;
+          return;
+        }
+
+        if (typeof value !== 'string') {
+          printError(`Entry '${segment}' is not a string command (got ${typeof value}).`);
+          process.exitCode = 1;
+          return;
+        }
+
+        if (isEncrypted(value)) {
+          if (!options.decrypt) {
+            printError(`Entry '${segment}' is encrypted. Use --decrypt to decrypt and run.`);
+            process.exitCode = 1;
+            return;
+          }
+          const password = await askPassword('Password: ');
+          try {
+            value = decryptValue(value, password);
+          } catch {
+            printError('Decryption failed. Wrong password or corrupted data.');
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        try {
+          value = interpolate(value);
+        } catch (err) {
+          printError(err instanceof Error ? err.message : String(err));
+          process.exitCode = 1;
+          return;
+        }
+
+        resolvedSegments.push(value);
       }
-      const password = await askPassword('Password: ');
-      try {
-        value = decryptValue(value, password);
-      } catch {
-        printError('Decryption failed. Wrong password or corrupted data.');
-        process.exitCode = 1;
-        return;
-      }
+
+      commands.push(resolvedSegments.join(' '));
     }
 
-    try {
-      value = interpolate(value);
-    } catch (err) {
-      printError(err instanceof Error ? err.message : String(err));
-      process.exitCode = 1;
-      return;
-    }
-
-    if (options.prefix) value = interpolate(options.prefix) + value;
-    if (options.suffix) value = value + interpolate(options.suffix);
+    let value = commands.join(' && ');
 
     if (options.source) {
       process.stderr.write(color.gray('$ ') + color.white(value) + '\n');

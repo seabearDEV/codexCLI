@@ -112,7 +112,7 @@ export function showHelp(): void {
   };
   cmd('set',      's',  '<key> [value]',      'Set an entry (value optional with -a)');
   cmd('get',      'g',  '[key]',              'Retrieve entries or specific data');
-  cmd('run',      'r',  '<key>',              'Execute a stored command');
+  cmd('run',      'r',  '<keys...>',          'Execute stored command(s) (: compose, && chain)');
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
   cmd('config',   '',   '[setting] [value]',  'View or change configuration settings');
@@ -151,8 +151,6 @@ export function showHelp(): void {
   opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt');
   opt(`${color.yellow('--dry')}`, 'Print the command without executing');
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted command before running');
-  opt(`${color.yellow('--prefix')} <cmd>, ${color.yellow('-p')}`, 'Prepend to the command before executing');
-  opt(`${color.yellow('--suffix')} <cmd>`, 'Append to the command before executing');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (find):'));
   opt(`${color.yellow('--entries')}, ${color.yellow('-e')}`, 'Search only in data entries');
@@ -206,6 +204,7 @@ export function showExamples(): void {
   ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')}`, '# Execute (prompts for confirmation)');
   ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')} ${y('-y')}`, '# Execute without confirmation');
   ex(`${y('ccli')} ${g('run')} ${c('deploy.cmd')} ${y('--dry')}`, '# Preview command without executing');
+  ex(`${y('ccli')} ${g('run')} ${c('nav.project')} ${c('commands.list')}`, '# Chain: cd /path && ls -l');
   ex(`${y('ccli')} ${g('run')} ${c('secret.script')} ${y('-d')}`, '# Decrypt and execute');
 
   section('SEARCHING:');

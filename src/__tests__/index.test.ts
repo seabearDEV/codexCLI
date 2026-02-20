@@ -149,11 +149,9 @@ describe('CLI Entry Point (index.ts)', () => {
     expect(mockGetEntry).toHaveBeenCalledWith(undefined, expect.any(Object));
   });
 
-  it('run command resolves key and calls runCommand', async () => {
-    mockResolveKey.mockReturnValueOnce('resolved.cmd');
+  it('run command passes raw keys array to runCommand', async () => {
     await loadCLI('run', 'my.cmd');
-    expect(mockResolveKey).toHaveBeenCalledWith('my.cmd');
-    expect(mockRunCommand).toHaveBeenCalledWith('resolved.cmd', expect.any(Object));
+    expect(mockRunCommand).toHaveBeenCalledWith(['my.cmd'], expect.any(Object));
   });
 
   it('find command calls searchEntries with options', async () => {

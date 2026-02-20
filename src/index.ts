@@ -105,18 +105,15 @@ codexCLI
 
 // Run command
 codexCLI
-  .command('run <key>')
+  .command('run <keys...>')
   .alias('r')
-  .description('Execute a stored command')
+  .description('Execute stored command(s) (use : to compose, multiple keys &&-chain)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry', 'Print the command without executing')
   .option('-d, --decrypt', 'Decrypt an encrypted command before running')
-  .option('-p, --prefix <cmd>', 'Prepend to the command before executing')
-  .option('--suffix <cmd>', 'Append to the command before executing')
   .option('--source', 'Output command to stdout for shell eval (used by shell wrapper)')
-  .action(async (key: string, options: { yes?: boolean, dry?: boolean, decrypt?: boolean, prefix?: string, suffix?: string, source?: boolean }) => {
-    key = resolveKey(key.replace(/:$/, ''));
-    await commands.runCommand(key, options);
+  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }) => {
+    await commands.runCommand(keys, options);
   });
 
 // Find command

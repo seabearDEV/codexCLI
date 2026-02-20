@@ -353,13 +353,13 @@ describe('Commands', () => {
     });
 
     it('executes a stored string command with --yes', async () => {
-      await runCommand('commands.greet', { yes: true });
+      await runCommand(['commands.greet'], { yes: true });
 
       expect(execSync).toHaveBeenCalledWith('echo hello', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
     });
 
     it('prints the command before executing', async () => {
-      await runCommand('commands.greet', { yes: true });
+      await runCommand(['commands.greet'], { yes: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const showedCommand = logCalls.some(call =>
@@ -369,7 +369,7 @@ describe('Commands', () => {
     });
 
     it('skips confirmation with --yes', async () => {
-      await runCommand('commands.greet', { yes: true });
+      await runCommand(['commands.greet'], { yes: true });
 
       // Should not have created a readline interface
       expect(readline.createInterface).not.toHaveBeenCalled();
@@ -377,7 +377,7 @@ describe('Commands', () => {
     });
 
     it('prints command without executing with --dry', async () => {
-      await runCommand('commands.greet', { dry: true });
+      await runCommand(['commands.greet'], { dry: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const showedCommand = logCalls.some(call =>
@@ -388,7 +388,7 @@ describe('Commands', () => {
     });
 
     it('errors when key is not found', async () => {
-      await runCommand('nonexistent.key', { yes: true });
+      await runCommand(['nonexistent.key'], { yes: true });
 
       expect(console.error).toHaveBeenCalled();
       const errorCalls = (console.error as Mock).mock.calls;
@@ -400,7 +400,7 @@ describe('Commands', () => {
     });
 
     it('errors when value is an object', async () => {
-      await runCommand('commands.nested', { yes: true });
+      await runCommand(['commands.nested'], { yes: true });
 
       expect(console.error).toHaveBeenCalled();
       const errorCalls = (console.error as Mock).mock.calls;
@@ -421,7 +421,7 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await runCommand('commands.greet', {});
+      await runCommand(['commands.greet'], {});
 
       expect(readline.createInterface).toHaveBeenCalled();
       expect(execSync).not.toHaveBeenCalled();
@@ -439,12 +439,47 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await runCommand('commands.greet', {});
+      await runCommand(['commands.greet'], {});
 
       expect(readline.createInterface).toHaveBeenCalled();
       expect(execSync).toHaveBeenCalledWith('echo hello', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
 
       Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
+    });
+
+    it('chains multiple keys with && into a single command', async () => {
+      const mockData = {
+        commands: { nav: 'cd /Users/me/project', list: 'ls -l' },
+      };
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
+
+      await runCommand(['commands.nav', 'commands.list'], { yes: true });
+
+      expect(execSync).toHaveBeenCalledWith('cd /Users/me/project && ls -l', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+    });
+
+    it('composes colon-separated keys with space-join', async () => {
+      const mockData = {
+        commands: { cd: 'cd' },
+        paths: { project: '/Users/me/project' },
+      };
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
+
+      await runCommand(['commands.cd:paths.project'], { yes: true });
+
+      expect(execSync).toHaveBeenCalledWith('cd /Users/me/project', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+    });
+
+    it('combines colon composition and && chaining', async () => {
+      const mockData = {
+        commands: { cd: 'cd', list: 'ls -l' },
+        paths: { project: '/Users/me/project' },
+      };
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
+
+      await runCommand(['commands.cd:paths.project', 'commands.list'], { yes: true });
+
+      expect(execSync).toHaveBeenCalledWith('cd /Users/me/project && ls -l', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
     });
   });
 
@@ -1090,14 +1125,14 @@ describe('Commands', () => {
     });
 
     it('emits raw command to stdout in source mode', async () => {
-      await runCommand('commands.greet', { yes: true, source: true });
+      await runCommand(['commands.greet'], { yes: true, source: true });
 
       expect(stdoutWriteSpy).toHaveBeenCalledWith('echo hello\n');
       expect(execSync).not.toHaveBeenCalled();
     });
 
     it('writes preview to stderr in source mode', async () => {
-      await runCommand('commands.greet', { yes: true, source: true });
+      await runCommand(['commands.greet'], { yes: true, source: true });
 
       const stderrCalls = stderrWriteSpy.mock.calls;
       const showedPreview = stderrCalls.some((call: unknown[]) =>
@@ -1109,7 +1144,7 @@ describe('Commands', () => {
     });
 
     it('emits nothing to stdout with --source --dry', async () => {
-      await runCommand('commands.greet', { dry: true, source: true });
+      await runCommand(['commands.greet'], { dry: true, source: true });
 
       expect(stdoutWriteSpy).not.toHaveBeenCalled();
       // But preview should still go to stderr
@@ -1130,7 +1165,7 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await runCommand('commands.greet', { source: true });
+      await runCommand(['commands.greet'], { source: true });
 
       expect(readline.createInterface).toHaveBeenCalledWith(
         expect.objectContaining({ output: process.stderr })
@@ -1149,7 +1184,7 @@ describe('Commands', () => {
       };
       (readline.createInterface as Mock).mockReturnValue(mockRl);
 
-      await runCommand('commands.greet', { source: true });
+      await runCommand(['commands.greet'], { source: true });
 
       const stderrCalls = stderrWriteSpy.mock.calls;
       const showedAborted = stderrCalls.some((call: unknown[]) =>
@@ -1179,7 +1214,7 @@ describe('Commands', () => {
         throw err;
       });
 
-      await runCommand('commands.fail', { yes: true });
+      await runCommand(['commands.fail'], { yes: true });
 
       expect(process.exitCode).toBe(42);
       process.exitCode = originalExitCode;
@@ -1344,7 +1379,7 @@ describe('Commands', () => {
       const mockData = { commands: { secret: encryptedVal } };
       (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
 
-      await runCommand('commands.secret', { yes: true });
+      await runCommand(['commands.secret'], { yes: true });
 
       const errorCalls = (console.error as Mock).mock.calls;
       const showedError = errorCalls.some(call =>
@@ -1360,7 +1395,7 @@ describe('Commands', () => {
       (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
       (askPassword as Mock).mockResolvedValueOnce('mypass');
 
-      await runCommand('commands.secret', { yes: true, decrypt: true });
+      await runCommand(['commands.secret'], { yes: true, decrypt: true });
 
       expect(execSync).toHaveBeenCalledWith('echo hello', expect.anything());
     });
