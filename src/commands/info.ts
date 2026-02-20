@@ -4,12 +4,14 @@ import path from 'path';
 import { version } from '../../package.json';
 import { getEntriesFlat } from '../storage';
 import { loadAliases } from '../alias';
-import { getDataFilePath, getAliasFilePath, getConfigFilePath } from '../utils/paths';
+import { loadConfirmKeys } from '../confirm';
+import { getDataFilePath, getAliasFilePath, getConfigFilePath, getConfirmFilePath } from '../utils/paths';
 import { color } from '../formatting';
 
 export function showInfo(): void {
   const entryCount = Object.keys(getEntriesFlat()).length;
   const aliasCount = Object.keys(loadAliases()).length;
+  const confirmCount = Object.keys(loadConfirmKeys()).length;
 
   console.log();
 
@@ -21,11 +23,13 @@ export function showInfo(): void {
   label('Version', color.cyan(version));
   label('Entries', String(entryCount));
   label('Aliases', String(aliasCount));
+  label('Confirm keys', String(confirmCount));
 
   console.log();
 
   label('Entries', getDataFilePath());
   label('Aliases', getAliasFilePath());
+  label('Confirm', getConfirmFilePath());
   label('Config', getConfigFilePath());
 
   console.log();

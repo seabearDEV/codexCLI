@@ -2,6 +2,7 @@ import readline from 'readline';
 import { colorizePathByLevels, displayTree } from '../formatting';
 import { color } from '../formatting';
 import { buildKeyToAliasMap } from '../alias';
+import { loadConfirmKeys } from '../confirm';
 import { isEncrypted } from '../utils/crypto';
 import { interpretEscapes, visibleLength, wordWrap } from '../utils/wordWrap';
 
@@ -19,15 +20,17 @@ export function printWarning(message: string): void {
 
 export function displayEntries(entries: Record<string, string>, keyToAliasMap?: Record<string, string>): void {
   const aliasMap = keyToAliasMap ?? buildKeyToAliasMap();
+  const confirmKeys = loadConfirmKeys();
   Object.entries(entries).forEach(([key, value]) => {
     const colorizedPath = colorizePathByLevels(key);
     const alias = aliasMap[key];
+    const confirmTag = confirmKeys[key] ? ` ${color.red('[confirm]')}` : '';
     const displayed = isEncrypted(value) ? '[encrypted]' : interpretEscapes(value);
     const lines = displayed.split('\n');
 
     const prefix = alias
-      ? `${colorizedPath} ${color.blue('(' + alias + ')')}:`
-      : `${colorizedPath}:`;
+      ? `${colorizedPath} ${color.blue('(' + alias + ')')}${confirmTag}:`
+      : `${colorizedPath}${confirmTag}:`;
 
     const termWidth = process.stdout.columns || 80;
 

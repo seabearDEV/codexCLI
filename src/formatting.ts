@@ -114,6 +114,7 @@ export function showHelp(): void {
   cmd('get',      'g',  '[key]',              'Retrieve entries or specific data');
   cmd('run',      'r',  '<keys...>',          'Execute stored command(s) (: compose, && chain)');
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
+  cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
   cmd('config',   '',   '[setting] [value]',  'View or change configuration settings');
   cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
@@ -138,6 +139,8 @@ export function showHelp(): void {
   opt(`${color.yellow('--prompt')}, ${color.yellow('-p')}`, 'Read value interactively (avoids shell expansion)');
   opt(`${color.yellow('--show')}, ${color.yellow('-s')}`, 'Show input when using --prompt (default is masked)');
   opt(`${color.yellow('--clear')}, ${color.yellow('-c')}`, 'Clear terminal and scrollback after setting');
+  opt(`${color.yellow('--confirm')}`, 'Require confirmation before running this entry');
+  opt(`${color.yellow('--no-confirm')}`, 'Remove confirmation requirement from this entry');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (get):'));
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display data in a hierarchical tree structure');
@@ -148,7 +151,7 @@ export function showHelp(): void {
   opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Show aliases only');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (run):'));
-  opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt');
+  opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt (for entries marked --confirm)');
   opt(`${color.yellow('--dry')}`, 'Print the command without executing');
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted command before running');
 
@@ -157,7 +160,12 @@ export function showHelp(): void {
   opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Search only in aliases');
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display results in a tree structure');
 
+  console.log('\n' + color.boldColors.magenta('OPTIONS (rename):'));
+  opt(`${color.yellow('--alias')}, ${color.yellow('-a')}`, 'Rename an alias instead of an entry key');
+  opt(`${color.yellow('--set-alias')} <name>`, 'Set an alias on the renamed key');
+
   console.log('\n' + color.boldColors.magenta('OPTIONS (remove):'));
+  opt(`${color.yellow('--force')}, ${color.yellow('-f')}`, 'Skip confirmation prompt');
   opt(`${color.yellow('--alias')}, ${color.yellow('-a')}`, 'Remove the alias only (keep the entry)');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (global):'));

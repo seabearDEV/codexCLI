@@ -81,3 +81,12 @@ export function getAliasFilePath(): string {
 export function getConfigFilePath(): string {
   return path.join(getDataDirectory(), 'config.json');
 }
+
+/**
+ * Get the path to the confirm metadata file
+ *
+ * @returns {string} Path to the confirm.json file
+ */
+export function getConfirmFilePath(): string {
+  return path.join(getDataDirectory(), 'confirm.json');
+}

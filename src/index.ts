@@ -49,7 +49,9 @@ codexCLI
   .option('-p, --prompt', 'Read value interactively (avoids shell expansion of $, !, etc.)')
   .option('-s, --show', 'Show input when using --prompt (default is masked)')
   .option('-c, --clear', 'Clear terminal and scrollback after setting (removes sensitive input from history)')
-  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean }) => {
+  .option('--confirm', 'Require confirmation before running this entry')
+  .option('--no-confirm', 'Remove confirmation requirement from this entry')
+  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean }) => {
     let value: string | undefined;
     if (options.prompt) {
       if (!process.stdin.isTTY) {
@@ -69,8 +71,8 @@ codexCLI
         }
       }
     } else if (valueArray.length === 0) {
-      // Allow no value when -a is provided (alias-only update)
-      if (!options.alias) {
+      // Allow no value when -a or --confirm/--no-confirm is provided (metadata-only update)
+      if (!options.alias && options.confirm === undefined) {
         printError('Missing value. Provide a value or use --prompt (-p) to enter it interactively.');
         process.exitCode = 1;
         return;
@@ -79,7 +81,7 @@ codexCLI
     } else {
       value = valueArray.join(' ');
     }
-    await commands.setEntry(resolveKey(key.replace(/:$/, '')), value, options.force, options.encrypt, options.alias);
+    await commands.setEntry(resolveKey(key.replace(/:$/, '')), value, options.force, options.encrypt, options.alias, options.confirm);
     if (options.clear) {
       process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
     }
@@ -132,13 +134,29 @@ codexCLI
     }));
   });
 
+// Rename command
+codexCLI
+  .command('rename <old> <new>')
+  .alias('rn')
+  .description('Rename an entry key or alias')
+  .option('-a, --alias', 'Rename an alias instead of an entry key')
+  .option('--set-alias <name>', 'Set an alias on the renamed key')
+  .action((oldName: string, newName: string, options: { alias?: boolean, setAlias?: string }) => {
+    if (options.alias) {
+      commands.renameEntry(oldName, newName, true);
+    } else {
+      commands.renameEntry(resolveKey(oldName.replace(/:$/, '')), newName, false, options.setAlias);
+    }
+  });
+
 // Remove command
 codexCLI
   .command('remove <key>')
   .alias('rm')
   .description('Remove an entry')
   .option('-a, --alias', 'Remove the alias only (keep the entry)')
-  .action((key: string, options: { alias?: boolean }) => {
+  .option('-f, --force', 'Skip confirmation prompt')
+  .action(async (key: string, options: { alias?: boolean, force?: boolean }) => {
     if (options.alias) {
       const removed = removeAlias(key);
       if (removed) {
@@ -148,7 +166,7 @@ codexCLI
         process.exitCode = 1;
       }
     } else {
-      commands.removeEntry(resolveKey(key.replace(/:$/, '')));
+      await commands.removeEntry(resolveKey(key.replace(/:$/, '')), options.force);
     }
   });
 

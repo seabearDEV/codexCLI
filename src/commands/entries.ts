@@ -6,7 +6,8 @@ import { displayTree } from '../formatting';
 import { color } from '../formatting';
 import { execSync } from 'child_process';
 import { ensureDataDirectoryExists } from '../utils/paths';
-import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, resolveKey } from '../alias';
+import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, resolveKey, renameAlias, removeAlias } from '../alias';
+import { hasConfirm, setConfirm, removeConfirm, removeConfirmForKey } from '../confirm';
 import { debug } from '../utils/debug';
 import { GetOptions } from '../types';
 import { printSuccess, printWarning, printError, displayEntries, displayAliases, askConfirmation, askPassword } from './helpers';
@@ -18,6 +19,7 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
   debug('runCommand called', { keys, options });
   try {
     const commands: string[] = [];
+    const resolvedKeys: string[] = [];
 
     for (const keyGroup of keys) {
       // Split on : for composition (e.g. "cd:codexcli" → "cd /path")
@@ -26,6 +28,7 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
 
       for (const segment of segments) {
         const resolvedKey = resolveKey(segment);
+        resolvedKeys.push(resolvedKey);
         let value = getValue(resolvedKey);
 
         if (value === undefined) {
@@ -82,7 +85,9 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
       return;
     }
 
-    if (!options.yes && process.stdin.isTTY) {
+    // Only prompt if any resolved key has confirm metadata set (and --yes not passed)
+    const needsConfirm = resolvedKeys.some(k => hasConfirm(k));
+    if (needsConfirm && !options.yes && process.stdin.isTTY) {
       const answer = await askConfirmation('Run this? [y/N] ', options.source ? process.stderr : undefined);
       if (answer.toLowerCase() !== 'y') {
         if (options.source) {
@@ -108,13 +113,33 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
   }
 }
 
-export async function setEntry(key: string, value: string | undefined, force: boolean = false, encrypt: boolean = false, alias?: string): Promise<void> {
-  debug('setEntry called', { key, force, encrypt, alias });
+export async function setEntry(key: string, value: string | undefined, force: boolean = false, encrypt: boolean = false, alias?: string, confirm?: boolean): Promise<void> {
+  debug('setEntry called', { key, force, encrypt, alias, confirm });
   try {
     ensureDataDirectoryExists();
 
-    // Alias-only update: no value provided, just update the alias on an existing entry
+    // Confirm-only or alias-only update: no value provided
     if (value === undefined) {
+      // Handle --confirm / --no-confirm on an existing entry (no value needed)
+      if (confirm !== undefined) {
+        const existing = getValue(key);
+        if (existing === undefined) {
+          printError(`Entry '${key}' not found. Cannot update confirm on a non-existent entry.`);
+          process.exitCode = 1;
+          return;
+        }
+        if (confirm) {
+          setConfirm(key);
+          printSuccess(`Entry '${key}' now requires confirmation to run.`);
+        } else {
+          removeConfirm(key);
+          printSuccess(`Entry '${key}' no longer requires confirmation to run.`);
+        }
+        if (alias) {
+          setAlias(alias, key);
+        }
+        return;
+      }
       if (!alias) {
         printError('Missing value. Provide a value or use --alias (-a) to update an alias.');
         process.exitCode = 1;
@@ -158,10 +183,22 @@ export async function setEntry(key: string, value: string | undefined, force: bo
     }
 
     setValue(key, storedValue);
-    printSuccess(`Entry '${key}' set successfully.`);
+    console.log(`Entry '${key}' set successfully.`);
 
     if (alias) {
       setAlias(alias, key);
+    }
+
+    if (confirm === true) {
+      setConfirm(key);
+    } else if (confirm === false) {
+      removeConfirm(key);
+    } else if (process.stdin.isTTY) {
+      // No explicit flag — ask interactively
+      const answer = await askConfirmation('Require confirmation to run? [y/N] ');
+      if (answer.toLowerCase() === 'y') {
+        setConfirm(key);
+      }
     }
   } catch (error) {
     handleError('Failed to set entry:', error);
@@ -329,17 +366,106 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   displayEntries({ [key]: displayValue }, aliasMap);
 }
 
-export function removeEntry(key: string): void {
-  debug('removeEntry called', { key });
-  const removed = removeValue(key);
+export async function removeEntry(key: string, force: boolean = false): Promise<void> {
+  debug('removeEntry called', { key, force });
 
-  if (!removed) {
+  const existing = getValue(key);
+  if (existing === undefined) {
     printWarning(`Entry '${key}' not found.`);
     return;
   }
 
+  if (!force && process.stdin.isTTY) {
+    const answer = await askConfirmation(`Remove '${key}'? [y/N] `);
+    if (answer.toLowerCase() !== 'y') {
+      console.log('Aborted.');
+      return;
+    }
+  }
+
+  removeValue(key);
+
   // Cascade delete: remove any aliases pointing to this key or its children
   removeAliasesForKey(key);
 
+  // Cascade delete: remove confirm metadata for this key or its children
+  removeConfirmForKey(key);
+
   printSuccess(`Entry '${key}' removed successfully.`);
+}
+
+export function renameEntry(oldKey: string, newKey: string, aliasMode: boolean = false, newAlias?: string): void {
+  debug('renameEntry called', { oldKey, newKey, aliasMode, newAlias });
+
+  if (aliasMode) {
+    const result = renameAlias(oldKey, newKey);
+    if (!result) {
+      const aliases = loadAliases();
+      if (!(oldKey in aliases)) {
+        printError(`Alias '${oldKey}' not found.`);
+      } else {
+        printError(`Alias '${newKey}' already exists.`);
+      }
+      process.exitCode = 1;
+      return;
+    }
+    printSuccess(`Alias '${oldKey}' renamed to '${newKey}'.`);
+    return;
+  }
+
+  // Entry key rename
+  const value = getValue(oldKey);
+  if (value === undefined) {
+    printError(`Entry '${oldKey}' not found.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const existing = getValue(newKey);
+  if (existing !== undefined) {
+    printError(`Entry '${newKey}' already exists. Remove it first or choose a different key.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  // Move the value
+  if (typeof value === 'string') {
+    setValue(newKey, value);
+  } else {
+    // For subtrees, flatten and re-set each leaf under the new prefix
+    const flat = flattenObject({ [oldKey]: value });
+    for (const [flatKey, flatVal] of Object.entries(flat)) {
+      const suffix = flatKey.slice(oldKey.length);
+      setValue(newKey + suffix, String(flatVal));
+    }
+  }
+  removeValue(oldKey);
+
+  // Update aliases: re-point any alias targeting oldKey (or children) to newKey
+  const aliases = loadAliases();
+  const oldPrefix = oldKey + '.';
+  for (const [alias, target] of Object.entries(aliases)) {
+    if (typeof target !== 'string') continue;
+    if (target === oldKey) {
+      removeAlias(alias);
+      setAlias(alias, newKey);
+    } else if (target.startsWith(oldPrefix)) {
+      const newTarget = newKey + target.slice(oldKey.length);
+      removeAlias(alias);
+      setAlias(alias, newTarget);
+    }
+  }
+
+  // Move confirm metadata
+  if (hasConfirm(oldKey)) {
+    removeConfirm(oldKey);
+    setConfirm(newKey);
+  }
+
+  // Set a new alias on the renamed key
+  if (newAlias) {
+    setAlias(newAlias, newKey);
+  }
+
+  printSuccess(`Entry '${oldKey}' renamed to '${newKey}'.`);
 }

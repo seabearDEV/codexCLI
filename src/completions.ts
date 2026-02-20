@@ -63,6 +63,8 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '-c': 'Copy value to clipboard',
   '--clear': 'Clear terminal after setting',
   '--source': 'Show source/raw output',
+  '--confirm': 'Require confirmation to run',
+  '--no-confirm': 'Remove confirmation requirement',
 };
 
 const GLOBAL_FLAGS: Record<string, string> = {
@@ -73,12 +75,12 @@ const GLOBAL_FLAGS: Record<string, string> = {
 
 const CLI_TREE: Record<string, CommandDef> = {
   set: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'] },
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'], '--confirm': FLAG_DESCRIPTIONS['--confirm'], '--no-confirm': FLAG_DESCRIPTIONS['--no-confirm'] },
     argType: 'dataKeyPrefix',
     description: 'Set an entry',
   },
   s: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'] },
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'], '--confirm': FLAG_DESCRIPTIONS['--confirm'], '--no-confirm': FLAG_DESCRIPTIONS['--no-confirm'] },
     argType: 'dataKeyPrefix',
     description: 'Set an entry',
   },
@@ -144,13 +146,23 @@ const CLI_TREE: Record<string, CommandDef> = {
     argType: null,
     description: 'Find entries by key or value',
   },
+  rename: {
+    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Rename alias', '--set-alias': 'Set alias on renamed key' },
+    argType: 'dataKey',
+    description: 'Rename an entry key or alias',
+  },
+  rn: {
+    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Rename alias', '--set-alias': 'Set alias on renamed key' },
+    argType: 'dataKey',
+    description: 'Rename an entry key or alias',
+  },
   remove: {
-    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only' },
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only' },
     argType: 'dataKey',
     description: 'Remove an entry',
   },
   rm: {
-    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only' },
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only' },
     argType: 'dataKey',
     description: 'Remove an entry',
   },

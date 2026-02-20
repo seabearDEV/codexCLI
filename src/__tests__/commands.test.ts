@@ -6,6 +6,7 @@ import {
   getEntry,
   searchEntries,
   removeEntry,
+  renameEntry,
   runCommand,
   resetData,
   importData,
@@ -19,6 +20,7 @@ import { copyToClipboard } from '../utils/clipboard';
 import { stripAnsi } from '../utils/wordWrap';
 import { clearDataCache } from '../storage';
 import { clearAliasCache } from '../alias';
+import { clearConfirmCache } from '../confirm';
 import { clearConfigCache } from '../config';
 
 // Mock child_process
@@ -71,6 +73,7 @@ describe('Commands', () => {
     vi.resetAllMocks();
     clearDataCache();
     clearAliasCache();
+    clearConfirmCache();
     clearConfigCache();
     console.log = vi.fn();
     console.error = vi.fn();
@@ -307,28 +310,137 @@ describe('Commands', () => {
   });
   
   describe('removeEntry', () => {
-    it('removes an existing entry', () => {
-      removeEntry('server.production.ip');
-      
+    it('removes an existing entry with --force', async () => {
+      await removeEntry('server.production.ip', true);
+
       // Verify writeFileSync was called to save updated data
       expect(fs.writeFileSync).toHaveBeenCalled();
-      
+
       // Extract the saved data
       const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
       const savedData = JSON.parse(savedCall[1]);
-      
+
       // Check that the entry was removed
       expect(savedData.server.production.ip).toBeUndefined();
     });
-    
-    it('handles non-existent keys gracefully', () => {
-      // Update our expectation to match actual behavior
-      // In your implementation, maybe it doesn't log errors for non-existent keys
-      removeEntry('nonexistent.key');
 
-      // Instead of checking for console.error, check that writeFileSync wasn't called
-      // (assuming you don't write anything when removing a non-existent key)
+    it('skips prompt in non-TTY', async () => {
+      await removeEntry('server.production.ip');
+
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      expect(readline.createInterface).not.toHaveBeenCalled();
+    });
+
+    it('prompts on TTY and removes on accept', async () => {
+      const originalIsTTY = process.stdin.isTTY;
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      const mockRl = {
+        question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('y')),
+        close: vi.fn(),
+      };
+      (readline.createInterface as Mock).mockReturnValue(mockRl);
+
+      await removeEntry('server.production.ip');
+
+      expect(readline.createInterface).toHaveBeenCalled();
+      expect(fs.writeFileSync).toHaveBeenCalled();
+
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
+    });
+
+    it('prompts on TTY and aborts on decline', async () => {
+      const originalIsTTY = process.stdin.isTTY;
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      const mockRl = {
+        question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('n')),
+        close: vi.fn(),
+      };
+      (readline.createInterface as Mock).mockReturnValue(mockRl);
+
+      await removeEntry('server.production.ip');
+
+      expect(readline.createInterface).toHaveBeenCalled();
       expect(fs.writeFileSync).not.toHaveBeenCalled();
+
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
+    });
+
+    it('handles non-existent keys gracefully', async () => {
+      await removeEntry('nonexistent.key');
+
+      expect(fs.writeFileSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('renameEntry', () => {
+    it('renames an entry key', () => {
+      renameEntry('server.production.ip', 'network.prod.ip');
+
+      // Should have written the new key and removed the old
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      const lastWrite = (fs.writeFileSync as Mock).mock.calls;
+      // Find the data file write (not alias/confirm writes)
+      const dataWrites = lastWrite.filter((call: unknown[]) =>
+        typeof call[1] === 'string' && call[1].includes('network')
+      );
+      expect(dataWrites.length).toBeGreaterThan(0);
+    });
+
+    it('errors when old key does not exist', () => {
+      renameEntry('nonexistent.key', 'new.key');
+
+      expect(console.error).toHaveBeenCalled();
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('not found'))
+      );
+      expect(showedError).toBe(true);
+    });
+
+    it('errors when new key already exists', () => {
+      renameEntry('server.production.ip', 'server.development.ip');
+
+      expect(console.error).toHaveBeenCalled();
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('already exists'))
+      );
+      expect(showedError).toBe(true);
+    });
+
+    it('renames an alias in alias mode', () => {
+      const mockAliases = { oldname: 'server.production.ip' };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
+        return JSON.stringify({ server: { production: { ip: '192.168.1.100' } } });
+      });
+
+      renameEntry('oldname', 'newname', true);
+
+      expect(fs.writeFileSync).toHaveBeenCalled();
+      const logCalls = (console.log as Mock).mock.calls;
+      const showedSuccess = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('renamed'))
+      );
+      expect(showedSuccess).toBe(true);
+    });
+
+    it('errors when alias does not exist in alias mode', () => {
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('aliases')) return JSON.stringify({});
+        return JSON.stringify({ server: { production: { ip: '192.168.1.100' } } });
+      });
+
+      renameEntry('nonexistent', 'newname', true);
+
+      expect(console.error).toHaveBeenCalled();
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('not found'))
+      );
+      expect(showedError).toBe(true);
     });
   });
 
@@ -411,9 +523,31 @@ describe('Commands', () => {
       expect(execSync).not.toHaveBeenCalled();
     });
 
-    it('prompts for confirmation on TTY and aborts on decline', async () => {
+    it('runs without prompting when no confirm metadata is set', async () => {
       const originalIsTTY = process.stdin.isTTY;
       Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      await runCommand(['commands.greet'], {});
+
+      // No confirm metadata → runs without prompting
+      expect(readline.createInterface).not.toHaveBeenCalled();
+      expect(execSync).toHaveBeenCalledWith('echo hello', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
+    });
+
+    it('prompts for confirmation on TTY when confirm metadata is set and aborts on decline', async () => {
+      const originalIsTTY = process.stdin.isTTY;
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      // Set up confirm metadata for commands.greet
+      const mockData = { commands: { greet: 'echo hello', nested: { deep: 'echo deep' } } };
+      const confirmData = { 'commands.greet': true };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('confirm')) return JSON.stringify(confirmData);
+        return JSON.stringify(mockData);
+      });
+      clearConfirmCache();
 
       const mockRl = {
         question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('n')),
@@ -429,9 +563,18 @@ describe('Commands', () => {
       Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
     });
 
-    it('prompts for confirmation on TTY and executes on accept', async () => {
+    it('prompts for confirmation on TTY when confirm metadata is set and executes on accept', async () => {
       const originalIsTTY = process.stdin.isTTY;
       Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      // Set up confirm metadata for commands.greet
+      const mockData = { commands: { greet: 'echo hello', nested: { deep: 'echo deep' } } };
+      const confirmData = { 'commands.greet': true };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('confirm')) return JSON.stringify(confirmData);
+        return JSON.stringify(mockData);
+      });
+      clearConfirmCache();
 
       const mockRl = {
         question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('y')),
@@ -443,6 +586,26 @@ describe('Commands', () => {
 
       expect(readline.createInterface).toHaveBeenCalled();
       expect(execSync).toHaveBeenCalledWith('echo hello', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+
+      Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
+    });
+
+    it('skips prompt with --yes even when confirm metadata is set', async () => {
+      const originalIsTTY = process.stdin.isTTY;
+      Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      const mockData = { commands: { greet: 'echo hello', nested: { deep: 'echo deep' } } };
+      const confirmData = { 'commands.greet': true };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('confirm')) return JSON.stringify(confirmData);
+        return JSON.stringify(mockData);
+      });
+      clearConfirmCache();
+
+      await runCommand(['commands.greet'], { yes: true });
+
+      expect(readline.createInterface).not.toHaveBeenCalled();
+      expect(execSync).toHaveBeenCalled();
 
       Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
     });
@@ -710,8 +873,8 @@ describe('Commands', () => {
 
       await importData('all', importFile, { force: true });
 
-      // Should write both data and aliases
-      expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+      // Should write data, aliases, and confirm keys
+      expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -738,10 +901,11 @@ describe('Commands', () => {
       expect(showedSuccess).toBe(true);
     });
 
-    it('exports all to two files', () => {
+    it('exports all to three files', () => {
       exportData('all', {});
 
-      expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+      // entries + aliases + confirm
+      expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
     });
 
     it('rejects invalid type', () => {
@@ -1155,9 +1319,18 @@ describe('Commands', () => {
       expect(showedPreview).toBe(true);
     });
 
-    it('uses stderr for confirmation prompt in source mode', async () => {
+    it('uses stderr for confirmation prompt in source mode when confirm is set', async () => {
       const originalIsTTY = process.stdin.isTTY;
       Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      // Set up confirm metadata
+      const mockData = { commands: { greet: 'echo hello', nav: 'cd ~/projects' } };
+      const confirmData = { 'commands.greet': true };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('confirm')) return JSON.stringify(confirmData);
+        return JSON.stringify(mockData);
+      });
+      clearConfirmCache();
 
       const mockRl = {
         question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('y')),
@@ -1174,9 +1347,18 @@ describe('Commands', () => {
       Object.defineProperty(process.stdin, 'isTTY', { value: originalIsTTY, configurable: true });
     });
 
-    it('writes Aborted to stderr in source mode', async () => {
+    it('writes Aborted to stderr in source mode when confirm is set', async () => {
       const originalIsTTY = process.stdin.isTTY;
       Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+
+      // Set up confirm metadata
+      const mockData = { commands: { greet: 'echo hello', nav: 'cd ~/projects' } };
+      const confirmData = { 'commands.greet': true };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('confirm')) return JSON.stringify(confirmData);
+        return JSON.stringify(mockData);
+      });
+      clearConfirmCache();
 
       const mockRl = {
         question: vi.fn((_prompt: string, cb: (answer: string) => void) => cb('n')),
@@ -1222,10 +1404,11 @@ describe('Commands', () => {
   });
 
   describe('resetData additional', () => {
-    it('resets all (data + aliases) with force', async () => {
+    it('resets all (data + aliases + confirm) with force', async () => {
       await resetData('all', { force: true });
 
-      expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+      // entries + aliases + confirm
+      expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -1240,12 +1423,12 @@ describe('Commands', () => {
       expect(console.error).toHaveBeenCalled();
     });
 
-    it('handles removeEntry storage error gracefully', () => {
+    it('handles removeEntry storage error gracefully', async () => {
       (fs.writeFileSync as Mock).mockImplementation(() => {
         throw new Error('disk full');
       });
 
-      removeEntry('server.production.ip');
+      await removeEntry('server.production.ip', true);
 
       expect(console.error).toHaveBeenCalled();
     });

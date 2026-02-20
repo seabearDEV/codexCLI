@@ -6,6 +6,7 @@ const mockGetEntry = vi.fn();
 const mockRunCommand = vi.fn().mockResolvedValue(undefined);
 const mockSearchEntries = vi.fn();
 const mockRemoveEntry = vi.fn();
+const mockRenameEntry = vi.fn();
 const mockHandleConfig = vi.fn();
 const mockConfigSet = vi.fn();
 const mockShowInfo = vi.fn();
@@ -39,6 +40,7 @@ function setupMocks() {
     runCommand: mockRunCommand,
     searchEntries: mockSearchEntries,
     removeEntry: mockRemoveEntry,
+    renameEntry: mockRenameEntry,
     handleConfig: mockHandleConfig,
     configSet: mockConfigSet,
     showInfo: mockShowInfo,
@@ -134,7 +136,7 @@ describe('CLI Entry Point (index.ts)', () => {
 
   it('set command calls setEntry with joined value', async () => {
     await loadCLI('set', '--force', 'my.key', 'my', 'value');
-    expect(mockSetEntry).toHaveBeenCalledWith('my.key', 'my value', true, undefined, undefined);
+    expect(mockSetEntry).toHaveBeenCalledWith('my.key', 'my value', true, undefined, undefined, undefined);
   });
 
   it('get command resolves key via resolveKey before calling getEntry', async () => {
@@ -163,7 +165,27 @@ describe('CLI Entry Point (index.ts)', () => {
     mockResolveKey.mockReturnValueOnce('resolved.key');
     await loadCLI('remove', 'my.key');
     expect(mockResolveKey).toHaveBeenCalledWith('my.key');
-    expect(mockRemoveEntry).toHaveBeenCalledWith('resolved.key');
+    expect(mockRemoveEntry).toHaveBeenCalledWith('resolved.key', undefined);
+  });
+
+  // --- Rename commands ---
+
+  it('rename command calls renameEntry with resolved old key', async () => {
+    mockResolveKey.mockReturnValueOnce('resolved.old');
+    await loadCLI('rename', 'old.key', 'new.key');
+    expect(mockResolveKey).toHaveBeenCalledWith('old.key');
+    expect(mockRenameEntry).toHaveBeenCalledWith('resolved.old', 'new.key', false, undefined);
+  });
+
+  it('rename -a calls renameEntry in alias mode', async () => {
+    await loadCLI('rename', '-a', 'oldalias', 'newalias');
+    expect(mockRenameEntry).toHaveBeenCalledWith('oldalias', 'newalias', true);
+  });
+
+  it('rename --set-alias sets alias on renamed key', async () => {
+    mockResolveKey.mockReturnValueOnce('resolved.old');
+    await loadCLI('rename', 'old.key', 'new.key', '--set-alias', 'myalias');
+    expect(mockRenameEntry).toHaveBeenCalledWith('resolved.old', 'new.key', false, 'myalias');
   });
 
   // --- Config commands ---
