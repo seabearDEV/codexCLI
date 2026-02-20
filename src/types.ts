@@ -18,13 +18,11 @@ export interface SearchOptions {
 }
 
 export interface ExportOptions {
-  format?: string;
   output?: string;
   pretty?: boolean;
 }
 
 export interface ImportOptions {
-  format?: string;
   merge?: boolean;
   force?: boolean;
 }

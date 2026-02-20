@@ -240,7 +240,6 @@ const dataCommand = codexCLI
 dataCommand
   .command('export <type>')
   .description('Export data or aliases to a file')
-  .option('--format <format>', 'File format (json, yaml)')
   .option('-o, --output <file>', 'Output file path')
   .option('--pretty', 'Pretty-print the output')
   .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean }) => {
@@ -250,7 +249,6 @@ dataCommand
 dataCommand
   .command('import <type> <file>')
   .description('Import data or aliases from a file')
-  .option('--format <format>', 'File format (json, yaml)')
   .option('-m, --merge', 'Merge with existing data instead of replacing')
   .option('-f, --force', 'Skip confirmation prompt')
   .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean }) => {

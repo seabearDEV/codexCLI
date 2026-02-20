@@ -111,8 +111,3 @@ export function removeConfirmForKey(key: string): void {
     saveConfirmKeys(keys);
   }
 }
-
-// Build a set of all keys that have confirm metadata
-export function buildConfirmSet(): Set<string> {
-  return new Set(Object.keys(loadConfirmKeys()));
-}

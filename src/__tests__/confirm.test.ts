@@ -6,7 +6,6 @@ import {
   removeConfirm,
   hasConfirm,
   removeConfirmForKey,
-  buildConfirmSet,
   clearConfirmCache
 } from '../confirm';
 
@@ -186,15 +185,6 @@ describe('Confirm Metadata', () => {
       removeConfirmForKey('nonexistent');
 
       expect(fs.writeFileSync).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('buildConfirmSet', () => {
-    it('returns a Set of all confirm keys', () => {
-      const set = buildConfirmSet();
-      expect(set.has('commands.deploy')).toBe(true);
-      expect(set.has('commands.rm-logs')).toBe(true);
-      expect(set.has('commands.greet')).toBe(false);
     });
   });
 

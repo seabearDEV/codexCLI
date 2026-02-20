@@ -37,7 +37,6 @@ interface CommandDef {
 
 const CONFIG_KEYS: readonly string[] = VALID_CONFIG_KEYS;
 const EXPORT_TYPES: readonly string[] = VALID_DATA_TYPES;
-const FORMAT_OPTIONS = ['json', 'yaml', 'text'];
 
 const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--tree': 'Display as tree',
@@ -45,7 +44,6 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--raw': 'Output raw values',
   '-r': 'Output raw values',
   '-s': 'Show before interpolation',
-  '--format': 'Set output format',
   '--force': 'Skip confirmation',
   '-f': 'Skip confirmation',
   '--yes': 'Skip confirmation',
@@ -194,7 +192,6 @@ const CLI_TREE: Record<string, CommandDef> = {
     subcommands: {
       export: {
         flags: {
-          '--format': FLAG_DESCRIPTIONS['--format'],
           '--output': FLAG_DESCRIPTIONS['--output'], '-o': FLAG_DESCRIPTIONS['-o'],
           '--pretty': 'Pretty-print output',
         },
@@ -203,7 +200,6 @@ const CLI_TREE: Record<string, CommandDef> = {
       },
       import: {
         flags: {
-          '--format': FLAG_DESCRIPTIONS['--format'],
           '--merge': 'Merge with existing',
           '-m': 'Merge with existing',
           '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'],
@@ -358,15 +354,6 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
   }
 
   const prevWord = args[args.length - 1];
-
-  // Special case: previous word is --format → suggest format options
-  if (prevWord === '--format') {
-    const fmtItems = FORMAT_OPTIONS.map(f => ({ value: f, description: 'Output format', group: 'formats' }));
-    if (endsWithSpace) {
-      return fmtItems;
-    }
-    return filterPrefix(fmtItems, partial);
-  }
 
   // Special case: previous word is --output → let shell handle file completion
   if (prevWord === '--output' || prevWord === '-o') {

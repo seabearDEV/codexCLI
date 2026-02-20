@@ -182,21 +182,6 @@ describe('Completions', () => {
       expect(v).toContain('install');
     });
 
-    it('returns format options after --format flag', () => {
-      const results = getCompletions('ccli data export --format ', 26);
-      const v = values(results);
-      expect(v).toContain('json');
-      expect(v).toContain('yaml');
-      expect(v).toContain('text');
-    });
-
-    it('returns format options with descriptions', () => {
-      const results = getCompletions('ccli data export --format ', 26);
-      const jsonItem = findItem(results, 'json');
-      expect(jsonItem).toBeDefined();
-      expect(jsonItem!.description).toBe('Output format');
-    });
-
     it('returns empty array after --output flag (file completion)', () => {
       const results = getCompletions('ccli data export --output ', 26);
       expect(results).toEqual([]);
@@ -467,13 +452,6 @@ describe('Completions', () => {
       const v = values(results);
       expect(v).toContain('set');
       expect(v).toContain('get');
-    });
-
-    it('returns format options when filtering partial', () => {
-      const results = getCompletions('ccli data export --format j', 27);
-      const v = values(results);
-      expect(v).toContain('json');
-      expect(v).not.toContain('yaml');
     });
 
     it('returns empty for --output flag (file completion)', () => {
