@@ -47,13 +47,24 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 
 ## Installation
 
-### Download Binary (Recommended)
+### Homebrew (macOS / Linux)
+
+```bash
+brew tap seabeardev/ccli
+brew install ccli
+```
+
+### Download Binary
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/seabearDEV/codexCLI/releases/latest).
 
 ```bash
 # macOS (Apple Silicon)
 curl -fsSL https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-macos-arm64 -o ccli
+chmod +x ccli && sudo mv ccli /usr/local/bin/
+
+# macOS (Intel)
+curl -fsSL https://github.com/seabearDEV/codexCLI/releases/latest/download/ccli-macos-x64 -o ccli
 chmod +x ccli && sudo mv ccli /usr/local/bin/
 
 # Linux (x64)
