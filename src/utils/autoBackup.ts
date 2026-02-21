@@ -16,7 +16,7 @@ export function createAutoBackup(label: string): string | null {
       fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     }
 
-    const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
+    const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
     const backupSubDir = path.join(backupDir, `${label}-${timestamp}`);
     fs.mkdirSync(backupSubDir, { mode: 0o700 });
 
