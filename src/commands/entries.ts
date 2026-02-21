@@ -449,7 +449,12 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
     fsModule.writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
 
     try {
-      const result = spawnSync('sh', ['-c', `${editor} "$CODEX_TMPFILE"`], {
+      const isWindows = process.platform === 'win32';
+      const shell = isWindows ? 'cmd' : (process.env.SHELL ?? '/bin/sh');
+      const shellArgs = isWindows
+        ? ['/c', `${editor} "%CODEX_TMPFILE%"`]
+        : ['-c', `${editor} "$CODEX_TMPFILE"`];
+      const result = spawnSync(shell, shellArgs, {
         stdio: 'inherit',
         env: { ...process.env, CODEX_TMPFILE: tmpFile },
       });
