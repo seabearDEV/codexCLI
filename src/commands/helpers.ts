@@ -88,7 +88,7 @@ export function displayAliases(aliases: Record<string, string>, options?: { tree
   }
 
   if (Object.keys(aliases).length === 0) {
-    console.log(`No aliases found. Add one with "${getBinaryName()} alias set <name> <command>"`);
+    console.log(`No aliases found. Add one with "${getBinaryName()} set <key> <value> -a <alias>"`);
     return;
   }
 

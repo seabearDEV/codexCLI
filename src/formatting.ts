@@ -118,11 +118,11 @@ export function showHelp(): void {
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
-  cmd('config',   '',   '[setting] [value]',  'View or change configuration settings');
+  cmd('config',   '',   '<subcommand>',       'View or change configuration settings');
   cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
   console.log();
   console.log('SUBCOMMANDS:');
-  console.log(`  ${color.green('config')}       info, examples, completions <bash|zsh|install>`);
+  console.log(`  ${color.green('config')}       set, get, info, examples, completions <bash|zsh|install>`);
   console.log(`  ${color.green('data')}         export <type>, import <type> <file>, reset <type>`);
   console.log();
   console.log(`  Use --help with any command for details (e.g. ${bin} set --help)`);
@@ -202,7 +202,6 @@ export function showExamples(): void {
 
   section('RETRIEVING DATA:');
   ex(`${b} ${g('get')}`, '# List all entries and aliases');
-  ex(`${b} ${g('get')} ${y('-e')}`, '# List entries only (no aliases)');
   ex(`${b} ${g('get')} ${y('-a')}`, '# List aliases only');
   ex(`${b} ${g('get')} ${c('server.ip')}`, '# Get a specific value');
   ex(`${b} ${g('get')} ${c('server')}`, '# Get everything under a namespace');
@@ -221,8 +220,6 @@ export function showExamples(): void {
 
   section('SEARCHING:');
   ex(`${b} ${g('find')} 192.168`, '# Search keys and values');
-  ex(`${b} ${g('find')} server ${y('-k')}`, '# Search only in keys');
-  ex(`${b} ${g('find')} production ${y('-v')}`, '# Search only in values');
   ex(`${b} ${g('find')} prod ${y('-e')}`, '# Search data entries only (skip aliases)');
   ex(`${b} ${g('find')} ip ${y('-a')}`, '# Search aliases only');
   ex(`${b} ${g('find')} server ${y('-t')}`, '# Show results as a tree');

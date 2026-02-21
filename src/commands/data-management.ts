@@ -22,20 +22,29 @@ export function exportData(type: string, options: ExportOptions): void {
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const indent = options.pretty ? 2 : 0;
 
+    // When exporting 'all' with -o, suffix the filename per type to avoid overwriting
+    const getOutputFile = (typeName: string, defaultName: string): string => {
+      if (!options.output) return path.join(defaultDir, defaultName);
+      if (type !== 'all') return options.output;
+      const ext = path.extname(options.output);
+      const base = options.output.slice(0, options.output.length - ext.length);
+      return `${base}-${typeName}${ext || '.json'}`;
+    };
+
     if (type === 'entries' || type === 'all') {
-      const outputFile = options.output ?? path.join(defaultDir, `codexcli-entries-${timestamp}.json`);
+      const outputFile = getOutputFile('entries', `codexcli-entries-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData()), null, indent), 'utf8');
       printSuccess(`Entries exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'aliases' || type === 'all') {
-      const outputFile = options.output ?? path.join(defaultDir, `codexcli-aliases-${timestamp}.json`);
+      const outputFile = getOutputFile('aliases', `codexcli-aliases-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), 'utf8');
       printSuccess(`Aliases exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'all') {
-      const outputFile = options.output ?? path.join(defaultDir, `codexcli-confirm-${timestamp}.json`);
+      const outputFile = getOutputFile('confirm', `codexcli-confirm-${timestamp}.json`);
       fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(), null, indent), 'utf8');
       printSuccess(`Confirm keys exported to: ${color.cyan(outputFile)}`);
     }
