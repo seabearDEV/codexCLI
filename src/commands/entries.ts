@@ -4,7 +4,7 @@ import { flattenObject } from '../utils/objectPath';
 import { CodexValue } from '../types';
 import { displayTree } from '../formatting';
 import { color } from '../formatting';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { ensureDataDirectoryExists } from '../utils/paths';
 import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, resolveKey, renameAlias, removeAlias } from '../alias';
 import { hasConfirm, setConfirm, removeConfirm, removeConfirmForKey } from '../confirm';
@@ -449,7 +449,19 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
     fsModule.writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
 
     try {
-      execSync(`${editor} ${tmpFile}`, { stdio: 'inherit' });
+      const isWindows = process.platform === 'win32';
+      const shell = isWindows ? 'cmd' : (process.env.SHELL ?? '/bin/sh');
+      const shellArgs = isWindows
+        ? ['/c', `${editor} "%CODEX_TMPFILE%"`]
+        : ['-c', `${editor} "$CODEX_TMPFILE"`];
+      const result = spawnSync(shell, shellArgs, {
+        stdio: 'inherit',
+        env: { ...process.env, CODEX_TMPFILE: tmpFile },
+      });
+      if (result.error) throw result.error;
+      if (result.status !== 0 && result.status !== null) {
+        throw new Error(`Editor exited with code ${result.status}`);
+      }
       const newValue = fsModule.readFileSync(tmpFile, 'utf8');
 
       if (newValue === value) {
