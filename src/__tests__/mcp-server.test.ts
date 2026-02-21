@@ -4,7 +4,7 @@
 type ToolHandler = (params: any) => Promise<any>;
 const {
   toolHandlers, mockExecSync, mockFiles, mockWrittenFiles,
-  mockData, mockAliases, mockConfig,
+  mockData, mockAliases, mockConfig, mockConfirmKeys,
 } = vi.hoisted(() => ({
   toolHandlers: {} as Record<string, ToolHandler>,
   mockExecSync: vi.fn(),
@@ -13,6 +13,7 @@ const {
   mockData: {} as Record<string, any>,
   mockAliases: {} as Record<string, string>,
   mockConfig: { colors: true, theme: 'default' } as Record<string, any>,
+  mockConfirmKeys: {} as Record<string, true>,
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => {
@@ -49,6 +50,11 @@ vi.mock('fs', () => {
         delete mockWrittenFiles[src];
       }
     }),
+    openSync: vi.fn(() => 3),
+    writeSync: vi.fn(),
+    closeSync: vi.fn(),
+    unlinkSync: vi.fn(),
+    constants: { O_CREAT: 0x40, O_EXCL: 0x80, O_WRONLY: 0x01 },
   };
   return { default: mock, ...mock };
 });
@@ -113,6 +119,16 @@ vi.mock('../alias', () => ({
   removeAliasesForKey: vi.fn(),
 }));
 
+// Mock confirm
+vi.mock('../confirm', () => ({
+  hasConfirm: vi.fn((key: string) => mockConfirmKeys[key] === true),
+  loadConfirmKeys: vi.fn(() => ({ ...mockConfirmKeys })),
+  saveConfirmKeys: vi.fn((c: any) => {
+    Object.keys(mockConfirmKeys).forEach(k => delete mockConfirmKeys[k]);
+    Object.assign(mockConfirmKeys, c);
+  }),
+}));
+
 vi.mock('../utils/paths', () => ({
   ensureDataDirectoryExists: vi.fn(),
   getDataFilePath: vi.fn(() => '/mock/entries.json'),
@@ -150,6 +166,7 @@ vi.mock('../utils/deepMerge', () => ({
 function resetMocks() {
   Object.keys(mockData).forEach(k => delete mockData[k]);
   Object.keys(mockAliases).forEach(k => delete mockAliases[k]);
+  Object.keys(mockConfirmKeys).forEach(k => delete mockConfirmKeys[k]);
   Object.keys(mockConfig).forEach(k => delete mockConfig[k]);
   Object.assign(mockConfig, { colors: true, theme: 'default' });
   Object.keys(mockFiles).forEach(k => delete mockFiles[k]);
@@ -490,7 +507,7 @@ describe('MCP Server Tools', () => {
       Object.assign(mockAliases, { x: 'y' });
       const result = await toolHandlers['codex_export']({ type: 'all', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed).toEqual({ entries: { a: '1' }, aliases: { x: 'y' } });
+      expect(parsed).toEqual({ entries: { a: '1' }, aliases: { x: 'y' }, confirm: {} });
     });
 
     it('pretty-prints when requested', async () => {
@@ -568,7 +585,7 @@ describe('MCP Server Tools', () => {
       const result = await toolHandlers['codex_import']({
         type: 'all', json, merge: undefined,
       });
-      expect(result.content[0].text).toContain('Entries and aliases imported successfully');
+      expect(result.content[0].text).toContain('Entries, aliases, and confirm keys imported successfully');
       expect(mockData).toEqual({ new: 'data' });
       expect(mockAliases).toEqual({ new: 'alias.path' });
     });
@@ -580,7 +597,7 @@ describe('MCP Server Tools', () => {
       const result = await toolHandlers['codex_import']({
         type: 'all', json, merge: true,
       });
-      expect(result.content[0].text).toContain('Entries and aliases merged successfully');
+      expect(result.content[0].text).toContain('Entries, aliases, and confirm keys merged successfully');
       expect(mockData).toEqual({ existing: 'data', added: 'data' });
       expect(mockAliases).toEqual({ existing: 'alias.path', added: 'alias.path' });
     });
@@ -611,7 +628,7 @@ describe('MCP Server Tools', () => {
 
       // Import
       const result = await toolHandlers['codex_import']({ type: 'all', json, merge: undefined });
-      expect(result.content[0].text).toContain('Entries and aliases imported successfully');
+      expect(result.content[0].text).toContain('Entries, aliases, and confirm keys imported successfully');
       expect(mockData).toEqual({ server: { ip: '10.0.0.1' } });
       expect(mockAliases).toEqual({ srv: 'server.ip' });
     });
@@ -636,7 +653,7 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { a: '1' });
       Object.assign(mockAliases, { srv: 'server.ip' });
       const result = await toolHandlers['codex_reset']({ type: 'all' });
-      expect(result.content[0].text).toContain('Entries and aliases reset to empty state');
+      expect(result.content[0].text).toContain('Entries, aliases, and confirm keys reset to empty state');
       expect(mockData).toEqual({});
       expect(mockAliases).toEqual({});
     });

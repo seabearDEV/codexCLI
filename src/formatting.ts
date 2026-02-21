@@ -116,6 +116,7 @@ export function showHelp(): void {
   cmd('get',      'g',  '[key]',              'Retrieve entries or specific data');
   cmd('run',      'r',  '<keys...>',          'Execute stored command(s) (: compose, && chain)');
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
+  cmd('edit',     'e',  '<key>',              'Open an entry in $EDITOR for editing');
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
   cmd('config',   '',   '<subcommand>',       'View or change configuration settings');
@@ -151,6 +152,7 @@ export function showHelp(): void {
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value');
   opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard');
   opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Show aliases only');
+  opt(`${color.yellow('--json')}, ${color.yellow('-j')}`, 'Output as JSON (for scripting)');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (run):'));
   opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt (for entries marked --confirm)');
@@ -161,6 +163,10 @@ export function showHelp(): void {
   opt(`${color.yellow('--entries')}, ${color.yellow('-e')}`, 'Search only in data entries');
   opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Search only in aliases');
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display results in a tree structure');
+  opt(`${color.yellow('--json')}, ${color.yellow('-j')}`, 'Output as JSON (for scripting)');
+
+  console.log('\n' + color.boldColors.magenta('OPTIONS (edit):'));
+  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value before editing');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (rename):'));
   opt(`${color.yellow('--alias')}, ${color.yellow('-a')}`, 'Rename an alias instead of an entry key');

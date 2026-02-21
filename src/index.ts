@@ -72,13 +72,26 @@ codexCLI
         }
       }
     } else if (valueArray.length === 0) {
-      // Allow no value when -a or --confirm/--no-confirm is provided (metadata-only update)
-      if (!options.alias && options.confirm === undefined) {
+      // Read from stdin if piped (non-TTY)
+      if (!process.stdin.isTTY) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of process.stdin) {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+        }
+        const stdinValue = Buffer.concat(chunks).toString('utf8').replace(/\n$/, '');
+        if (stdinValue.length > 0) {
+          value = stdinValue;
+        } else if (!options.alias && options.confirm === undefined) {
+          printError('No input received from stdin.');
+          process.exitCode = 1;
+          return;
+        }
+      } else if (!options.alias && options.confirm === undefined) {
+        // Allow no value when -a or --confirm/--no-confirm is provided (metadata-only update)
         printError('Missing value. Provide a value or use --prompt (-p) to enter it interactively.');
         process.exitCode = 1;
         return;
       }
-      value = undefined;
     } else {
       value = valueArray.join(' ');
     }
@@ -99,7 +112,8 @@ codexCLI
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
   .option('-c, --copy', 'Copy value to clipboard')
   .option('-a, --aliases', 'Show aliases only')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean }) => {
+  .option('-j, --json', 'Output as JSON (for scripting)')
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, json?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }
@@ -127,12 +141,24 @@ codexCLI
   .option('-e, --entries', 'Search only in data entries')
   .option('-a, --aliases', 'Search only in aliases')
   .option('-t, --tree', 'Display results in a hierarchical tree structure')
-  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean }) => {
+  .option('-j, --json', 'Output as JSON (for scripting)')
+  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean }) => {
     await withPager(() => commands.searchEntries(term, {
       entries: options.entries,
       aliases: options.aliases,
-      tree: options.tree
+      tree: options.tree,
+      json: options.json
     }));
+  });
+
+// Edit command
+codexCLI
+  .command('edit <key>')
+  .alias('e')
+  .description('Open an entry in $EDITOR for editing')
+  .option('-d, --decrypt', 'Decrypt an encrypted value before editing')
+  .action(async (key: string, options: { decrypt?: boolean }) => {
+    await commands.editEntry(resolveKey(key.replace(/:$/, '')), options);
   });
 
 // Rename command

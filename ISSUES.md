@@ -56,39 +56,35 @@ Added `win32` platform support using `clip` command.
 
 ---
 
-## P2 — Missing Core Features
+## P2 — Missing Core Features (FIXED)
 
-### 8. No stdin piping for `set`
+### 8. ~~No stdin piping for `set`~~ FIXED
 
-Cannot do `echo "value" | ccli set key` — there's no way to pipe input to `set`. The `--prompt` flag requires a TTY.
+`set` now reads from stdin when piped (non-TTY): `echo "value" | ccli set key`.
 
-### 9. No `edit` command (`$EDITOR` support)
+### 9. ~~No `edit` command (`$EDITOR` support)~~ FIXED
 
-No way to open a value in `$EDITOR` for editing. Users must `get`, copy, then `set -f` with the new value.
+Added `edit` (alias `e`) command: `ccli edit <key>` opens the value in `$EDITOR`/`$VISUAL`. Supports `--decrypt` for encrypted entries.
 
-### 10. MCP has no encryption support (set/get)
+### 10. ~~MCP has no encryption support (set/get)~~ FIXED
 
-**File:** `src/mcp-server.ts`
+`codex_set` now accepts `encrypt` and `password` parameters. `codex_get` now accepts `decrypt` and `password` parameters.
 
-`codex_set` has no `encrypt` parameter. `codex_get` can't decrypt values — they always show as `[encrypted]`.
+### 11. ~~`confirm` is not a standalone export/import type~~ FIXED
 
-### 11. `confirm` is not a standalone export/import type
+`confirm` is now a valid standalone type for `data export`, `data import`, and `data reset`. Also added to MCP `codex_export`, `codex_import`, and `codex_reset`.
 
-**File:** `src/commands/helpers.ts:164`
+### 12. ~~No file locking for concurrent access~~ FIXED
 
-`VALID_DATA_TYPES` only includes `entries`, `aliases`, `all`. There's no way to export or import just the `confirm` metadata.
+Added advisory file locking (`src/utils/fileLock.ts`) using `.lock` files with atomic `O_CREAT|O_EXCL`. Integrated into `saveJsonSorted` — all writes are now lock-protected. Stale locks (>10s) are automatically broken.
 
-### 12. No file locking for concurrent access
+### 13. ~~No auto-backup before destructive operations~~ FIXED
 
-Multiple processes writing to the same JSON files simultaneously could cause data corruption. No advisory locking is implemented.
+Added `src/utils/autoBackup.ts`. Automatic backups are created in `~/.codexcli/.backups/` before `data reset` and non-merge `data import`.
 
-### 13. No auto-backup before destructive operations
+### 14. ~~No `--json` output format~~ FIXED
 
-`data reset` and `data import` (without `--merge`) destroy data with no automatic backup.
-
-### 14. No `--json` output format
-
-No way to get machine-readable JSON output for scripting beyond `--raw`.
+Added `--json` / `-j` flag to `get` and `find` commands for machine-readable JSON output.
 
 ---
 
@@ -142,5 +138,5 @@ Cannot set multiple entries in one command.
 |----------|-------|-------------|
 | **P0** | 4 | ~~Bugs showing incorrect info or causing data loss~~ ALL FIXED |
 | **P1** | 3 | ~~Security and platform gaps~~ ALL FIXED |
-| **P2** | 7 | Missing core features |
+| **P2** | 7 | ~~Missing core features~~ ALL FIXED |
 | **P3** | 10 | Nice-to-have features |

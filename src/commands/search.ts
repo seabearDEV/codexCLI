@@ -95,6 +95,14 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
 
   const totalMatches = Object.keys(dataMatches).length + Object.keys(aliasMatches).length;
 
+  if (options.json) {
+    const result: { entries?: Record<string, string>, aliases?: Record<string, string> } = {};
+    if (Object.keys(dataMatches).length > 0) result.entries = dataMatches;
+    if (Object.keys(aliasMatches).length > 0) result.aliases = aliasMatches;
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
   if (totalMatches === 0) {
     console.log(`No matches found for '${searchTerm}'.`);
     return;

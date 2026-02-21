@@ -9,12 +9,14 @@ export interface GetOptions {
   decrypt?: boolean | undefined;
   copy?: boolean | undefined;
   aliases?: boolean | undefined;
+  json?: boolean | undefined;
 }
 
 export interface SearchOptions {
   entries?: boolean | undefined;
   aliases?: boolean | undefined;
   tree?: boolean | undefined;
+  json?: boolean | undefined;
 }
 
 export interface ExportOptions {

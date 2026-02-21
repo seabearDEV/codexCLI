@@ -268,6 +268,42 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
 
   const aliasMap = buildKeyToAliasMap();
 
+  // --json output mode
+  if (options.json) {
+    if (!key) {
+      if (options.aliases) {
+        console.log(JSON.stringify(loadAliases(), null, 2));
+      } else {
+        const data = loadData();
+        const flat = flattenObject(data);
+        const result: Record<string, string> = {};
+        for (const [k, v] of Object.entries(flat)) {
+          result[k] = isEncrypted(v) ? '[encrypted]' : v;
+        }
+        console.log(JSON.stringify(result, null, 2));
+      }
+      return;
+    }
+
+    const val = getValue(key);
+    if (val === undefined) {
+      console.error(JSON.stringify({ error: `Entry '${key}' not found` }));
+      return;
+    }
+    if (typeof val === 'object' && val !== null) {
+      const flat = flattenObject({ [key]: val });
+      const result: Record<string, string> = {};
+      for (const [k, v] of Object.entries(flat)) {
+        result[k] = isEncrypted(v) ? '[encrypted]' : v;
+      }
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      const strVal = String(val);
+      console.log(JSON.stringify({ [key]: isEncrypted(strVal) ? '[encrypted]' : strVal }));
+    }
+    return;
+  }
+
   if (!key) {
     // -a → aliases only
     if (options.aliases) {
@@ -362,6 +398,78 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   }
 
   displayEntries({ [key]: displayValue }, aliasMap);
+}
+
+export async function editEntry(key: string, options: { decrypt?: boolean } = {}): Promise<void> {
+  debug('editEntry called', { key, options });
+  try {
+    const editor = process.env.VISUAL || process.env.EDITOR;
+    if (!editor) {
+      printError('No editor configured. Set $EDITOR or $VISUAL environment variable.');
+      process.exitCode = 1;
+      return;
+    }
+
+    const resolvedKey = resolveKey(key);
+    let value = getValue(resolvedKey);
+
+    if (value === undefined) {
+      printError(`Entry '${resolvedKey}' not found.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    if (typeof value !== 'string') {
+      printError(`Entry '${resolvedKey}' is a subtree, not a single value. Cannot edit.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    let password: string | undefined;
+    if (isEncrypted(value)) {
+      if (!options.decrypt) {
+        printError(`Entry '${resolvedKey}' is encrypted. Use --decrypt to edit.`);
+        process.exitCode = 1;
+        return;
+      }
+      password = await askPassword('Password: ');
+      try {
+        value = decryptValue(value, password);
+      } catch {
+        printError('Decryption failed. Wrong password or corrupted data.');
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    const os = await import('os');
+    const path = await import('path');
+    const fsModule = await import('fs');
+    const tmpFile = path.join(os.tmpdir(), `codexcli-edit-${Date.now()}.tmp`);
+    fsModule.writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
+
+    try {
+      execSync(`${editor} ${tmpFile}`, { stdio: 'inherit' });
+      const newValue = fsModule.readFileSync(tmpFile, 'utf8');
+
+      if (newValue === value) {
+        console.log('No changes made.');
+        return;
+      }
+
+      let storedValue = newValue;
+      if (password) {
+        storedValue = encryptValue(newValue, password);
+      }
+
+      setValue(resolvedKey, storedValue);
+      printSuccess(`Entry '${resolvedKey}' updated successfully.`);
+    } finally {
+      try { fsModule.unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
+    }
+  } catch (error) {
+    handleError('Failed to edit entry:', error);
+  }
 }
 
 export async function removeEntry(key: string, force = false): Promise<void> {

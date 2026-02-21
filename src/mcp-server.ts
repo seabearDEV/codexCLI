@@ -22,12 +22,12 @@ import {
 import {
   ensureDataDirectoryExists,
 } from "./utils/paths";
-import { hasConfirm } from "./confirm";
+import { hasConfirm, loadConfirmKeys, saveConfirmKeys } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
 import { version } from "../package.json";
 import { formatTree } from "./formatting";
-import { isEncrypted, maskEncryptedValues } from "./utils/crypto";
+import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
 
 function textResponse(text: string) {
@@ -46,12 +46,19 @@ const server = new McpServer({
 server.tool(
   "codex_set",
   "Set an entry in the CodexCLI data store",
-  { key: z.string().describe("Dot-notation key (e.g. server.prod.ip)"), value: z.string().describe("Value to store"), alias: z.string().optional().describe("Create an alias for this key") },
-  async ({ key, value, alias }) => {
+  { key: z.string().describe("Dot-notation key (e.g. server.prod.ip)"), value: z.string().describe("Value to store"), alias: z.string().optional().describe("Create an alias for this key"), encrypt: z.boolean().optional().describe("Encrypt the value with the provided password"), password: z.string().optional().describe("Password for encryption (required when encrypt is true)") },
+  async ({ key, value, alias, encrypt, password }) => {
     try {
       ensureDataDirectoryExists();
       const resolved = resolveKey(key);
-      setValue(resolved, value);
+      let storedValue = value;
+      if (encrypt) {
+        if (!password) {
+          return errorResponse("Password is required when encrypt is true.");
+        }
+        storedValue = encryptValue(value, password);
+      }
+      setValue(resolved, storedValue);
       if (alias) {
         const aliases = loadAliases();
         // Enforce one alias per entry: remove any existing alias for the same target
@@ -79,8 +86,10 @@ server.tool(
     key: z.string().optional().describe("Dot-notation key to retrieve (omit for all entries)"),
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
     aliases_only: z.boolean().optional().describe("Show aliases only"),
+    decrypt: z.boolean().optional().describe("Decrypt an encrypted value"),
+    password: z.string().optional().describe("Password for decryption (required when decrypt is true)"),
   },
-  async ({ key, format, aliases_only }) => {
+  async ({ key, format, aliases_only, decrypt: decryptOpt, password }) => {
     try {
       const data = loadData();
       const keyToAliasMap = buildKeyToAliasMap();
@@ -129,7 +138,19 @@ server.tool(
         const strVal = String(value);
         let display: string | number | boolean;
         if (isEncrypted(strVal)) {
-          display = '[encrypted]';
+          if (decryptOpt) {
+            if (!password) {
+              return errorResponse("Password is required when decrypt is true.");
+            }
+            try {
+              const decrypted = decryptValue(strVal, password);
+              display = decrypted;
+            } catch {
+              return errorResponse("Decryption failed. Wrong password or corrupted data.");
+            }
+          } else {
+            display = '[encrypted]';
+          }
         } else if (typeof value === 'string') {
           try { display = interpolate(strVal); } catch { display = value; }
         } else {
@@ -421,7 +442,7 @@ server.tool(
   "codex_export",
   "Export entries and/or aliases as JSON text",
   {
-    type: z.enum(["entries", "aliases", "all"]).describe("What to export"),
+    type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to export"),
     pretty: z.boolean().optional().describe("Pretty-print the JSON (default false)"),
   },
   async ({ type, pretty }) => {
@@ -429,8 +450,12 @@ server.tool(
       const indent = pretty ? 2 : 0;
 
       if (type === "all") {
-        const combined = { entries: maskEncryptedValues(loadData()), aliases: loadAliases() };
+        const combined = { entries: maskEncryptedValues(loadData()), aliases: loadAliases(), confirm: loadConfirmKeys() };
         return textResponse(JSON.stringify(combined, null, indent));
+      }
+
+      if (type === "confirm") {
+        return textResponse(JSON.stringify(loadConfirmKeys(), null, indent));
       }
 
       const content = type === "entries" ? maskEncryptedValues(loadData()) : loadAliases();
@@ -446,7 +471,7 @@ server.tool(
   "codex_import",
   "Import entries and/or aliases from a JSON string",
   {
-    type: z.enum(["entries", "aliases", "all"]).describe("What to import"),
+    type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to import"),
     json: z.string().describe("JSON string to import"),
     merge: z.boolean().optional().describe("Merge with existing data instead of replacing (default false)"),
   },
@@ -489,10 +514,21 @@ server.tool(
 
         const currentAliases = merge ? loadAliases() : {};
         saveAliases(merge ? { ...currentAliases, ...(aliasesObj as Record<string, string>) } : aliasesObj as Record<string, string>);
+
+        // Import confirm keys if present
+        const confirmVal = obj.confirm;
+        if (confirmVal && typeof confirmVal === "object" && !Array.isArray(confirmVal)) {
+          const currentConfirm = merge ? loadConfirmKeys() : {};
+          saveConfirmKeys(merge ? { ...currentConfirm, ...(confirmVal as Record<string, true>) } : confirmVal as Record<string, true>);
+        }
       } else if (type === "entries") {
         const current = merge ? loadData() : {};
         const newData = merge ? deepMerge(current, obj) : obj;
         saveData(newData as CodexData);
+      } else if (type === "confirm") {
+        const currentConfirm = merge ? loadConfirmKeys() : {};
+        const newConfirm = merge ? { ...currentConfirm, ...(obj as Record<string, true>) } : obj;
+        saveConfirmKeys(newConfirm as Record<string, true>);
       } else {
         if (Object.values(obj).some(v => typeof v !== "string")) {
           return errorResponse("Alias values must all be strings (dot-notation paths).");
@@ -505,8 +541,9 @@ server.tool(
         saveAliases(newAliases as Record<string, string>);
       }
 
+      const typeLabel = { all: "Entries, aliases, and confirm keys", entries: "Entries", aliases: "Aliases", confirm: "Confirm keys" }[type];
       return textResponse(
-        `${type === "all" ? "Entries and aliases" : type === "entries" ? "Entries" : "Aliases"} ${merge ? "merged" : "imported"} successfully.`
+        `${typeLabel} ${merge ? "merged" : "imported"} successfully.`
       );
     } catch (err) {
       return errorResponse(`Error importing: ${String(err)}`);
@@ -519,7 +556,7 @@ server.tool(
   "codex_reset",
   "Reset entries and/or aliases to empty state",
   {
-    type: z.enum(["entries", "aliases", "all"]).describe("What to reset"),
+    type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to reset"),
   },
   async ({ type }) => {
     try {
@@ -529,8 +566,12 @@ server.tool(
       if (type === "aliases" || type === "all") {
         saveAliases({});
       }
+      if (type === "confirm" || type === "all") {
+        saveConfirmKeys({});
+      }
+      const typeLabel = { all: "Entries, aliases, and confirm keys", entries: "Entries", aliases: "Aliases", confirm: "Confirm keys" }[type];
       return textResponse(
-        `${type === "all" ? "Entries and aliases" : type === "entries" ? "Entries" : "Aliases"} reset to empty state.`
+        `${typeLabel} reset to empty state.`
       );
     } catch (err) {
       return errorResponse(`Error resetting: ${String(err)}`);
