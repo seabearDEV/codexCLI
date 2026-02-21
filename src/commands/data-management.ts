@@ -9,6 +9,7 @@ import { validateDataType, confirmOrAbort, getInvalidDataTypeMessage, printSucce
 import { deepMerge } from '../utils/deepMerge';
 import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
+import { createAutoBackup } from '../utils/autoBackup';
 
 export function exportData(type: string, options: ExportOptions): void {
   debug('exportData called', { type, options });
@@ -22,21 +23,30 @@ export function exportData(type: string, options: ExportOptions): void {
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const indent = options.pretty ? 2 : 0;
 
+    // When exporting 'all' with -o, suffix the filename per type to avoid overwriting
+    const getOutputFile = (typeName: string, defaultName: string): string => {
+      if (!options.output) return path.join(defaultDir, defaultName);
+      if (type !== 'all') return options.output;
+      const ext = path.extname(options.output);
+      const base = options.output.slice(0, options.output.length - ext.length);
+      return `${base}-${typeName}${ext || '.json'}`;
+    };
+
     if (type === 'entries' || type === 'all') {
-      const outputFile = options.output ?? path.join(defaultDir, `codexcli-entries-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData()), null, indent), 'utf8');
+      const outputFile = getOutputFile('entries', `codexcli-entries-${timestamp}.json`);
+      fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData()), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Entries exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'aliases' || type === 'all') {
-      const outputFile = options.output ?? path.join(defaultDir, `codexcli-aliases-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), 'utf8');
+      const outputFile = getOutputFile('aliases', `codexcli-aliases-${timestamp}.json`);
+      fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Aliases exported to: ${color.cyan(outputFile)}`);
     }
 
-    if (type === 'all') {
-      const outputFile = options.output ?? path.join(defaultDir, `codexcli-confirm-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(), null, indent), 'utf8');
+    if (type === 'confirm' || type === 'all') {
+      const outputFile = getOutputFile('confirm', `codexcli-confirm-${timestamp}.json`);
+      fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Confirm keys exported to: ${color.cyan(outputFile)}`);
     }
   } catch (error) {
@@ -82,6 +92,11 @@ export async function importData(type: string, file: string, options: ImportOpti
 
     const validData = importedData as Record<string, unknown>;
 
+    // Auto-backup before destructive import (replace, not merge)
+    if (!options.merge) {
+      createAutoBackup('pre-import');
+    }
+
     if (type === 'entries' || type === 'all') {
       const currentData = options.merge ? loadData() : {};
 
@@ -110,8 +125,7 @@ export async function importData(type: string, file: string, options: ImportOpti
       printSuccess(`Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
     }
 
-    if (type === 'all') {
-      // Import confirm keys — values must all be true
+    if (type === 'confirm' || type === 'all') {
       const currentConfirm = options.merge ? loadConfirmKeys() : {};
       const newConfirm = options.merge
         ? { ...currentConfirm, ...(validData as Record<string, true>) }
@@ -140,6 +154,9 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
       if (!confirmed) return;
     }
 
+    // Auto-backup before reset
+    createAutoBackup('pre-reset');
+
     // Reset entries
     if (type === 'entries' || type === 'all') {
       saveData({});
@@ -153,7 +170,7 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
     }
 
     // Reset confirm keys
-    if (type === 'all') {
+    if (type === 'confirm' || type === 'all') {
       saveConfirmKeys({});
       printSuccess('Confirm keys have been reset to an empty state');
     }

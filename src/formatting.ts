@@ -116,13 +116,14 @@ export function showHelp(): void {
   cmd('get',      'g',  '[key]',              'Retrieve entries or specific data');
   cmd('run',      'r',  '<keys...>',          'Execute stored command(s) (: compose, && chain)');
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
+  cmd('edit',     'e',  '<key>',              'Open an entry in $EDITOR for editing');
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
-  cmd('config',   '',   '[setting] [value]',  'View or change configuration settings');
+  cmd('config',   '',   '<subcommand>',       'View or change configuration settings');
   cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
   console.log();
   console.log('SUBCOMMANDS:');
-  console.log(`  ${color.green('config')}       info, examples, completions <bash|zsh|install>`);
+  console.log(`  ${color.green('config')}       set, get, info, examples, completions <bash|zsh|install>`);
   console.log(`  ${color.green('data')}         export <type>, import <type> <file>, reset <type>`);
   console.log();
   console.log(`  Use --help with any command for details (e.g. ${bin} set --help)`);
@@ -151,6 +152,7 @@ export function showHelp(): void {
   opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value');
   opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard');
   opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Show aliases only');
+  opt(`${color.yellow('--json')}, ${color.yellow('-j')}`, 'Output as JSON (for scripting)');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (run):'));
   opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt (for entries marked --confirm)');
@@ -161,6 +163,10 @@ export function showHelp(): void {
   opt(`${color.yellow('--entries')}, ${color.yellow('-e')}`, 'Search only in data entries');
   opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Search only in aliases');
   opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display results in a tree structure');
+  opt(`${color.yellow('--json')}, ${color.yellow('-j')}`, 'Output as JSON (for scripting)');
+
+  console.log('\n' + color.boldColors.magenta('OPTIONS (edit):'));
+  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value before editing');
 
   console.log('\n' + color.boldColors.magenta('OPTIONS (rename):'));
   opt(`${color.yellow('--alias')}, ${color.yellow('-a')}`, 'Rename an alias instead of an entry key');
@@ -202,7 +208,6 @@ export function showExamples(): void {
 
   section('RETRIEVING DATA:');
   ex(`${b} ${g('get')}`, '# List all entries and aliases');
-  ex(`${b} ${g('get')} ${y('-e')}`, '# List entries only (no aliases)');
   ex(`${b} ${g('get')} ${y('-a')}`, '# List aliases only');
   ex(`${b} ${g('get')} ${c('server.ip')}`, '# Get a specific value');
   ex(`${b} ${g('get')} ${c('server')}`, '# Get everything under a namespace');
@@ -221,8 +226,6 @@ export function showExamples(): void {
 
   section('SEARCHING:');
   ex(`${b} ${g('find')} 192.168`, '# Search keys and values');
-  ex(`${b} ${g('find')} server ${y('-k')}`, '# Search only in keys');
-  ex(`${b} ${g('find')} production ${y('-v')}`, '# Search only in values');
   ex(`${b} ${g('find')} prod ${y('-e')}`, '# Search data entries only (skip aliases)');
   ex(`${b} ${g('find')} ip ${y('-a')}`, '# Search aliases only');
   ex(`${b} ${g('find')} server ${y('-t')}`, '# Show results as a tree');

@@ -17,6 +17,8 @@ export function copyToClipboard(text: string): void {
     } catch {
       cmd = 'xsel --clipboard --input';
     }
+  } else if (platform === 'win32') {
+    cmd = 'clip';
   } else {
     throw new Error(`Clipboard not supported on platform: ${platform}`);
   }

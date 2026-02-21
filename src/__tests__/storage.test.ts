@@ -7,7 +7,12 @@ vi.mock('fs', () => {
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
     renameSync: vi.fn(),
-    statSync: vi.fn()
+    statSync: vi.fn(),
+    openSync: vi.fn(() => 3),
+    writeSync: vi.fn(),
+    closeSync: vi.fn(),
+    unlinkSync: vi.fn(),
+    constants: { O_CREAT: 0x40, O_EXCL: 0x80, O_WRONLY: 0x01 }
   };
   return { default: mock, ...mock };
 });
@@ -141,7 +146,7 @@ describe('Storage', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         '/mock/entries.json.tmp',
         JSON.stringify({ key: 'value' }, null, 2),
-        'utf8'
+        { encoding: 'utf8', mode: 0o600 }
       );
       expect(fs.renameSync).toHaveBeenCalledWith(
         '/mock/entries.json.tmp',

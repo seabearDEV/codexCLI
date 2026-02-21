@@ -64,6 +64,8 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--source': 'Show source/raw output',
   '--confirm': 'Require confirmation to run',
   '--no-confirm': 'Remove confirmation requirement',
+  '--json': 'Output as JSON',
+  '-j': 'Output as JSON',
 };
 
 const GLOBAL_FLAGS: Record<string, string> = {
@@ -91,6 +93,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
+      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
     argType: 'dataKey',
     description: 'Retrieve entries',
@@ -103,6 +106,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
+      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
     argType: 'dataKey',
     description: 'Retrieve entries',
@@ -132,6 +136,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--entries': FLAG_DESCRIPTIONS['--entries'], '-e': FLAG_DESCRIPTIONS['--entries'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
+      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
     argType: null,
     description: 'Find entries by key or value',
@@ -141,9 +146,20 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--entries': FLAG_DESCRIPTIONS['--entries'], '-e': FLAG_DESCRIPTIONS['--entries'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
       '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
+      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
     argType: null,
     description: 'Find entries by key or value',
+  },
+  edit: {
+    flags: { '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'] },
+    argType: 'dataKey',
+    description: 'Edit entry in $EDITOR',
+  },
+  e: {
+    flags: { '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'] },
+    argType: 'dataKey',
+    description: 'Edit entry in $EDITOR',
   },
   rename: {
     flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Rename alias', '--set-alias': 'Set alias on renamed key' },

@@ -88,7 +88,7 @@ describe('Config', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         '/mock/config.json.tmp',
         JSON.stringify({ colors: true, theme: 'dark' }, null, 2),
-        'utf8'
+        { encoding: 'utf8', mode: 0o600 }
       );
       expect(fs.renameSync).toHaveBeenCalledWith(
         '/mock/config.json.tmp',

@@ -42,9 +42,17 @@ describe('copyToClipboard', () => {
     expect(execSync).toHaveBeenCalledWith('xsel --clipboard --input', { input: 'hello' });
   });
 
-  it('throws on unsupported platform', () => {
+  it('uses clip on Windows', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
-    expect(() => copyToClipboard('hello')).toThrow('Clipboard not supported on platform: win32');
+    copyToClipboard('hello');
+
+    expect(execSync).toHaveBeenCalledWith('clip', { input: 'hello' });
+  });
+
+  it('throws on unsupported platform', () => {
+    Object.defineProperty(process, 'platform', { value: 'freebsd' });
+
+    expect(() => copyToClipboard('hello')).toThrow('Clipboard not supported on platform: freebsd');
   });
 });

@@ -1,10 +1,13 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { loadData, handleError, getValue, setValue, removeValue } from '../storage';
 import { flattenObject } from '../utils/objectPath';
 import { CodexValue } from '../types';
 import { displayTree } from '../formatting';
 import { color } from '../formatting';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { ensureDataDirectoryExists } from '../utils/paths';
 import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, resolveKey, renameAlias, removeAlias } from '../alias';
 import { hasConfirm, setConfirm, removeConfirm, removeConfirmForKey } from '../confirm';
@@ -268,6 +271,57 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
 
   const aliasMap = buildKeyToAliasMap();
 
+  // --json output mode
+  if (options.json) {
+    if (!key) {
+      if (options.aliases) {
+        console.log(JSON.stringify(loadAliases(), null, 2));
+      } else {
+        const data = loadData();
+        const flat = flattenObject(data);
+        const result: Record<string, string> = {};
+        for (const [k, v] of Object.entries(flat)) {
+          if (isEncrypted(v)) {
+            result[k] = '[encrypted]';
+          } else {
+            try { result[k] = interpolate(v); } catch { result[k] = v; }
+          }
+        }
+        console.log(JSON.stringify(result, null, 2));
+      }
+      return;
+    }
+
+    const val = getValue(key);
+    if (val === undefined) {
+      console.error(JSON.stringify({ error: `Entry '${key}' not found` }));
+      process.exitCode = 1;
+      return;
+    }
+    if (typeof val === 'object' && val !== null) {
+      const flat = flattenObject({ [key]: val });
+      const result: Record<string, string> = {};
+      for (const [k, v] of Object.entries(flat)) {
+        if (isEncrypted(v)) {
+          result[k] = '[encrypted]';
+        } else {
+          try { result[k] = interpolate(v); } catch { result[k] = v; }
+        }
+      }
+      console.log(JSON.stringify(result, null, 2));
+    } else {
+      const strVal = String(val);
+      let displayVal: string;
+      if (isEncrypted(strVal)) {
+        displayVal = '[encrypted]';
+      } else {
+        try { displayVal = interpolate(strVal); } catch { displayVal = strVal; }
+      }
+      console.log(JSON.stringify({ [key]: displayVal }));
+    }
+    return;
+  }
+
   if (!key) {
     // -a → aliases only
     if (options.aliases) {
@@ -362,6 +416,86 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   }
 
   displayEntries({ [key]: displayValue }, aliasMap);
+}
+
+export async function editEntry(key: string, options: { decrypt?: boolean } = {}): Promise<void> {
+  debug('editEntry called', { key, options });
+  try {
+    const editor = process.env.VISUAL || process.env.EDITOR;
+    if (!editor) {
+      printError('No editor configured. Set $EDITOR or $VISUAL environment variable.');
+      process.exitCode = 1;
+      return;
+    }
+
+    let value = getValue(key);
+
+    if (value === undefined) {
+      printError(`Entry '${key}' not found.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    if (typeof value !== 'string') {
+      printError(`Entry '${key}' is a subtree, not a single value. Cannot edit.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    let password: string | undefined;
+    if (isEncrypted(value)) {
+      if (!options.decrypt) {
+        printError(`Entry '${key}' is encrypted. Use --decrypt to edit.`);
+        process.exitCode = 1;
+        return;
+      }
+      password = await askPassword('Password: ');
+      try {
+        value = decryptValue(value, password);
+      } catch {
+        printError('Decryption failed. Wrong password or corrupted data.');
+        process.exitCode = 1;
+        return;
+      }
+    }
+
+    const tmpFile = path.join(os.tmpdir(), `codexcli-edit-${Date.now()}.tmp`);
+    fs.writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
+
+    try {
+      const isWindows = process.platform === 'win32';
+      const shell = isWindows ? 'cmd' : (process.env.SHELL ?? '/bin/sh');
+      const shellArgs = isWindows
+        ? ['/c', `${editor} "%CODEX_TMPFILE%"`]
+        : ['-c', `${editor} "$CODEX_TMPFILE"`];
+      const result = spawnSync(shell, shellArgs, {
+        stdio: 'inherit',
+        env: { ...process.env, CODEX_TMPFILE: tmpFile },
+      });
+      if (result.error) throw result.error;
+      if (result.status !== 0 && result.status !== null) {
+        throw new Error(`Editor exited with code ${result.status}`);
+      }
+      const newValue = fs.readFileSync(tmpFile, 'utf8');
+
+      if (newValue === value) {
+        console.log('No changes made.');
+        return;
+      }
+
+      let storedValue = newValue;
+      if (password) {
+        storedValue = encryptValue(newValue, password);
+      }
+
+      setValue(key, storedValue);
+      printSuccess(`Entry '${key}' updated successfully.`);
+    } finally {
+      try { fs.unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
+    }
+  } catch (error) {
+    handleError('Failed to edit entry:', error);
+  }
 }
 
 export async function removeEntry(key: string, force = false): Promise<void> {

@@ -88,7 +88,7 @@ export function displayAliases(aliases: Record<string, string>, options?: { tree
   }
 
   if (Object.keys(aliases).length === 0) {
-    console.log(`No aliases found. Add one with "${getBinaryName()} alias set <name> <command>"`);
+    console.log(`No aliases found. Add one with "${getBinaryName()} set <key> <value> -a <alias>"`);
     return;
   }
 
@@ -161,14 +161,14 @@ export function askPassword(prompt: string): Promise<string> {
   });
 }
 
-export const VALID_DATA_TYPES = ['entries', 'aliases', 'all'] as const;
+export const VALID_DATA_TYPES = ['entries', 'aliases', 'confirm', 'all'] as const;
 
 export function validateDataType(type: string): boolean {
   return (VALID_DATA_TYPES as readonly string[]).includes(type);
 }
 
 export function getInvalidDataTypeMessage(type: string): string {
-  return `Invalid type: ${type}. Must be 'entries', 'aliases', or 'all'`;
+  return `Invalid type: ${type}. Must be 'entries', 'aliases', 'confirm', or 'all'`;
 }
 
 export async function confirmOrAbort(prompt: string): Promise<boolean> {
