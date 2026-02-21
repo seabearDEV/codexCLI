@@ -26,7 +26,9 @@ export function createAutoBackup(label: string): string | null {
     for (const file of filesToBackup) {
       const src = path.join(dataDir, file);
       if (fs.existsSync(src)) {
-        fs.copyFileSync(src, path.join(backupSubDir, file));
+        const dest = path.join(backupSubDir, file);
+        fs.copyFileSync(src, dest);
+        fs.chmodSync(dest, 0o600);
         backedUp++;
       }
     }
