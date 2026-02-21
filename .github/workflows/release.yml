@@ -86,7 +86,7 @@ jobs:
       - name: Download release binaries
         run: |
           base="https://github.com/seabearDEV/codexCLI/releases/download/${GITHUB_REF_NAME}"
-          for bin in ccli-macos-arm64 ccli-macos-x64 ccli-linux-x64 ccli-linux-arm64; do
+          for bin in ccli-macos-arm64 ccli-linux-x64 ccli-linux-arm64; do
             curl -fsSL "$base/$bin" -o "$bin"
           done
 
@@ -94,7 +94,6 @@ jobs:
         id: sha
         run: |
           echo "macos_arm64=$(sha256sum ccli-macos-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
-          echo "macos_x64=$(sha256sum ccli-macos-x64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "linux_x64=$(sha256sum ccli-linux-x64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "linux_arm64=$(sha256sum ccli-linux-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
@@ -109,7 +108,6 @@ jobs:
         env:
           CCLI_VERSION: ${{ steps.version.outputs.version }}
           SHA_MACOS_ARM64: ${{ steps.sha.outputs.macos_arm64 }}
-          SHA_MACOS_X64: ${{ steps.sha.outputs.macos_x64 }}
           SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
           SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
         run: |
@@ -127,13 +125,8 @@ jobs:
             end
 
             on_macos do
-              if Hardware::CPU.arm?
-                url "https://github.com/seabearDEV/codexCLI/releases/download/v$CCLI_VERSION/ccli-macos-arm64"
-                sha256 "$SHA_MACOS_ARM64"
-              else
-                url "https://github.com/seabearDEV/codexCLI/releases/download/v$CCLI_VERSION/ccli-macos-x64"
-                sha256 "$SHA_MACOS_X64"
-              end
+              url "https://github.com/seabearDEV/codexCLI/releases/download/v$CCLI_VERSION/ccli-macos-arm64"
+              sha256 "$SHA_MACOS_ARM64"
             end
 
             on_linux do
