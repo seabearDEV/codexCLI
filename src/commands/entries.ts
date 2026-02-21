@@ -454,6 +454,9 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
         env: { ...process.env, CODEX_TMPFILE: tmpFile },
       });
       if (result.error) throw result.error;
+      if (result.status !== 0 && result.status !== null) {
+        throw new Error(`Editor exited with code ${result.status}`);
+      }
       const newValue = fsModule.readFileSync(tmpFile, 'utf8');
 
       if (newValue === value) {
