@@ -421,7 +421,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
 export async function editEntry(key: string, options: { decrypt?: boolean } = {}): Promise<void> {
   debug('editEntry called', { key, options });
   try {
-    const editor = process.env.VISUAL || process.env.EDITOR;
+    const editor = process.env.VISUAL ?? process.env.EDITOR;
     if (!editor) {
       printError('No editor configured. Set $EDITOR or $VISUAL environment variable.');
       process.exitCode = 1;

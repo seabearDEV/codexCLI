@@ -580,7 +580,8 @@ npm install        # Install dependencies
 npm run build      # Build the project
 npm test           # Run all tests
 npm run test:watch # Run tests in watch mode
-npm run dev        # Run in development mode (uses local data directory)
+npm run dev:watch  # Watch mode — recompiles on file changes
+npm run lint       # Run ESLint
 ```
 
 ## License

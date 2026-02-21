@@ -54,12 +54,12 @@ export function createAutoBackup(label: string): string | null {
         debug(`Removed ${toRemove.length} old backup(s)`);
       }
     } catch (cleanupErr) {
-      debug(`Backup cleanup failed: ${cleanupErr}`);
+      debug(`Backup cleanup failed: ${String(cleanupErr)}`);
     }
 
     return backupSubDir;
   } catch (error) {
-    debug(`Auto-backup failed: ${error}`);
+    debug(`Auto-backup failed: ${String(error)}`);
     return null;
   }
 }

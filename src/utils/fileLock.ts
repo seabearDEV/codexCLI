@@ -74,7 +74,7 @@ export function withFileLock<T>(filePath: string, fn: () => T): T {
     acquireLock(filePath);
     locked = true;
   } catch (err) {
-    debug(`Lock acquisition failed for ${filePath}, proceeding without lock: ${err}`);
+    debug(`Lock acquisition failed for ${filePath}, proceeding without lock: ${String(err)}`);
   }
   try {
     return fn();

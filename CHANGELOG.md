@@ -19,6 +19,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - MCP `codex_run`: `force` parameter to skip confirm check on protected entries
 - MCP `codex_export`, `codex_import`, `codex_reset`: support for `confirm` data type
 - Windows clipboard support via `clip` command
+- `dev:watch` npm script — runs `tsc --watch` for automatic recompilation during development
+- `lint` npm script with ESLint and `typescript-eslint` (type-checked + stylistic rulesets)
+
+### Removed
+
+- `start` npm script — redundant with `cclid`
+- `dev` npm script — broken with path aliases and redundant with `cclid`
+- `prepublish` npm script — not used (SEA distribution)
 
 ### Fixed
 
