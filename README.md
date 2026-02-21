@@ -84,6 +84,8 @@ ccli
 
 ### Install from Source
 
+> **Note:** Installing from source registers the development binary `cclid` (not `ccli`). All examples in this README use `ccli`, but substitute `cclid` if you installed from source. The production `ccli` binary is available via Homebrew or the GitHub Releases download above.
+
 Ensure npm's global binaries are in your PATH by adding the following to your shell profile (`.bashrc`, `.zshrc`, or equivalent):
 
 ```bash
@@ -98,7 +100,7 @@ npm run build
 npm install -g .
 ```
 
-If `ccli` is not found after installing, verify that npm's global bin directory is in your PATH:
+If `cclid` is not found after installing, verify that npm's global bin directory is in your PATH:
 
 ```bash
 echo $PATH | grep -o "$(npm config get prefix)/bin"
@@ -359,8 +361,11 @@ ccli data export entries
 # Export to a specific file
 ccli data export aliases -o my-aliases.json
 
-# Export everything
-ccli data export all -o backup.json
+# Export with pretty-printed JSON
+ccli data export entries --pretty
+
+# Export everything (entries, aliases, confirm metadata)
+ccli data export all
 
 # Import data from a file (replaces existing)
 ccli data import entries backup.json
@@ -466,10 +471,10 @@ ccli --debug get server.production
 | `find` | `f` | `<term>` | Find entries by key or value |
 | `remove` | `rm` | `<key>` | Remove an entry and its alias |
 | `rename` | `rn` | `<old> <new>` | Rename an entry key or alias |
-| `config` | | `[setting] [value]` | View or change configuration settings |
+| `config` | | `<subcommand>` | View or change configuration settings |
 | `data` | | `<subcommand>` | Manage stored data (export, import, reset) |
 
-**Config subcommands:** `info`, `examples`, `completions <bash\|zsh\|install>`
+**Config subcommands:** `set <key> <value>`, `get [key]`, `info`, `examples`, `completions <bash\|zsh\|install>`
 
 **Data subcommands:** `export <type>`, `import <type> <file>`, `reset <type>`
 
@@ -485,10 +490,10 @@ CodexCLI includes a built-in [Model Context Protocol](https://modelcontextprotoc
 claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 ```
 
-If you installed CodexCLI globally, you can also use:
+If you installed from source via `npm install -g .`, you can also use:
 
 ```bash
-claude mcp add codexcli -- ccli-mcp
+claude mcp add codexcli -- cclid-mcp
 ```
 
 #### Claude Desktop
