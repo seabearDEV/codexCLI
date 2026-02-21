@@ -9,6 +9,7 @@ import { version } from '../package.json';
 import { getCompletions, generateBashScript, generateZshScript, installCompletions } from './completions';
 import { withPager } from './utils/pager';
 import { getDataDirectory } from './utils/paths';
+import { getBinaryName } from './utils/binaryName';
 import fs from 'fs';
 
 // Early-exit handler for shell tab-completion (must run before Commander parses args)
@@ -24,7 +25,7 @@ if (completionFlagIndex !== -1) {
 
 // Initialize the CLI
 const codexCLI = new Command();
-codexCLI.name('ccli');
+codexCLI.name(getBinaryName());
 codexCLI.version(version);
 codexCLI.description('A CLI tool for storing and retrieving code snippets, commands, and knowledge');
 
@@ -286,7 +287,8 @@ async function handleFirstRun(): Promise<void> {
   if (fs.existsSync(getDataDirectory())) return;
 
   console.log();
-  console.log('Welcome to CodexCLI! Run `ccli config examples` to see usage patterns.');
+  const bin = getBinaryName();
+  console.log(`Welcome to CodexCLI! Run \`${bin} config examples\` to see usage patterns.`);
 
   if (!process.stdin.isTTY) {
     console.log();
@@ -304,7 +306,7 @@ async function handleFirstRun(): Promise<void> {
   if (answer.toLowerCase() !== 'n') {
     installCompletions();
   } else {
-    console.log('Skipped. Run `ccli config completions install` later to set up.');
+    console.log(`Skipped. Run \`${bin} config completions install\` later to set up.`);
   }
   console.log();
 }

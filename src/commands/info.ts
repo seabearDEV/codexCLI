@@ -7,6 +7,7 @@ import { loadAliases } from '../alias';
 import { loadConfirmKeys } from '../confirm';
 import { getDataFilePath, getAliasFilePath, getConfigFilePath, getConfirmFilePath } from '../utils/paths';
 import { color } from '../formatting';
+import { getBinaryName } from '../utils/binaryName';
 
 export function showInfo(): void {
   const entryCount = Object.keys(getEntriesFlat()).length;
@@ -44,10 +45,12 @@ export function showInfo(): void {
     const bashrc = path.join(home, '.bashrc');
     rcFile = process.platform === 'darwin' && fs.existsSync(bashProfile) ? bashProfile : bashrc;
   }
-  if (rcFile && fs.existsSync(rcFile) && fs.readFileSync(rcFile, 'utf8').includes('ccli completions')) {
+  const bin = getBinaryName();
+  const rcContent = rcFile && fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
+  if (rcContent.includes(`${bin} config completions`) || rcContent.includes(`${bin} completions`)) {
     label('Completions', `${color.green('installed')} (${rcFile})`);
   } else {
-    label('Completions', `${color.yellow('not installed')} (run: ccli config completions install)`);
+    label('Completions', `${color.yellow('not installed')} (run: ${bin} config completions install)`);
   }
 
   console.log();

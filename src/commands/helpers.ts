@@ -5,6 +5,7 @@ import { buildKeyToAliasMap } from '../alias';
 import { loadConfirmKeys } from '../confirm';
 import { isEncrypted } from '../utils/crypto';
 import { interpretEscapes, visibleLength, wordWrap } from '../utils/wordWrap';
+import { getBinaryName } from '../utils/binaryName';
 
 export function printSuccess(message: string): void {
   console.log(color.green('✓ ') + message);
@@ -87,7 +88,7 @@ export function displayAliases(aliases: Record<string, string>, options?: { tree
   }
 
   if (Object.keys(aliases).length === 0) {
-    console.log('No aliases found. Add one with "ccli alias set <name> <command>"');
+    console.log(`No aliases found. Add one with "${getBinaryName()} alias set <name> <command>"`);
     return;
   }
 

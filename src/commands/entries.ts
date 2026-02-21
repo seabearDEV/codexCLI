@@ -14,6 +14,7 @@ import { printSuccess, printWarning, printError, displayEntries, displayAliases,
 import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
+import { getBinaryName } from '../utils/binaryName';
 
 export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }): Promise<void> {
   debug('runCommand called', { keys, options });
@@ -233,7 +234,7 @@ function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<strin
 function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (Object.keys(data).length === 0) {
     if (options.raw) return;
-    console.log(color.gray('No entries found. Add one with "ccli set <key> <value>"'));
+    console.log(color.gray(`No entries found. Add one with "${getBinaryName()} set <key> <value>"`));
     console.log('');
     return;
   }

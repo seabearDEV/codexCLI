@@ -1,12 +1,14 @@
 import path from 'path';
 import os from 'os';
 import * as fs from 'fs';
+import { getBinaryName } from './binaryName';
 
 /**
  * Determines if the application is running in development mode
  */
 function isDev(): boolean {
   return process.env.NODE_ENV === 'development' ||
+         getBinaryName() === 'cclid' ||
          Boolean(process.argv[1]?.includes('ts-node')) ||
          Boolean(process.env.npm_lifecycle_script?.includes('ts-node'));
 }

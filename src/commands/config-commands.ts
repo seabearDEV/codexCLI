@@ -2,6 +2,7 @@ import { color } from '../formatting';
 import { loadConfig, getConfigSetting, setConfigSetting } from '../config';
 import { printError } from './helpers';
 import { debug } from '../utils/debug';
+import { getBinaryName } from '../utils/binaryName';
 
 export function handleConfig(setting?: string, value?: string, options?: { list?: boolean }) {
   debug('handleConfig called', { setting, value, options });
@@ -23,7 +24,7 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
       console.log(`${color.green(key.padEnd(15))}: ${val}`);
     }
 
-    console.log('\nUse `ccli config --help` to see available options');
+    console.log(`\nUse \`${getBinaryName()} config --help\` to see available options`);
     return;
   }
 

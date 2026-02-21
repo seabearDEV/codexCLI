@@ -7,6 +7,7 @@ import { flattenObject } from './utils/objectPath';
 import { debug } from './utils/debug';
 import { VALID_DATA_TYPES } from './commands/helpers';
 import { VALID_CONFIG_KEYS } from './config';
+import { getBinaryName } from './utils/binaryName';
 
 // --- Types ---
 
@@ -402,10 +403,11 @@ function filterPrefix(items: CompletionItem[], prefix: string): CompletionItem[]
 // --- Shell script generators ---
 
 export function generateBashScript(): string {
-  return `# Bash completion for ccli (CodexCLI)
-_ccli_completions() {
+  const bin = getBinaryName();
+  return `# Bash completion for ${bin} (CodexCLI)
+_${bin}_completions() {
   local completions
-  completions="$(ccli --get-completions "$COMP_LINE" "$COMP_POINT" 2>/dev/null)"
+  completions="$(${bin} --get-completions "$COMP_LINE" "$COMP_POINT" 2>/dev/null)"
   if [ -z "$completions" ]; then
     return
   fi
@@ -427,13 +429,14 @@ _ccli_completions() {
     compopt -o nospace
   fi
 }
-complete -o default -F _ccli_completions ccli
+complete -o default -F _${bin}_completions ${bin}
 `;
 }
 
 export function generateZshScript(): string {
-  return `# Zsh completion for ccli (CodexCLI)
-_ccli_completions() {
+  const bin = getBinaryName();
+  return `# Zsh completion for ${bin} (CodexCLI)
+_${bin}_completions() {
   local line tab=$'\\t'
   local -A groups
   while IFS= read -r line; do
@@ -452,41 +455,42 @@ _ccli_completions() {
     else
       groups[completions]="\${groups[completions]+\${groups[completions]}|}\${line}"
     fi
-  done < <(ccli --get-completions "$BUFFER" "$CURSOR" 2>/dev/null)
+  done < <(${bin} --get-completions "$BUFFER" "$CURSOR" 2>/dev/null)
   if (( \${#groups} == 0 )); then
     _files
     return
   fi
-  local grp_name _ccli_val
-  local -a _ccli_items _ccli_dot _ccli_desc _ccli_plain
+  local grp_name _${bin}_val
+  local -a _${bin}_items _${bin}_dot _${bin}_desc _${bin}_plain
   for grp_name in \${(ko)groups}; do
-    _ccli_items=("\${(@s:|:)groups[\$grp_name]}")
-    _ccli_dot=()
-    _ccli_desc=()
-    _ccli_plain=()
-    for _ccli_val in "\${_ccli_items[@]}"; do
-      local _ccli_key="\${_ccli_val%%:*}"
-      local _ccli_dsc="\${_ccli_val#*:}"
-      if [[ "\$_ccli_key" == *. ]]; then
-        _ccli_dot+=("\$_ccli_key")
-      elif [[ -n "\$_ccli_dsc" ]]; then
-        _ccli_desc+=("\$_ccli_val")
+    _${bin}_items=("\${(@s:|:)groups[\$grp_name]}")
+    _${bin}_dot=()
+    _${bin}_desc=()
+    _${bin}_plain=()
+    for _${bin}_val in "\${_${bin}_items[@]}"; do
+      local _${bin}_key="\${_${bin}_val%%:*}"
+      local _${bin}_dsc="\${_${bin}_val#*:}"
+      if [[ "\$_${bin}_key" == *. ]]; then
+        _${bin}_dot+=("\$_${bin}_key")
+      elif [[ -n "\$_${bin}_dsc" ]]; then
+        _${bin}_desc+=("\$_${bin}_val")
       else
-        _ccli_plain+=("\$_ccli_key")
+        _${bin}_plain+=("\$_${bin}_key")
       fi
     done
-    (( \${#_ccli_desc} )) && _describe "\$grp_name" _ccli_desc
-    (( \${#_ccli_plain} )) && compadd -- "\${_ccli_plain[@]}"
-    (( \${#_ccli_dot} )) && compadd -S '' -- "\${_ccli_dot[@]}"
+    (( \${#_${bin}_desc} )) && _describe "\$grp_name" _${bin}_desc
+    (( \${#_${bin}_plain} )) && compadd -- "\${_${bin}_plain[@]}"
+    (( \${#_${bin}_dot} )) && compadd -S '' -- "\${_${bin}_dot[@]}"
   done
 }
-compdef _ccli_completions ccli
+compdef _${bin}_completions ${bin}
 `;
 }
 
 // --- Install helper ---
 
 export function installCompletions(): void {
+  const bin = getBinaryName();
   const shell = process.env.SHELL ?? '';
   let rcFile: string;
   let scriptCmd: string;
@@ -494,41 +498,42 @@ export function installCompletions(): void {
   const home = os.homedir();
   if (shell.endsWith('/zsh')) {
     rcFile = path.join(home, '.zshrc');
-    scriptCmd = 'eval "$(ccli config completions zsh)"';
+    scriptCmd = `eval "$(${bin} config completions zsh)"`;
   } else if (shell.endsWith('/bash')) {
     // Prefer .bash_profile on macOS, .bashrc on Linux
     const bashProfile = path.join(home, '.bash_profile');
     const bashrc = path.join(home, '.bashrc');
     rcFile = process.platform === 'darwin' && fs.existsSync(bashProfile) ? bashProfile : bashrc;
-    scriptCmd = 'eval "$(ccli config completions bash)"';
+    scriptCmd = `eval "$(${bin} config completions bash)"`;
   } else {
     console.error(`Unsupported shell: ${shell || '(unknown)'}`);
     console.error('Supported shells: bash, zsh');
-    console.error('You can manually add completions by running: ccli config completions bash  OR  ccli config completions zsh');
+    console.error(`You can manually add completions by running: ${bin} config completions bash  OR  ${bin} config completions zsh`);
     process.exit(1);
   }
 
   const content = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
 
   // Install completions
-  if (content.includes('ccli completions')) {
+  if (content.includes(`${bin} completions`) || content.includes(`${bin} config completions`)) {
     console.log(`Completions already installed in ${rcFile}`);
   } else {
-    const completionBlock = `\n# CodexCLI shell completions\n${scriptCmd}\n`;
+    const completionBlock = `\n# CodexCLI shell completions (${bin})\n${scriptCmd}\n`;
     fs.appendFileSync(rcFile, completionBlock, 'utf8');
     console.log(`Completions installed in ${rcFile}`);
   }
 
-  // Install shell wrapper for `ccli run` / `ccli r` (eval in current shell)
+  // Install shell wrapper for `run` / `r` (eval in current shell)
   // Re-read content since completions block may have been appended above
   const wrapperContent = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
+  const wrapperMarker = `# CodexCLI shell wrapper (${bin})`;
 
-  if (wrapperContent.includes('# CodexCLI shell wrapper')) {
+  if (wrapperContent.includes(wrapperMarker)) {
     console.log(`Shell wrapper already installed in ${rcFile}`);
   } else {
     const wrapperBlock = `
-# CodexCLI shell wrapper — eval "ccli run" in the current shell so cd/export/alias work
-ccli() {
+${wrapperMarker} — eval "${bin} run" in the current shell so cd/export/alias work
+${bin}() {
   local subcmd="" has_help=false
   for arg in "$@"; do
     if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
@@ -538,13 +543,13 @@ ccli() {
     fi
   done
   if [[ "$has_help" == false && ("$subcmd" == "run" || "$subcmd" == "r") ]]; then
-    local __ccli_cmd __ccli_exit
-    __ccli_cmd="$(command ccli "$@" --source)"
-    __ccli_exit=$?
-    [[ $__ccli_exit -ne 0 ]] && return $__ccli_exit
-    [[ -n "$__ccli_cmd" ]] && eval "$__ccli_cmd"
+    local __${bin}_cmd __${bin}_exit
+    __${bin}_cmd="$(command ${bin} "$@" --source)"
+    __${bin}_exit=$?
+    [[ $__${bin}_exit -ne 0 ]] && return $__${bin}_exit
+    [[ -n "$__${bin}_cmd" ]] && eval "$__${bin}_cmd"
   else
-    command ccli "$@"
+    command ${bin} "$@"
   fi
 }
 `;
@@ -555,12 +560,13 @@ ccli() {
   // Install history exclusion
   // Re-read content since earlier blocks may have been appended above
   let currentContent = fs.existsSync(rcFile) ? fs.readFileSync(rcFile, 'utf8') : '';
+  const historyMarker = `_${bin}_history_filter`;
 
-  if (currentContent.includes('_codexcli_history_filter') || (!shell.endsWith('/zsh') && currentContent.includes('HISTIGNORE'))) {
+  if (currentContent.includes(historyMarker) || (!shell.endsWith('/zsh') && currentContent.includes('HISTIGNORE'))) {
     console.log(`History exclusion already configured in ${rcFile}`);
   } else {
-    // Migrate from old HISTORY_IGNORE approach if present (zsh only)
-    if (shell.endsWith('/zsh') && currentContent.includes('HISTORY_IGNORE')) {
+    // Migrate from old HISTORY_IGNORE approach if present (zsh only, production ccli only)
+    if (bin === 'ccli' && shell.endsWith('/zsh') && currentContent.includes('HISTORY_IGNORE')) {
       currentContent = currentContent
         .replace(/\n?# CodexCLI - exclude from shell history\n/, '\n')
         .replace(/\n?HISTORY_IGNORE="\(ccli \*\)"\n?/, '\n');
@@ -569,8 +575,8 @@ ccli() {
     }
 
     const historyBlock = shell.endsWith('/zsh')
-      ? `\n# CodexCLI - exclude from shell history (set/s commands may contain sensitive values)\n[[ -z \${functions[add-zsh-hook]} ]] && autoload -Uz add-zsh-hook\n_codexcli_history_filter() { [[ $1 != ccli\\ (set|s)\\ * ]] }\nadd-zsh-hook zshaddhistory _codexcli_history_filter\n`
-      : `\n# CodexCLI - exclude from shell history (set/s commands may contain sensitive values)\nHISTIGNORE="\${HISTIGNORE:+\$HISTIGNORE:}ccli set *:ccli s *"\n`;
+      ? `\n# CodexCLI - exclude from shell history (${bin} set/s commands may contain sensitive values)\n[[ -z \${functions[add-zsh-hook]} ]] && autoload -Uz add-zsh-hook\n${historyMarker}() { [[ $1 != ${bin}\\ (set|s)\\ * ]] }\nadd-zsh-hook zshaddhistory ${historyMarker}\n`
+      : `\n# CodexCLI - exclude from shell history (${bin} set/s commands may contain sensitive values)\nHISTIGNORE="\${HISTIGNORE:+\$HISTIGNORE:}${bin} set *:${bin} s *"\n`;
     fs.appendFileSync(rcFile, historyBlock, 'utf8');
     console.log(`History exclusion installed in ${rcFile}`);
   }

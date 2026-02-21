@@ -27,10 +27,18 @@ function findItem(items: CompletionItem[], value: string): CompletionItem | unde
 }
 
 describe('Completions', () => {
+  let originalArgv1: string;
+
   beforeEach(() => {
+    originalArgv1 = process.argv[1];
+    process.argv[1] = '/usr/local/bin/ccli';
     clearDataCache();
     clearAliasCache();
     clearConfigCache();
+  });
+
+  afterEach(() => {
+    process.argv[1] = originalArgv1;
   });
 
   describe('getCompletions', () => {
@@ -603,7 +611,7 @@ describe('Completions', () => {
     it('skips if completions, shell wrapper, and history exclusion already installed', () => {
       process.env.SHELL = '/bin/zsh';
       (fs.existsSync as Mock).mockReturnValue(true);
-      (fs.readFileSync as Mock).mockReturnValue('eval "$(ccli completions zsh)"\n# CodexCLI shell wrapper\n_codexcli_history_filter');
+      (fs.readFileSync as Mock).mockReturnValue('eval "$(ccli config completions zsh)"\n# CodexCLI shell wrapper (ccli)\n_ccli_history_filter');
 
       installCompletions();
 
@@ -623,7 +631,7 @@ describe('Completions', () => {
 
       const appendCalls = (fs.appendFileSync as Mock).mock.calls;
       const wrapperAppend = appendCalls.find((call: unknown[]) =>
-        typeof call[1] === 'string' && call[1].includes('# CodexCLI shell wrapper')
+        typeof call[1] === 'string' && call[1].includes('# CodexCLI shell wrapper (ccli)')
       );
       expect(wrapperAppend).toBeDefined();
       expect(wrapperAppend[1]).toContain('command ccli');
@@ -635,7 +643,7 @@ describe('Completions', () => {
       process.env.SHELL = '/bin/zsh';
       (fs.existsSync as Mock).mockReturnValue(true);
       (fs.readFileSync as Mock).mockReturnValue(
-        'eval "$(ccli completions zsh)"\n# CodexCLI shell wrapper\nccli() {\n}\n_codexcli_history_filter'
+        'eval "$(ccli config completions zsh)"\n# CodexCLI shell wrapper (ccli)\nccli() {\n}\n_ccli_history_filter'
       );
 
       installCompletions();
@@ -650,7 +658,7 @@ describe('Completions', () => {
     it('migrates from old HISTORY_IGNORE to zshaddhistory hook', () => {
       process.env.SHELL = '/bin/zsh';
       (fs.existsSync as Mock).mockReturnValue(true);
-      const oldContent = 'eval "$(ccli completions zsh)"\n\n# CodexCLI - exclude from shell history\nHISTORY_IGNORE="(ccli *)"';
+      const oldContent = 'eval "$(ccli config completions zsh)"\n# CodexCLI shell wrapper (ccli)\n\n# CodexCLI - exclude from shell history\nHISTORY_IGNORE="(ccli *)"';
       (fs.readFileSync as Mock).mockReturnValue(oldContent);
 
       installCompletions();
@@ -660,10 +668,10 @@ describe('Completions', () => {
       const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
       expect(writeCall[1]).not.toContain('HISTORY_IGNORE');
 
-      // Should have appended the shell wrapper and the new hook
+      // Should have appended the new hook
       const appendCalls = (fs.appendFileSync as Mock).mock.calls;
       const historyAppend = appendCalls.find((call: unknown[]) =>
-        typeof call[1] === 'string' && call[1].includes('_codexcli_history_filter')
+        typeof call[1] === 'string' && call[1].includes('_ccli_history_filter')
       );
       expect(historyAppend).toBeDefined();
       expect(historyAppend[1]).toContain('add-zsh-hook zshaddhistory');

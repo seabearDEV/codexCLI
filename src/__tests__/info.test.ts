@@ -117,13 +117,17 @@ describe('showInfo with empty data', () => {
 describe('showInfo shell completions', () => {
   let consoleSpy: SpyInstance;
   let originalShell: string | undefined;
+  let originalArgv1: string;
 
   beforeEach(() => {
+    originalArgv1 = process.argv[1];
+    process.argv[1] = '/usr/local/bin/ccli';
     consoleSpy = vi.spyOn(console, 'log').mockImplementation();
     originalShell = process.env.SHELL;
   });
 
   afterEach(() => {
+    process.argv[1] = originalArgv1;
     consoleSpy.mockRestore();
     process.env.SHELL = originalShell;
   });
@@ -135,7 +139,7 @@ describe('showInfo shell completions', () => {
   it('shows installed when rc file contains ccli completions', () => {
     process.env.SHELL = '/bin/zsh';
     (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockReturnValue('eval "$(ccli completions zsh)"');
+    (fs.readFileSync as Mock).mockReturnValue('eval "$(ccli config completions zsh)"');
 
     showInfo();
     expect(getOutput()).toContain('installed');
