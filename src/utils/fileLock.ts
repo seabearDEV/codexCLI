@@ -1,6 +1,8 @@
 import fs from 'fs';
 
 const LOCK_STALE_MS = 10_000; // Consider lock stale after 10 seconds
+// Reusable buffer for Atomics.wait()-based sleep (avoids per-call allocation)
+const _sleepBuf = new Int32Array(new SharedArrayBuffer(4));
 
 /**
  * Acquire an advisory file lock using a .lock file.
@@ -33,10 +35,9 @@ export function acquireLock(filePath: string, maxRetries = 5): void {
         }
 
         if (attempt < maxRetries) {
-          // Busy-wait with backoff (1ms, 2ms, 4ms, 8ms, 16ms)
+          // Sleep with exponential backoff (1ms, 2ms, 4ms, 8ms, 16ms)
           const waitMs = Math.pow(2, attempt);
-          const start = Date.now();
-          while (Date.now() - start < waitMs) { /* spin */ }
+          Atomics.wait(_sleepBuf, 0, 0, waitMs);
           continue;
         }
 
