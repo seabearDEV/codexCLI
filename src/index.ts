@@ -78,7 +78,7 @@ codexCLI
         for await (const chunk of process.stdin) {
           chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
         }
-        const stdinValue = Buffer.concat(chunks).toString('utf8').replace(/\n$/, '');
+        const stdinValue = Buffer.concat(chunks).toString('utf8').trimEnd();
         if (stdinValue.length > 0) {
           value = stdinValue;
         } else if (!options.alias && options.confirm === undefined) {
