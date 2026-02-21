@@ -193,6 +193,25 @@ describe('MCP Server Tools', () => {
       expect(result.content[0].text).toContain('Set: server.ip = 10.0.0.1');
       expect(result.isError).toBeUndefined();
     });
+
+    it('masks plaintext in response when encrypt is true', async () => {
+      const result = await toolHandlers['codex_set']({
+        key: 'api.secret', value: 'mysecret', encrypt: true, password: 'pass',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('[encrypted]');
+      expect(result.content[0].text).not.toContain('mysecret');
+    });
+
+    it('masks plaintext in response when encrypt is true with alias', async () => {
+      const result = await toolHandlers['codex_set']({
+        key: 'api.secret', value: 'mysecret', encrypt: true, password: 'pass', alias: 'sec',
+      });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('[encrypted]');
+      expect(result.content[0].text).toContain('Alias set: sec ->');
+      expect(result.content[0].text).not.toContain('mysecret');
+    });
   });
 
   describe('codex_get', () => {
