@@ -4,64 +4,31 @@ Comprehensive audit of bugs, inconsistencies, and missing features.
 
 ---
 
-## P0 — Bugs (incorrect behavior visible to users)
+## P0 — Bugs (FIXED)
 
-### 1. `showExamples()` references non-existent flags `-k`, `-v`, `-e`
+### 1. ~~`showExamples()` references non-existent flags `-k`, `-v`, `-e`~~ FIXED
 
-**File:** `src/formatting.ts:205,224-225`
+**File:** `src/formatting.ts`
 
-The `config examples` output shows three flags that don't exist:
+Examples now use valid flags: `get -a` (aliases only), `find prod -e` (entries only), `find ip -a` (aliases only), `find server -t` (tree).
 
-| Example shown | Flag | Actual behavior |
-|---|---|---|
-| `ccli get -e` | `-e` ("entries only") | No such flag on `get`; `-e` is not registered |
-| `ccli find server -k` | `-k` ("keys only") | No such flag on `find`; only `-e`, `-a`, `-t` exist |
-| `ccli find production -v` | `-v` ("values only") | No such flag on `find`; only `-e`, `-a`, `-t` exist |
+### 2. ~~`showHelp()` config signature and subcommands are wrong~~ FIXED
 
-**Fix:** Remove the `get -e` example (there's no entries-only filter on `get`). Replace `-k` and `-v` examples with valid flags or remove them.
+**File:** `src/formatting.ts`
 
----
+Config line now shows `<subcommand>` and SUBCOMMANDS section includes `set, get, info, examples, completions`.
 
-### 2. `showHelp()` config signature and subcommands are wrong
+### 3. ~~`displayAliases` empty-state message references deleted command~~ FIXED
 
-**File:** `src/formatting.ts:121,125`
+**File:** `src/commands/helpers.ts`
 
-- Help shows `config [setting] [value]` — but `config` takes no positional arguments. Passing `ccli config theme dark` triggers a Commander error because "theme" is not a registered subcommand.
-- The SUBCOMMANDS section lists `info, examples, completions` but **omits `set` and `get`**, which are real config subcommands.
+Message now shows the correct command: `set <key> <value> -a <alias>`.
 
-**Fix:** Change the config args column to `<subcommand>` and add `set`, `get` to the subcommands line.
+### 4. ~~`data export all -o <file>` overwrites same file three times~~ FIXED
 
----
+**File:** `src/commands/data-management.ts`
 
-### 3. `displayAliases` empty-state message references deleted command
-
-**File:** `src/commands/helpers.ts:91`
-
-When no aliases exist, the message says:
-```
-No aliases found. Add one with "ccli alias set <name> <command>"
-```
-
-There is no `alias set` command. The correct way to create an alias is:
-```
-ccli set <key> <value> -a <alias_name>
-```
-
-**Fix:** Update the message to show the correct command.
-
----
-
-### 4. `data export all -o <file>` overwrites same file three times
-
-**File:** `src/commands/data-management.ts:25-41`
-
-When `type === 'all'` and `-o output.json` is specified, all three writes (entries, aliases, confirm) go to the same file path. Each write overwrites the previous — only the last one (confirm keys) survives.
-
-Without `-o`, each type gets a unique timestamped filename, so the bug only manifests with the explicit output flag.
-
-**Fix:** When `type === 'all'` and `-o` is given, either:
-- Ignore `-o` and use per-type timestamped filenames (warn the user), or
-- Suffix the provided filename with the type (e.g., `backup-entries.json`, `backup-aliases.json`, `backup-confirm.json`)
+When `type === 'all'` and `-o` is specified, filenames are suffixed with the type (e.g., `backup-entries.json`, `backup-aliases.json`, `backup-confirm.json`).
 
 ---
 
@@ -173,7 +140,7 @@ Cannot set multiple entries in one command.
 
 | Priority | Count | Description |
 |----------|-------|-------------|
-| **P0** | 4 | Bugs showing incorrect info or causing data loss |
-| **P1** | 3 | Security and platform gaps |
+| **P0** | 4 | ~~Bugs showing incorrect info or causing data loss~~ ALL FIXED |
+| **P1** | 3 | ~~Security and platform gaps~~ ALL FIXED |
 | **P2** | 7 | Missing core features |
 | **P3** | 10 | Nice-to-have features |
