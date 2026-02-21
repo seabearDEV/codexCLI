@@ -16,8 +16,6 @@ jobs:
         include:
           - runner: macos-latest
             binary: ccli-macos-arm64
-          - runner: macos-latest-large
-            binary: ccli-macos-x64
           - runner: ubuntu-latest
             binary: ccli-linux-x64
           - runner: ubuntu-24.04-arm
