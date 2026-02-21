@@ -86,6 +86,7 @@ codexCLI
           process.exitCode = 1;
           return;
         }
+        // value stays undefined — intentional for alias-only or confirm-only updates
       } else if (!options.alias && options.confirm === undefined) {
         // Allow no value when -a or --confirm/--no-confirm is provided (metadata-only update)
         printError('Missing value. Provide a value or use --prompt (-p) to enter it interactively.');

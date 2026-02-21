@@ -97,8 +97,8 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
 
   if (options.json) {
     const result: { entries?: Record<string, string>, aliases?: Record<string, string> } = {};
-    if (Object.keys(dataMatches).length > 0) result.entries = dataMatches;
-    if (Object.keys(aliasMatches).length > 0) result.aliases = aliasMatches;
+    if (!options.aliases) result.entries = dataMatches;
+    if (!options.entries) result.aliases = aliasMatches;
     console.log(JSON.stringify(result, null, 2));
     return;
   }

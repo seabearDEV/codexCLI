@@ -1,4 +1,7 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { loadData, handleError, getValue, setValue, removeValue } from '../storage';
 import { flattenObject } from '../utils/objectPath';
 import { CodexValue } from '../types';
@@ -278,7 +281,11 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
         const flat = flattenObject(data);
         const result: Record<string, string> = {};
         for (const [k, v] of Object.entries(flat)) {
-          result[k] = isEncrypted(v) ? '[encrypted]' : v;
+          if (isEncrypted(v)) {
+            result[k] = '[encrypted]';
+          } else {
+            try { result[k] = interpolate(v); } catch { result[k] = v; }
+          }
         }
         console.log(JSON.stringify(result, null, 2));
       }
@@ -288,18 +295,29 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     const val = getValue(key);
     if (val === undefined) {
       console.error(JSON.stringify({ error: `Entry '${key}' not found` }));
+      process.exitCode = 1;
       return;
     }
     if (typeof val === 'object' && val !== null) {
       const flat = flattenObject({ [key]: val });
       const result: Record<string, string> = {};
       for (const [k, v] of Object.entries(flat)) {
-        result[k] = isEncrypted(v) ? '[encrypted]' : v;
+        if (isEncrypted(v)) {
+          result[k] = '[encrypted]';
+        } else {
+          try { result[k] = interpolate(v); } catch { result[k] = v; }
+        }
       }
       console.log(JSON.stringify(result, null, 2));
     } else {
       const strVal = String(val);
-      console.log(JSON.stringify({ [key]: isEncrypted(strVal) ? '[encrypted]' : strVal }));
+      let displayVal: string;
+      if (isEncrypted(strVal)) {
+        displayVal = '[encrypted]';
+      } else {
+        try { displayVal = interpolate(strVal); } catch { displayVal = strVal; }
+      }
+      console.log(JSON.stringify({ [key]: displayVal }));
     }
     return;
   }
@@ -410,17 +428,16 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
       return;
     }
 
-    const resolvedKey = resolveKey(key);
-    let value = getValue(resolvedKey);
+    let value = getValue(key);
 
     if (value === undefined) {
-      printError(`Entry '${resolvedKey}' not found.`);
+      printError(`Entry '${key}' not found.`);
       process.exitCode = 1;
       return;
     }
 
     if (typeof value !== 'string') {
-      printError(`Entry '${resolvedKey}' is a subtree, not a single value. Cannot edit.`);
+      printError(`Entry '${key}' is a subtree, not a single value. Cannot edit.`);
       process.exitCode = 1;
       return;
     }
@@ -428,7 +445,7 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
     let password: string | undefined;
     if (isEncrypted(value)) {
       if (!options.decrypt) {
-        printError(`Entry '${resolvedKey}' is encrypted. Use --decrypt to edit.`);
+        printError(`Entry '${key}' is encrypted. Use --decrypt to edit.`);
         process.exitCode = 1;
         return;
       }
@@ -442,11 +459,8 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
       }
     }
 
-    const os = await import('os');
-    const path = await import('path');
-    const fsModule = await import('fs');
     const tmpFile = path.join(os.tmpdir(), `codexcli-edit-${Date.now()}.tmp`);
-    fsModule.writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
+    fs.writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
 
     try {
       const isWindows = process.platform === 'win32';
@@ -462,7 +476,7 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
       if (result.status !== 0 && result.status !== null) {
         throw new Error(`Editor exited with code ${result.status}`);
       }
-      const newValue = fsModule.readFileSync(tmpFile, 'utf8');
+      const newValue = fs.readFileSync(tmpFile, 'utf8');
 
       if (newValue === value) {
         console.log('No changes made.');
@@ -474,10 +488,10 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
         storedValue = encryptValue(newValue, password);
       }
 
-      setValue(resolvedKey, storedValue);
-      printSuccess(`Entry '${resolvedKey}' updated successfully.`);
+      setValue(key, storedValue);
+      printSuccess(`Entry '${key}' updated successfully.`);
     } finally {
-      try { fsModule.unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
+      try { fs.unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
     }
   } catch (error) {
     handleError('Failed to edit entry:', error);

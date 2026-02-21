@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { debug } from './debug';
 
 const LOCK_STALE_MS = 10_000; // Consider lock stale after 10 seconds
 // Reusable buffer for Atomics.wait()-based sleep (avoids per-call allocation)
@@ -25,7 +26,10 @@ export function acquireLock(filePath: string, maxRetries = 5): void {
         try {
           const stat = fs.statSync(lockPath);
           if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
-            // Stale lock — remove and retry immediately
+            // Stale lock — remove and retry immediately.
+            // TOCTOU note: another process may unlink+recreate between our
+            // unlink and the next openSync, but that's fine — the O_CREAT|O_EXCL
+            // re-acquire is atomic so we'll just loop again.
             try { fs.unlinkSync(lockPath); } catch { /* another process may have removed it */ }
             continue;
           }
@@ -69,8 +73,8 @@ export function withFileLock<T>(filePath: string, fn: () => T): T {
   try {
     acquireLock(filePath);
     locked = true;
-  } catch {
-    // Lock acquisition failed — proceed without lock
+  } catch (err) {
+    debug(`Lock acquisition failed for ${filePath}, proceeding without lock: ${err}`);
   }
   try {
     return fn();

@@ -35,11 +35,28 @@ export function createAutoBackup(label: string): string | null {
 
     if (backedUp === 0) {
       // Nothing to back up — remove the empty directory
-      try { fs.rmdirSync(backupSubDir); } catch { /* ignore */ }
+      try { fs.rmSync(backupSubDir); } catch { /* ignore */ }
       return null;
     }
 
     debug(`Auto-backup created: ${backupSubDir} (${backedUp} files)`);
+
+    // Rotate: keep only the 10 most recent backups
+    try {
+      const allBackups = fs.readdirSync(backupDir)
+        .filter(name => fs.statSync(path.join(backupDir, name)).isDirectory())
+        .sort();
+      if (allBackups.length > 10) {
+        const toRemove = allBackups.slice(0, allBackups.length - 10);
+        for (const old of toRemove) {
+          fs.rmSync(path.join(backupDir, old), { recursive: true, force: true });
+        }
+        debug(`Removed ${toRemove.length} old backup(s)`);
+      }
+    } catch (cleanupErr) {
+      debug(`Backup cleanup failed: ${cleanupErr}`);
+    }
+
     return backupSubDir;
   } catch (error) {
     debug(`Auto-backup failed: ${error}`);

@@ -515,11 +515,13 @@ server.tool(
         const currentAliases = merge ? loadAliases() : {};
         saveAliases(merge ? { ...currentAliases, ...(aliasesObj as Record<string, string>) } : aliasesObj as Record<string, string>);
 
-        // Import confirm keys if present
+        // Import confirm keys if present; reset to empty when replacing and key is absent
         const confirmVal = obj.confirm;
         if (confirmVal && typeof confirmVal === "object" && !Array.isArray(confirmVal)) {
           const currentConfirm = merge ? loadConfirmKeys() : {};
           saveConfirmKeys(merge ? { ...currentConfirm, ...(confirmVal as Record<string, true>) } : confirmVal as Record<string, true>);
+        } else if (!merge) {
+          saveConfirmKeys({});
         }
       } else if (type === "entries") {
         const current = merge ? loadData() : {};
