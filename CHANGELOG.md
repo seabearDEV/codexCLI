@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-02-21
+
+### Added
+
+- `edit` command (alias `e`) — open an entry's value in `$EDITOR` / `$VISUAL` with `--decrypt` support
+- `--json` / `-j` flag on `get` and `find` for machine-readable JSON output
+- Stdin piping for `set` — read value from stdin when piped (`echo "val" | ccli set key`)
+- `confirm` as a standalone type for `data export`, `data import`, and `data reset`
+- Advisory file locking (`fileLock.ts`) — all writes are lock-protected with stale-lock detection
+- Auto-backup before destructive operations (`data reset`, non-merge `data import`) in `~/.codexcli/.backups/`
+- MCP `codex_set`: `encrypt` and `password` parameters for encrypted storage
+- MCP `codex_get`: `decrypt` and `password` parameters for encrypted retrieval
+- MCP `codex_run`: `force` parameter to skip confirm check on protected entries
+- MCP `codex_export`, `codex_import`, `codex_reset`: support for `confirm` data type
+- Windows clipboard support via `clip` command
+
+### Fixed
+
+- `showExamples()` referenced non-existent flags `-k`, `-v`, `-e` — now uses valid flags
+- `showHelp()` config signature and subcommands were incorrect — now shows `<subcommand>` with correct list
+- `displayAliases` empty-state message referenced deleted command — now shows `set <key> <value> -a <alias>`
+- `data export all -o <file>` overwrote the same file three times — filenames now suffixed with type
+- MCP `codex_run` ignored `confirm` metadata — now checks confirm before executing
+- Data files used default permissions (0644) — now use 0600; directories use 0700
+
 ## [0.1.0] - 2026-02-20
 
 ### Added

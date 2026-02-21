@@ -14,6 +14,7 @@ A command-line information store for quick reference of frequently used data.
   - [Searching](#searching)
   - [Aliases](#aliases)
   - [Renaming](#renaming)
+  - [Editing Data](#editing-data)
   - [Removing Data](#removing-data)
   - [Interpolation](#interpolation)
   - [Encryption](#encryption)
@@ -41,7 +42,12 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 - **Encryption**: Password-protect sensitive values
 - **Search**: Find entries by searching keys or values
 - **Tree Visualization**: Display nested data in a tree-like structure
-- **Clipboard Integration**: Copy values directly to clipboard
+- **Clipboard Integration**: Copy values directly to clipboard (macOS, Linux, Windows)
+- **Inline Editing**: Open entries in `$EDITOR` / `$VISUAL` for quick edits
+- **JSON Output**: Machine-readable `--json` flag on `get` and `find` for scripting
+- **Stdin Piping**: Pipe values into `set` from other commands
+- **Auto-Backup**: Automatic timestamped backups before destructive operations
+- **File Locking**: Advisory locking prevents data corruption from concurrent access
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
 - **MCP Server**: Expose CodexCLI as a tool for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
 
@@ -137,6 +143,12 @@ ccli set commands.deploy "./deploy.sh" --confirm
 
 # Remove the confirmation requirement from an entry
 ccli set commands.deploy --no-confirm
+
+# Pipe a value from stdin
+echo "my value" | ccli set mykey
+
+# Pipe from another command
+curl -s https://api.example.com/token | ccli set api.token
 ```
 
 After setting an entry, you'll be asked interactively whether it should require confirmation to run. Use `--confirm` or `--no-confirm` to skip the prompt.
@@ -167,6 +179,9 @@ ccli get api.key -d
 
 # Copy value to clipboard
 ccli get server.ip -c
+
+# Output as JSON (for scripting)
+ccli get server --json
 
 # Show aliases only
 ccli get -a
@@ -220,6 +235,9 @@ ccli find ip -a
 
 # Show results as a tree
 ccli find server -t
+
+# Output as JSON (for scripting)
+ccli find prod --json
 ```
 
 ### Aliases
@@ -260,6 +278,18 @@ ccli rename -a oldalias newalias
 
 # Rename a key and set a new alias on it
 ccli rename server.old server.new --set-alias sn
+```
+
+### Editing Data
+
+Open a stored value in your `$EDITOR` (or `$VISUAL`) for inline editing:
+
+```bash
+# Edit an entry in your default editor
+ccli edit server.production.ip
+
+# Edit an encrypted entry (decrypts before editing, re-encrypts on save)
+ccli edit api.key --decrypt
 ```
 
 ### Removing Data
@@ -364,6 +394,9 @@ ccli data export aliases -o my-aliases.json
 # Export with pretty-printed JSON
 ccli data export entries --pretty
 
+# Export confirm metadata
+ccli data export confirm
+
 # Export everything (entries, aliases, confirm metadata)
 ccli data export all
 
@@ -379,6 +412,8 @@ ccli data reset entries
 # Reset without confirmation
 ccli data reset all -f
 ```
+
+> **Auto-backup:** Before destructive operations (`data reset`, non-merge `data import`), CodexCLI automatically creates a timestamped backup in `~/.codexcli/.backups/`.
 
 ### Shell Wrapper
 
@@ -437,7 +472,7 @@ eval "$(ccli config completions bash)"
 | `ccli set <TAB>` | Flags + namespace prefixes (one level at a time) |
 | `ccli config <TAB>` | Subcommands (`set`, `get`, `info`, `examples`, `completions`) |
 | `ccli config set <TAB>` | Config keys (`colors`, `theme`) |
-| `ccli data export <TAB>` | `entries`, `aliases`, `all` |
+| `ccli data export <TAB>` | `entries`, `aliases`, `confirm`, `all` |
 
 ### Scripting Tips
 
@@ -469,6 +504,7 @@ ccli --debug get server.production
 | `get` | `g` | `[key]` | Retrieve entries or specific data |
 | `run` | `r` | `<keys...>` | Execute stored command(s) (`:` compose, `&&` chain) |
 | `find` | `f` | `<term>` | Find entries by key or value |
+| `edit` | `e` | `<key>` | Open an entry's value in `$EDITOR` |
 | `remove` | `rm` | `<key>` | Remove an entry and its alias |
 | `rename` | `rn` | `<old> <new>` | Rename an entry key or alias |
 | `config` | | `<subcommand>` | View or change configuration settings |
@@ -515,14 +551,14 @@ Add the following to your Claude Desktop MCP config file:
 
 | Tool | Description |
 |---|---|
-| `codex_set` | Set an entry in the data store (key + value, optional alias) |
-| `codex_get` | Retrieve entries (specific key, subtree, or all; flat or tree format) |
+| `codex_set` | Set an entry (key + value, optional alias, optional encrypt + password) |
+| `codex_get` | Retrieve entries (specific key, subtree, or all; optional decrypt + password) |
 | `codex_remove` | Remove an entry or alias by key |
 | `codex_search` | Search entries by key or value (case-insensitive) |
 | `codex_alias_set` | Create or update an alias for a dot-notation path |
 | `codex_alias_remove` | Remove an alias |
 | `codex_alias_list` | List all defined aliases |
-| `codex_run` | Execute a stored command (with optional dry-run mode) |
+| `codex_run` | Execute a stored command (dry-run, force to skip confirm check) |
 | `codex_config_get` | Get one or all configuration settings |
 | `codex_config_set` | Set a configuration setting (colors, theme) |
 | `codex_export` | Export data and/or aliases as JSON text |
