@@ -65,25 +65,27 @@ Without `-o`, each type gets a unique timestamped filename, so the bug only mani
 
 ---
 
-## P1 — Security & Platform Gaps
+## P1 — Security & Platform Gaps (FIXED)
 
-### 5. MCP `codex_run` ignores `confirm` metadata
+### 5. ~~MCP `codex_run` ignores `confirm` metadata~~ FIXED
 
 **File:** `src/mcp-server.ts`
 
-The `codex_run` MCP tool executes stored commands but never loads or checks `confirm.json`. Entries marked with `--confirm` will execute without prompting when invoked via AI agents.
+`codex_run` now imports `hasConfirm` and checks confirm metadata before executing. If an entry has confirm set and `force` is not `true` (and not a dry run), execution is refused with an error message. Added `force` parameter to the tool schema.
 
-### 6. Windows clipboard is unsupported
+### 6. ~~Windows clipboard is unsupported~~ FIXED
 
 **File:** `src/utils/clipboard.ts`
 
-The clipboard utility throws `"Clipboard not supported on platform: win32"` — but the tool ships npm binaries that could run on Windows. Use `clip.exe` for Windows support.
+Added `win32` platform support using `clip` command.
 
-### 7. Data files use default permissions (0644)
+### 7. ~~Data files use default permissions (0644)~~ FIXED
 
-**File:** `src/storage.ts`, `src/utils/atomicWrite.ts`
+**File:** `src/utils/atomicWrite.ts`, `src/utils/paths.ts`, `src/commands/data-management.ts`
 
-Files in `~/.codexcli/` are created with default permissions, meaning other users on a shared system can read them. For a tool storing secrets, files should use `0600`.
+- `atomicWriteFileSync` now writes files with mode `0o600` (owner read/write only)
+- `ensureDataDirectoryExists` now creates directories with mode `0o700`
+- Export files in `data-management.ts` also use mode `0o600`
 
 ---
 

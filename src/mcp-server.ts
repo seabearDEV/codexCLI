@@ -22,6 +22,7 @@ import {
 import {
   ensureDataDirectoryExists,
 } from "./utils/paths";
+import { hasConfirm } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
 import { version } from "../package.json";
@@ -311,8 +312,9 @@ server.tool(
   {
     key: z.string().describe("Dot-notation key (or alias) whose value is a shell command"),
     dry: z.boolean().optional().describe("If true, return the command without executing it"),
+    force: z.boolean().optional().describe("If true, skip the confirm check for entries marked --confirm"),
   },
-  async ({ key, dry }) => {
+  async ({ key, dry, force }) => {
     const resolvedKey = resolveKey(key);
     const value = getValue(resolvedKey);
 
@@ -325,6 +327,13 @@ server.tool(
 
     if (isEncrypted(value)) {
       return errorResponse(`Value at '${key}' is encrypted. Decryption is not supported via MCP.`);
+    }
+
+    // Respect confirm metadata: refuse unless --force or --dry
+    if (hasConfirm(resolvedKey) && !force && !dry) {
+      return errorResponse(
+        `Entry '${key}' requires confirmation (--confirm). Pass force: true to execute.`
+      );
     }
 
     let command = value;

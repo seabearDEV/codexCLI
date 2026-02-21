@@ -33,19 +33,19 @@ export function exportData(type: string, options: ExportOptions): void {
 
     if (type === 'entries' || type === 'all') {
       const outputFile = getOutputFile('entries', `codexcli-entries-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData()), null, indent), 'utf8');
+      fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData()), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Entries exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'aliases' || type === 'all') {
       const outputFile = getOutputFile('aliases', `codexcli-aliases-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), 'utf8');
+      fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Aliases exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'all') {
       const outputFile = getOutputFile('confirm', `codexcli-confirm-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(), null, indent), 'utf8');
+      fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Confirm keys exported to: ${color.cyan(outputFile)}`);
     }
   } catch (error) {

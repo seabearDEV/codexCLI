@@ -118,6 +118,7 @@ vi.mock('../utils/paths', () => ({
   getDataFilePath: vi.fn(() => '/mock/entries.json'),
   getAliasFilePath: vi.fn(() => '/mock/aliases.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
+  getConfirmFilePath: vi.fn(() => '/mock/confirm.json'),
 }));
 
 vi.mock('../formatting', () => ({

@@ -38,7 +38,7 @@ export function ensureDataDirectoryExists(): string {
   const dataDir = getDataDirectory();
 
   if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+    fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   }
 
   return dataDir;

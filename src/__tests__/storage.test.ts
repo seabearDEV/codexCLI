@@ -141,7 +141,7 @@ describe('Storage', () => {
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         '/mock/entries.json.tmp',
         JSON.stringify({ key: 'value' }, null, 2),
-        'utf8'
+        { encoding: 'utf8', mode: 0o600 }
       );
       expect(fs.renameSync).toHaveBeenCalledWith(
         '/mock/entries.json.tmp',

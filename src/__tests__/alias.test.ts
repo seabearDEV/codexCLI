@@ -198,7 +198,7 @@ describe('Alias Management', () => {
 
       saveAliases({ myAlias: 'some.path' });
 
-      expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true, mode: 0o700 });
       expect(fs.writeFileSync).toHaveBeenCalled();
     });
 
