@@ -69,9 +69,9 @@ server.tool(
         }
         aliases[alias] = resolved;
         saveAliases(aliases);
-        return textResponse(`Set: ${resolved} = ${value}\nAlias set: ${alias} -> ${resolved}`);
+        return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}\nAlias set: ${alias} -> ${resolved}`);
       }
-      return textResponse(`Set: ${resolved} = ${value}`);
+      return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}`);
     } catch (err) {
       return errorResponse(`Error setting entry: ${String(err)}`);
     }
