@@ -13,6 +13,7 @@ A command-line information store for quick reference of frequently used data.
   - [Running Commands](#running-commands)
   - [Searching](#searching)
   - [Aliases](#aliases)
+  - [Copying Data](#copying-data)
   - [Renaming](#renaming)
   - [Editing Data](#editing-data)
   - [Removing Data](#removing-data)
@@ -144,6 +145,9 @@ ccli set commands.deploy "./deploy.sh" --confirm
 # Remove the confirmation requirement from an entry
 ccli set commands.deploy --no-confirm
 
+# Batch set multiple key=value pairs
+ccli set a=1 b=2 c=3
+
 # Pipe a value from stdin
 echo "my value" | ccli set mykey
 
@@ -219,6 +223,9 @@ ccli run commands.scp:files.config:targets.prod -y
 
 # Decrypt and run an encrypted command
 ccli run secret.script -d -y
+
+# Capture output for piping (instead of inheriting stdio)
+ccli run cmd.echo --capture | tr a-z A-Z
 ```
 
 ### Searching
@@ -263,6 +270,21 @@ ccli remove ip -a
 
 # Remove an entry and its alias
 ccli remove server.production.ip
+```
+
+### Copying Data
+
+Copy an entry (or an entire subtree) to a new key:
+
+```bash
+# Copy a single entry
+ccli copy server.ip server.ip.backup
+
+# Copy an entire subtree
+ccli copy server server.backup
+
+# Overwrite destination without confirmation
+ccli cp server.ip server.ip.backup -f
 ```
 
 ### Renaming
@@ -406,6 +428,9 @@ ccli data import entries backup.json
 # Import and merge with existing data
 ccli data import entries backup.json --merge
 
+# Preview changes without importing
+ccli data import entries backup.json --merge --preview
+
 # Reset data to empty state (prompts first)
 ccli data reset entries
 
@@ -466,7 +491,7 @@ eval "$(ccli config completions bash)"
 
 | Context | Completions |
 |---|---|
-| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `remove`, `rename`, `config`, `data`) |
+| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `config`, `data`) |
 | `ccli get <TAB>` | Flags + stored data keys + aliases |
 | `ccli run <TAB>` | Flags + stored data keys + aliases |
 | `ccli set <TAB>` | Flags + namespace prefixes (one level at a time) |
@@ -500,11 +525,12 @@ ccli --debug get server.production
 
 | Command | Alias | Signature | Description |
 |---|---|---|---|
-| `set` | `s` | `<key> [value]` | Set an entry (value optional with `-a`) |
+| `set` | `s` | `<key> [value]` | Set an entry (value optional with `-a`; supports `key=val` batch) |
 | `get` | `g` | `[key]` | Retrieve entries or specific data |
 | `run` | `r` | `<keys...>` | Execute stored command(s) (`:` compose, `&&` chain) |
 | `find` | `f` | `<term>` | Find entries by key or value |
 | `edit` | `e` | `<key>` | Open an entry's value in `$EDITOR` |
+| `copy` | `cp` | `<source> <dest>` | Copy an entry to a new key |
 | `remove` | `rm` | `<key>` | Remove an entry and its alias |
 | `rename` | `rn` | `<old> <new>` | Rename an entry key or alias |
 | `config` | | `<subcommand>` | View or change configuration settings |
@@ -554,15 +580,16 @@ Add the following to your Claude Desktop MCP config file:
 | `codex_set` | Set an entry (key + value, optional alias, optional encrypt + password) |
 | `codex_get` | Retrieve entries (specific key, subtree, or all; optional decrypt + password) |
 | `codex_remove` | Remove an entry or alias by key |
+| `codex_copy` | Copy an entry to a new key (optional force to overwrite) |
 | `codex_search` | Search entries by key or value (case-insensitive) |
 | `codex_alias_set` | Create or update an alias for a dot-notation path |
 | `codex_alias_remove` | Remove an alias |
 | `codex_alias_list` | List all defined aliases |
-| `codex_run` | Execute a stored command (dry-run, force to skip confirm check) |
+| `codex_run` | Execute a stored command (dry-run, force to skip confirm check, capture output) |
 | `codex_config_get` | Get one or all configuration settings |
 | `codex_config_set` | Set a configuration setting (colors, theme) |
 | `codex_export` | Export data and/or aliases as JSON text |
-| `codex_import` | Import data and/or aliases from a JSON string (merge or replace) |
+| `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
 
 ### Verifying the MCP Server

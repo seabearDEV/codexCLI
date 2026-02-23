@@ -210,6 +210,47 @@ server.tool(
   }
 );
 
+// --- codex_copy ---
+server.tool(
+  "codex_copy",
+  "Copy an entry to a new key in the CodexCLI data store",
+  {
+    source: z.string().describe("Source dot-notation key to copy from"),
+    dest: z.string().describe("Destination dot-notation key to copy to"),
+    force: z.boolean().optional().describe("Overwrite destination if it already exists"),
+  },
+  async ({ source, dest, force }) => {
+    try {
+      ensureDataDirectoryExists();
+      const resolvedSource = resolveKey(source);
+      const value = getValue(resolvedSource);
+
+      if (value === undefined) {
+        return errorResponse(`Key '${source}' not found.`);
+      }
+
+      const existing = getValue(dest);
+      if (existing !== undefined && !force) {
+        return errorResponse(`Key '${dest}' already exists. Pass force: true to overwrite.`);
+      }
+
+      if (typeof value === "string") {
+        setValue(dest, value);
+      } else {
+        const flat = flattenObject({ [resolvedSource]: value });
+        for (const [flatKey, flatVal] of Object.entries(flat)) {
+          const suffix = flatKey.slice(resolvedSource.length);
+          setValue(dest + suffix, String(flatVal));
+        }
+      }
+
+      return textResponse(`Copied: ${resolvedSource} -> ${dest}`);
+    } catch (err) {
+      return errorResponse(`Error copying entry: ${String(err)}`);
+    }
+  }
+);
+
 // --- codex_search ---
 server.tool(
   "codex_search",
@@ -334,6 +375,7 @@ server.tool(
     key: z.string().describe("Dot-notation key (or alias) whose value is a shell command"),
     dry: z.boolean().optional().describe("If true, return the command without executing it"),
     force: z.boolean().optional().describe("If true, skip the confirm check for entries marked --confirm"),
+    capture: z.boolean().optional().describe("Capture output (MCP always captures; included for API consistency)"),
   },
   async ({ key, dry, force }) => {
     const resolvedKey = resolveKey(key);
@@ -474,8 +516,9 @@ server.tool(
     type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to import"),
     json: z.string().describe("JSON string to import"),
     merge: z.boolean().optional().describe("Merge with existing data instead of replacing (default false)"),
+    preview: z.boolean().optional().describe("Preview changes without modifying data (returns diff text)"),
   },
-  async ({ type, json, merge }) => {
+  async ({ type, json, merge, preview }) => {
     try {
       let parsed: unknown;
       try {
@@ -489,6 +532,73 @@ server.tool(
       }
 
       const obj = parsed as Record<string, unknown>;
+
+      // Preview mode: compute diff and return without modifying data
+      if (preview) {
+        const lines: string[] = [];
+
+        const diffEntries = (current: Record<string, string>, incoming: Record<string, string>, doMerge: boolean): string[] => {
+          const result: string[] = [];
+          if (doMerge) {
+            const allKeys = new Set([...Object.keys(current), ...Object.keys(incoming)]);
+            for (const key of [...allKeys].sort()) {
+              if (key in incoming && !(key in current)) {
+                result.push(`  [add]    ${key}: ${incoming[key]}`);
+              } else if (key in incoming && key in current && current[key] !== incoming[key]) {
+                result.push(`  [modify] ${key}: ${current[key]} → ${incoming[key]}`);
+              }
+            }
+          } else {
+            for (const key of Object.keys(current).sort()) {
+              if (!(key in incoming) || current[key] !== incoming[key]) {
+                result.push(`  [remove] ${key}: ${current[key]}`);
+              }
+            }
+            for (const key of Object.keys(incoming).sort()) {
+              if (!(key in current) || current[key] !== incoming[key]) {
+                result.push(`  [add]    ${key}: ${incoming[key]}`);
+              }
+            }
+          }
+          return result;
+        };
+
+        if (type === "entries" || type === "all") {
+          const importObj = type === "all" ? (obj.entries as Record<string, unknown> || {}) : obj;
+          const currentFlat = flattenObject(loadData());
+          const importFlat = flattenObject(importObj as Record<string, unknown>);
+          lines.push(`Entries (${merge ? "merge" : "replace"}):`);
+          const diff = diffEntries(currentFlat, importFlat, !!merge);
+          lines.push(...(diff.length > 0 ? diff : ["  No changes"]));
+        }
+
+        if (type === "aliases" || type === "all") {
+          const importObj = type === "all" ? (obj.aliases as Record<string, string> || {}) : obj as Record<string, string>;
+          const currentAliases = loadAliases();
+          const currentFlat: Record<string, string> = {};
+          const importFlat: Record<string, string> = {};
+          for (const [k, v] of Object.entries(currentAliases)) currentFlat[k] = v;
+          for (const [k, v] of Object.entries(importObj)) importFlat[k] = String(v);
+          lines.push(`Aliases (${merge ? "merge" : "replace"}):`);
+          const diff = diffEntries(currentFlat, importFlat, !!merge);
+          lines.push(...(diff.length > 0 ? diff : ["  No changes"]));
+        }
+
+        if (type === "confirm" || type === "all") {
+          const importObj = type === "all" ? (obj.confirm as Record<string, unknown> || {}) : obj;
+          const currentConfirm = loadConfirmKeys();
+          const currentFlat: Record<string, string> = {};
+          const importFlat: Record<string, string> = {};
+          for (const k of Object.keys(currentConfirm)) currentFlat[k] = "true";
+          for (const k of Object.keys(importObj)) importFlat[k] = "true";
+          lines.push(`Confirm keys (${merge ? "merge" : "replace"}):`);
+          const diff = diffEntries(currentFlat, importFlat, !!merge);
+          lines.push(...(diff.length > 0 ? diff : ["  No changes"]));
+        }
+
+        lines.push("\nThis is a preview. No data was modified.");
+        return textResponse(lines.join("\n"));
+      }
 
       if (type === "all") {
         const dataVal = obj.entries;

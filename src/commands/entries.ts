@@ -19,7 +19,7 @@ import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
 import { getBinaryName } from '../utils/binaryName';
 
-export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }): Promise<void> {
+export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean, capture?: boolean }): Promise<void> {
   debug('runCommand called', { keys, options });
   try {
     const commands: string[] = [];
@@ -105,6 +105,16 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
 
     if (options.source) {
       process.stdout.write(value + '\n');
+    } else if (options.capture) {
+      try {
+        const stdout = execSync(value, { encoding: 'utf-8', shell: process.env.SHELL ?? '/bin/sh' });
+        process.stdout.write(stdout);
+      } catch (err: unknown) {
+        process.exitCode = (err && typeof err === 'object' && 'status' in err ? Number(err.status) : 1) || 1;
+        if (err && typeof err === 'object' && 'stderr' in err && (err as { stderr?: string }).stderr) {
+          process.stderr.write(String((err as { stderr?: string }).stderr));
+        }
+      }
     } else {
       try {
         execSync(value, { stdio: 'inherit', shell: process.env.SHELL ?? '/bin/sh' });
@@ -524,6 +534,45 @@ export async function removeEntry(key: string, force = false): Promise<void> {
   removeConfirmForKey(key);
 
   printSuccess(`Entry '${key}' removed successfully.`);
+}
+
+export async function copyEntry(sourceKey: string, destKey: string, force = false): Promise<void> {
+  debug('copyEntry called', { sourceKey, destKey, force });
+  try {
+    const value = getValue(sourceKey);
+    if (value === undefined) {
+      printError(`Entry '${sourceKey}' not found.`);
+      process.exitCode = 1;
+      return;
+    }
+
+    const existing = getValue(destKey);
+    if (existing !== undefined && !force && process.stdin.isTTY) {
+      const displayVal = typeof existing === 'object'
+        ? JSON.stringify(existing)
+        : isEncrypted(String(existing)) ? '[encrypted]' : String(existing);
+      console.log(`Key '${destKey}' already exists with value: ${displayVal}`);
+      const answer = await askConfirmation('Overwrite? [y/N] ');
+      if (answer.toLowerCase() !== 'y') {
+        console.log('Aborted.');
+        return;
+      }
+    }
+
+    if (typeof value === 'string') {
+      setValue(destKey, value);
+    } else {
+      const flat = flattenObject({ [sourceKey]: value });
+      for (const [flatKey, flatVal] of Object.entries(flat)) {
+        const suffix = flatKey.slice(sourceKey.length);
+        setValue(destKey + suffix, String(flatVal));
+      }
+    }
+
+    printSuccess(`Entry '${sourceKey}' copied to '${destKey}'.`);
+  } catch (error) {
+    handleError('Failed to copy entry:', error);
+  }
 }
 
 export function renameEntry(oldKey: string, newKey: string, aliasMode = false, newAlias?: string): void {

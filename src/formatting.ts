@@ -117,6 +117,7 @@ export function showHelp(): void {
   cmd('run',      'r',  '<keys...>',          'Execute stored command(s) (: compose, && chain)');
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
   cmd('edit',     'e',  '<key>',              'Open an entry in $EDITOR for editing');
+  cmd('copy',     'cp', '<source> <dest>',    'Copy an entry to a new key');
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
   cmd('config',   '',   '<subcommand>',       'View or change configuration settings');
@@ -126,57 +127,16 @@ export function showHelp(): void {
   console.log(`  ${color.green('config')}       set, get, info, examples, completions <bash|zsh|install>`);
   console.log(`  ${color.green('data')}         export <type>, import <type> <file>, reset <type>`);
   console.log();
-  console.log(`  Use --help with any command for details (e.g. ${bin} set --help)`);
+  console.log(`  Use ${color.yellow('--help')} with any command for options (e.g. ${bin} set --help)`);
 
-  // Align all option descriptions at the same column
-  const optDescCol = 26; // description starts this many chars after the 2-space indent
+  const optDescCol = 26;
   const opt = (flag: string, desc: string) => {
     const pad = ' '.repeat(Math.max(2, optDescCol - visibleLength(flag)));
     console.log(`  ${flag}${pad}${desc}`);
   };
 
-  console.log('\n' + color.boldColors.magenta('OPTIONS (set):'));
-  opt(`${color.yellow('--force')}, ${color.yellow('-f')}`, 'Overwrite existing entries without confirmation');
-  opt(`${color.yellow('--encrypt')}, ${color.yellow('-e')}`, 'Encrypt the value with a password');
-  opt(`${color.yellow('--alias')} <name>, ${color.yellow('-a')}`, 'Create or change an alias (value optional)');
-  opt(`${color.yellow('--prompt')}, ${color.yellow('-p')}`, 'Read value interactively (avoids shell expansion)');
-  opt(`${color.yellow('--show')}, ${color.yellow('-s')}`, 'Show input when using --prompt (default is masked)');
-  opt(`${color.yellow('--clear')}, ${color.yellow('-c')}`, 'Clear terminal and scrollback after setting');
-  opt(`${color.yellow('--confirm')}`, 'Require confirmation before running this entry');
-  opt(`${color.yellow('--no-confirm')}`, 'Remove confirmation requirement from this entry');
-
-  console.log('\n' + color.boldColors.magenta('OPTIONS (get):'));
-  opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display data in a hierarchical tree structure');
-  opt(`${color.yellow('--raw')}, ${color.yellow('-r')}`, 'Output plain text without colors (for scripting)');
-  opt(`${color.yellow('--source')}, ${color.yellow('-s')}`, 'Show stored value before interpolation');
-  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value');
-  opt(`${color.yellow('--copy')}, ${color.yellow('-c')}`, 'Copy value to clipboard');
-  opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Show aliases only');
-  opt(`${color.yellow('--json')}, ${color.yellow('-j')}`, 'Output as JSON (for scripting)');
-
-  console.log('\n' + color.boldColors.magenta('OPTIONS (run):'));
-  opt(`${color.yellow('--yes')}, ${color.yellow('-y')}`, 'Skip confirmation prompt (for entries marked --confirm)');
-  opt(`${color.yellow('--dry')}`, 'Print the command without executing');
-  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted command before running');
-
-  console.log('\n' + color.boldColors.magenta('OPTIONS (find):'));
-  opt(`${color.yellow('--entries')}, ${color.yellow('-e')}`, 'Search only in data entries');
-  opt(`${color.yellow('--aliases')}, ${color.yellow('-a')}`, 'Search only in aliases');
-  opt(`${color.yellow('--tree')}, ${color.yellow('-t')}`, 'Display results in a tree structure');
-  opt(`${color.yellow('--json')}, ${color.yellow('-j')}`, 'Output as JSON (for scripting)');
-
-  console.log('\n' + color.boldColors.magenta('OPTIONS (edit):'));
-  opt(`${color.yellow('--decrypt')}, ${color.yellow('-d')}`, 'Decrypt an encrypted value before editing');
-
-  console.log('\n' + color.boldColors.magenta('OPTIONS (rename):'));
-  opt(`${color.yellow('--alias')}, ${color.yellow('-a')}`, 'Rename an alias instead of an entry key');
-  opt(`${color.yellow('--set-alias')} <name>`, 'Set an alias on the renamed key');
-
-  console.log('\n' + color.boldColors.magenta('OPTIONS (remove):'));
-  opt(`${color.yellow('--force')}, ${color.yellow('-f')}`, 'Skip confirmation prompt');
-  opt(`${color.yellow('--alias')}, ${color.yellow('-a')}`, 'Remove the alias only (keep the entry)');
-
-  console.log('\n' + color.boldColors.magenta('OPTIONS (global):'));
+  console.log('\n' + color.boldColors.magenta('GLOBAL OPTIONS:'));
+  opt(`${color.yellow('--version')}, ${color.yellow('-V')}`, 'Show version number');
   opt(`${color.yellow('--debug')}`, 'Enable debug output for troubleshooting');
   console.log();
 }
@@ -205,6 +165,7 @@ export function showExamples(): void {
   ex(`${b} ${g('set')} ${c('db.host')} "mydb.local" ${y('-f')}`, '# Overwrite without confirmation');
   ex(`${b} ${g('set')} ${c('db.host')} "mydb.local" ${y('-a')} ${c('dbh')}`, '# Store and create alias "dbh" at once');
   ex(`${b} ${g('set')} ${c('db.host')} ${y('-a')} ${c('newdbh')}`, '# Change alias without re-setting value');
+  ex(`${b} ${g('set')} ${c('a')}=1 ${c('b')}=2 ${c('c')}=3`, '# Batch set multiple key=value pairs');
 
   section('RETRIEVING DATA:');
   ex(`${b} ${g('get')}`, '# List all entries and aliases');
@@ -223,6 +184,7 @@ export function showExamples(): void {
   ex(`${b} ${g('run')} ${c('deploy.cmd')} ${y('--dry')}`, '# Preview command without executing');
   ex(`${b} ${g('run')} ${c('nav.project')} ${c('commands.list')}`, '# Chain: cd /path && ls -l');
   ex(`${b} ${g('run')} ${c('secret.script')} ${y('-d')}`, '# Decrypt and execute');
+  ex(`${b} ${g('run')} ${c('cmd.echo')} ${y('-c')} | tr a-z A-Z`, '# Capture output for piping');
 
   section('SEARCHING:');
   ex(`${b} ${g('find')} 192.168`, '# Search keys and values');
@@ -238,6 +200,10 @@ export function showExamples(): void {
   ex(`${b} ${g('remove')} ${c('ip')} ${y('-a')}`, '# Remove alias only (keep entry)');
   ex(`${b} ${g('remove')} ${c('server.ip')}`, '# Remove entry and its alias');
 
+  section('COPYING DATA:');
+  ex(`${b} ${g('copy')} ${c('server.ip')} ${c('server.ip.backup')}`, '# Copy an entry to a new key');
+  ex(`${b} ${g('cp')} ${c('server')} ${c('server.backup')} ${y('-f')}`, '# Copy a subtree without confirmation');
+
   section('REMOVING DATA:');
   ex(`${b} ${g('remove')} ${c('server.old')}`, '# Remove an entry (and its alias)');
   ex(`${b} ${g('remove')} ${c('myalias')} ${y('-a')}`, '# Remove alias only (keep the entry)');
@@ -247,6 +213,7 @@ export function showExamples(): void {
   ex(`${b} ${g('data export')} aliases ${y('-o')} aliases.json`, '# Export aliases to a specific file');
   ex(`${b} ${g('data export')} all ${y('-o')} backup.json`, '# Export everything');
   ex(`${b} ${g('data import')} entries backup.json`, '# Import data from a file');
+  ex(`${b} ${g('data import')} entries backup.json ${y('-m -p')}`, '# Preview merge changes without importing');
   ex(`${b} ${g('data import')} all backup.json`, '# Import data and aliases');
   ex(`${b} ${g('data reset')} entries`, '# Clear all data (prompts first)');
   ex(`${b} ${g('data reset')} all ${y('-f')}`, '# Clear everything without confirmation');

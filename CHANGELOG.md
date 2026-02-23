@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-02-23
+
+### Added
+
+- `copy` command (alias `cp`) — copy an entry or subtree to a new key, with `--force` to skip confirmation
+- `--capture` / `-c` flag on `run` — capture stdout for piping instead of inheriting stdio
+- `--preview` / `-p` flag on `data import` — show a diff of add/modify/remove changes without modifying data
+- Batch set with `key=val` pairs — e.g. `ccli set a=1 b=2 c=3`
+- MCP `codex_copy` tool — copy entries via MCP with optional `force` to overwrite
+- MCP `codex_import`: `preview` parameter to return diff text without importing
+- MCP `codex_run`: `capture` parameter for API consistency (MCP already captures output)
+- `--version` / `-V` now shown in main help under global options
+
+### Changed
+
+- Main help (`ccli --help`) now shows only commands, subcommands, and global options; per-command options moved to `<command> --help` submenus
+- `set` command description updated to reflect batch mode support
+
+### Fixed
+
+- Nested subcommand `--help` routing — e.g. `ccli data import --help` now correctly shows import options instead of falling through to root help
+- `edit` was missing from the tab-completion commands list
+
 ## [0.2.0] - 2026-02-21
 
 ### Added

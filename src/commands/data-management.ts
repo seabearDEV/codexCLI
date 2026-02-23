@@ -7,6 +7,7 @@ import { CodexData, ExportOptions, ImportOptions, ResetOptions } from '../types'
 import path from 'path';
 import { validateDataType, confirmOrAbort, getInvalidDataTypeMessage, printSuccess, printError } from './helpers';
 import { deepMerge } from '../utils/deepMerge';
+import { flattenObject } from '../utils/objectPath';
 import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
@@ -69,8 +70,8 @@ export async function importData(type: string, file: string, options: ImportOpti
       return;
     }
 
-    // Confirm before overwriting unless --force is used
-    if (!options.force) {
+    // Confirm before overwriting unless --force or --preview is used
+    if (!options.force && !options.preview) {
       console.log(color.yellow(`⚠ This will ${options.merge ? 'merge' : 'replace'} your ${type} file.`));
       const confirmed = await confirmOrAbort('Continue? [y/N] ');
       if (!confirmed) return;
@@ -91,6 +92,12 @@ export async function importData(type: string, file: string, options: ImportOpti
     }
 
     const validData = importedData as Record<string, unknown>;
+
+    // Preview mode: show diff without modifying data
+    if (options.preview) {
+      showImportPreview(type, validData, !!options.merge);
+      return;
+    }
 
     // Auto-backup before destructive import (replace, not merge)
     if (!options.merge) {
@@ -177,4 +184,93 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
   } catch (error) {
     handleError('Error resetting data:', error);
   }
+}
+
+function computeDiff(current: Record<string, string>, incoming: Record<string, string>, merge: boolean): string[] {
+  const lines: string[] = [];
+
+  if (merge) {
+    const allKeys = new Set([...Object.keys(current), ...Object.keys(incoming)]);
+    for (const key of [...allKeys].sort()) {
+      const inCurrent = key in current;
+      const inImport = key in incoming;
+      if (inImport && !inCurrent) {
+        lines.push(color.green(`  [add]    ${key}: ${incoming[key]}`));
+      } else if (inImport && inCurrent && current[key] !== incoming[key]) {
+        lines.push(color.yellow(`  [modify] ${key}: ${current[key]} → ${incoming[key]}`));
+      }
+      // unchanged keys are omitted for brevity
+    }
+  } else {
+    // Replace mode: everything current is removed, everything incoming is added
+    for (const key of Object.keys(current).sort()) {
+      if (!(key in incoming) || current[key] !== incoming[key]) {
+        lines.push(color.red(`  [remove] ${key}: ${current[key]}`));
+      }
+    }
+    for (const key of Object.keys(incoming).sort()) {
+      if (!(key in current) || current[key] !== incoming[key]) {
+        lines.push(color.green(`  [add]    ${key}: ${incoming[key]}`));
+      }
+    }
+  }
+
+  return lines;
+}
+
+function showImportPreview(type: string, validData: Record<string, unknown>, merge: boolean): void {
+  let hasChanges = false;
+
+  if (type === 'entries' || type === 'all') {
+    const currentFlat = flattenObject(loadData());
+    const importFlat = flattenObject(validData);
+    const lines = computeDiff(currentFlat, importFlat, merge);
+    console.log(color.bold(`Entries (${merge ? 'merge' : 'replace'}):`));
+    if (lines.length > 0) {
+      lines.forEach(l => console.log(l));
+      hasChanges = true;
+    } else {
+      console.log(color.gray('  No changes'));
+    }
+  }
+
+  if (type === 'aliases' || type === 'all') {
+    const currentAliases = loadAliases();
+    const importAliases = validData as Record<string, string>;
+    const currentFlat: Record<string, string> = {};
+    const importFlat: Record<string, string> = {};
+    for (const [k, v] of Object.entries(currentAliases)) currentFlat[k] = v;
+    for (const [k, v] of Object.entries(importAliases)) importFlat[k] = String(v);
+    const lines = computeDiff(currentFlat, importFlat, merge);
+    console.log(color.bold(`Aliases (${merge ? 'merge' : 'replace'}):`));
+    if (lines.length > 0) {
+      lines.forEach(l => console.log(l));
+      hasChanges = true;
+    } else {
+      console.log(color.gray('  No changes'));
+    }
+  }
+
+  if (type === 'confirm' || type === 'all') {
+    const currentConfirm = loadConfirmKeys();
+    const importConfirm = validData as Record<string, unknown>;
+    const currentFlat: Record<string, string> = {};
+    const importFlat: Record<string, string> = {};
+    for (const k of Object.keys(currentConfirm)) currentFlat[k] = 'true';
+    for (const k of Object.keys(importConfirm)) importFlat[k] = 'true';
+    const lines = computeDiff(currentFlat, importFlat, merge);
+    console.log(color.bold(`Confirm keys (${merge ? 'merge' : 'replace'}):`));
+    if (lines.length > 0) {
+      lines.forEach(l => console.log(l));
+      hasChanges = true;
+    } else {
+      console.log(color.gray('  No changes'));
+    }
+  }
+
+  if (!hasChanges) {
+    console.log(color.gray('No changes would be made.'));
+  }
+
+  console.log(color.gray('\nThis is a preview. No data was modified.'));
 }

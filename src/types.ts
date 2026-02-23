@@ -27,6 +27,7 @@ export interface ExportOptions {
 export interface ImportOptions {
   merge?: boolean;
   force?: boolean;
+  preview?: boolean;
 }
 
 export interface ResetOptions {

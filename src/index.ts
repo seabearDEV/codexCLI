@@ -43,7 +43,7 @@ codexCLI.option('--debug', 'Enable debug mode')
 codexCLI
   .command('set <key> [value...]')
   .alias('s')
-  .description('Set an entry (prompts before overwriting)')
+  .description('Set an entry, or batch set with key=val pairs')
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-e, --encrypt', 'Encrypt the value with a password')
   .option('-a, --alias <name>', 'Create an alias for this key')
@@ -53,6 +53,28 @@ codexCLI
   .option('--confirm', 'Require confirmation before running this entry')
   .option('--no-confirm', 'Remove confirmation requirement from this entry')
   .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean }) => {
+    // Batch mode: `set a=1 b=2 c=3`
+    if (key.includes('=')) {
+      const pairs = [key, ...valueArray];
+      for (const pair of pairs) {
+        const eqIdx = pair.indexOf('=');
+        if (eqIdx === -1) {
+          printError(`Invalid batch pair '${pair}'. Expected key=value format.`);
+          process.exitCode = 1;
+          return;
+        }
+        const k = pair.slice(0, eqIdx);
+        const v = pair.slice(eqIdx + 1);
+        if (!k) {
+          printError(`Invalid batch pair '${pair}'. Key cannot be empty.`);
+          process.exitCode = 1;
+          return;
+        }
+        await commands.setEntry(resolveKey(k.replace(/:$/, '')), v, options.force);
+      }
+      return;
+    }
+
     let value: string | undefined;
     if (options.prompt) {
       if (!process.stdin.isTTY) {
@@ -129,9 +151,20 @@ codexCLI
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry', 'Print the command without executing')
   .option('-d, --decrypt', 'Decrypt an encrypted command before running')
+  .option('-c, --capture', 'Capture output for piping (instead of inheriting stdio)')
   .option('--source', 'Output command to stdout for shell eval (used by shell wrapper)')
-  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean }) => {
+  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean }) => {
     await commands.runCommand(keys, options);
+  });
+
+// Copy command
+codexCLI
+  .command('copy <source> <dest>')
+  .alias('cp')
+  .description('Copy an entry to a new key')
+  .option('-f, --force', 'Skip confirmation prompt')
+  .action(async (source: string, dest: string, options: { force?: boolean }) => {
+    await commands.copyEntry(resolveKey(source.replace(/:$/, '')), dest, options.force);
   });
 
 // Find command
@@ -262,8 +295,7 @@ completionsCommand
 // Data management command group
 const dataCommand = codexCLI
   .command('data')
-  .description('Manage stored data (export, import, reset)')
-  .helpCommand(false);
+  .description('Manage stored data (export, import, reset)');
 
 dataCommand
   .command('export <type>')
@@ -279,7 +311,8 @@ dataCommand
   .description('Import data or aliases from a file')
   .option('-m, --merge', 'Merge with existing data instead of replacing')
   .option('-f, --force', 'Skip confirmation prompt')
-  .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean }) => {
+  .option('-p, --preview', 'Preview changes without modifying data')
+  .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean, preview?: boolean }) => {
     await commands.importData(type, file, options);
   });
 
@@ -350,6 +383,20 @@ void (async () => {
     if (process.argv.includes('--debug')) process.env.DEBUG = 'true';
     void withPager(() => showHelp());
   } else {
+    // Fix nested subcommand --help routing (Commander v13 can't route --help
+    // for nested subcommands when required positional args are missing)
+    if (userArgs.includes('--help') || userArgs.includes('-h')) {
+      const helpFreeArgs = userArgs.filter(a => a !== '--help' && a !== '-h');
+      if (helpFreeArgs.length >= 2) {
+        const parentCmd = codexCLI.commands.find(c => c.name() === helpFreeArgs[0]);
+        if (parentCmd) {
+          const subCmd = parentCmd.commands.find(c => c.name() === helpFreeArgs[1]);
+          if (subCmd) {
+            subCmd.help();
+          }
+        }
+      }
+    }
     codexCLI.parse(process.argv);
   }
 })();

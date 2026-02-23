@@ -77,12 +77,9 @@ describe('showHelp', () => {
     const output = consoleSpy.mock.calls.map(c => c.join(' ')).join('\n');
     expect(output).toContain('USAGE:');
     expect(output).toContain('COMMANDS:');
-    expect(output).toContain('OPTIONS (set):');
-    expect(output).toContain('OPTIONS (get):');
-    expect(output).toContain('OPTIONS (run):');
-    expect(output).toContain('OPTIONS (find):');
-    expect(output).toContain('OPTIONS (global):');
+    expect(output).toContain('GLOBAL OPTIONS:');
     expect(output).toContain('SUBCOMMANDS:');
+    expect(output).toContain('--help');
   });
 
   it('lists subcommands section with info and examples', () => {

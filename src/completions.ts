@@ -60,12 +60,15 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '-d': 'Decrypt an encrypted value',
   '--copy': 'Copy value to clipboard',
   '-c': 'Copy value to clipboard',
+  '--capture': 'Capture output for piping',
   '--clear': 'Clear terminal after setting',
   '--source': 'Show source/raw output',
   '--confirm': 'Require confirmation to run',
   '--no-confirm': 'Remove confirmation requirement',
   '--json': 'Output as JSON',
   '-j': 'Output as JSON',
+  '--preview': 'Preview changes without modifying',
+  '-p': 'Preview changes without modifying',
 };
 
 const GLOBAL_FLAGS: Record<string, string> = {
@@ -116,6 +119,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
       '--dry': FLAG_DESCRIPTIONS['--dry'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--capture': FLAG_DESCRIPTIONS['--capture'], '-c': FLAG_DESCRIPTIONS['--capture'],
       '--source': FLAG_DESCRIPTIONS['--source'],
     },
     argType: 'dataKey',
@@ -126,6 +130,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
       '--dry': FLAG_DESCRIPTIONS['--dry'],
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+      '--capture': FLAG_DESCRIPTIONS['--capture'], '-c': FLAG_DESCRIPTIONS['--capture'],
       '--source': FLAG_DESCRIPTIONS['--source'],
     },
     argType: 'dataKey',
@@ -150,6 +155,16 @@ const CLI_TREE: Record<string, CommandDef> = {
     },
     argType: null,
     description: 'Find entries by key or value',
+  },
+  copy: {
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] },
+    argType: 'dataKey',
+    description: 'Copy an entry to a new key',
+  },
+  cp: {
+    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'] },
+    argType: 'dataKey',
+    description: 'Copy an entry to a new key',
   },
   edit: {
     flags: { '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'] },
@@ -220,6 +235,7 @@ const CLI_TREE: Record<string, CommandDef> = {
           '--merge': 'Merge with existing',
           '-m': 'Merge with existing',
           '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'],
+          '--preview': FLAG_DESCRIPTIONS['--preview'], '-p': FLAG_DESCRIPTIONS['-p'],
         },
         argType: 'exportType',
         description: 'Import data or aliases',
