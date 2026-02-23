@@ -65,7 +65,7 @@ async function main() {
     entryPoints: [path.join(ROOT, 'src/index.ts')],
     bundle: true,
     platform: 'node',
-    target: 'node22',
+    target: 'node24',
     format: 'cjs',
     outfile: BUNDLE,
   });

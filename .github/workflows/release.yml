@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
 
       - run: npm ci
 
@@ -61,7 +61,7 @@ jobs:
       - uses: actions/setup-node@v4
         id: setup-node
         with:
-          node-version: 22
+          node-version: 24
 
       - run: npm ci
 
@@ -79,6 +79,7 @@ jobs:
         id: node-x64
         run: |
           NODE_VERSION="${{ steps.setup-node.outputs.node-version }}"
+          NODE_VERSION="${NODE_VERSION#v}"
           TARBALL="node-v${NODE_VERSION}-darwin-x64.tar.gz"
           URL="https://nodejs.org/dist/v${NODE_VERSION}/${TARBALL}"
           echo "Downloading ${URL}"
