@@ -101,6 +101,7 @@ jobs:
       - name: Create universal binary
         run: |
           lipo -create dist/ccli-macos-arm64 dist/ccli-macos-x64 -output dist/ccli-macos-universal
+          codesign --remove-signature dist/ccli-macos-universal
           codesign --sign - dist/ccli-macos-universal
           file dist/ccli-macos-universal
 
