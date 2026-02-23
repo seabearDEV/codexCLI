@@ -3,8 +3,9 @@
 /**
  * Build a Node SEA (Single Executable Application) binary for the current platform.
  *
- * Usage: node scripts/sea-build.js [output-name]
+ * Usage: node scripts/sea-build.js [output-name] [--node-binary <path>]
  *   output-name defaults to ccli-{platform}-{arch} (e.g. ccli-darwin-arm64)
+ *   --node-binary  path to the Node binary to use as the SEA shell (defaults to process.execPath)
  */
 
 const { execFileSync } = require('child_process');
@@ -18,10 +19,26 @@ const DIST = path.join(ROOT, 'dist');
 const platform = os.platform();  // darwin | linux | win32
 const arch = os.arch();          // arm64 | x64
 
-// Resolve output binary name
+// ── Parse arguments ──────────────────────────────────────────────────────────
+let outputName = null;
+let nodeBinary = null;
+
+const args = process.argv.slice(2);
+for (let i = 0; i < args.length; i++) {
+  if (args[i] === '--node-binary') {
+    nodeBinary = args[++i];
+    if (!nodeBinary) {
+      console.error('Error: --node-binary requires a path argument');
+      process.exit(1);
+    }
+  } else if (!outputName) {
+    outputName = args[i];
+  }
+}
+
 const platformName = platform === 'darwin' ? 'macos' : platform === 'win32' ? 'win' : platform;
 const defaultName = `ccli-${platformName}-${arch}`;
-let outputName = process.argv[2] || defaultName;
+outputName = outputName || defaultName;
 
 // Ensure Windows binaries have .exe
 if (platform === 'win32' && !outputName.endsWith('.exe')) {
@@ -75,11 +92,12 @@ async function main() {
 
   // ── 4. Copy node binary ───────────────────────────────────────────────────
   console.log('\n=== Step 4: Copy node binary ===');
-  fs.copyFileSync(process.execPath, BINARY);
+  const sourceNode = nodeBinary || process.execPath;
+  fs.copyFileSync(sourceNode, BINARY);
   if (platform !== 'win32') {
     fs.chmodSync(BINARY, 0o755);
   }
-  console.log(`Copied ${process.execPath} → ${BINARY}`);
+  console.log(`Copied ${sourceNode} → ${BINARY}`);
 
   // ── 5. Inject blob with postject ──────────────────────────────────────────
   console.log('\n=== Step 5: Inject SEA blob ===');

@@ -14,8 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-latest
-            binary: ccli-macos-arm64
           - runner: ubuntu-latest
             binary: ccli-linux-x64
           - runner: ubuntu-24.04-arm
@@ -53,8 +51,71 @@ jobs:
           name: ${{ matrix.binary }}
           path: dist/${{ matrix.binary }}
 
+  build-macos:
+    runs-on: macos-latest
+    name: Build ccli-macos-universal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        id: setup-node
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      # ── arm64 slice (native on macos-latest) ─────────────────────────────
+      - name: Build arm64 slice
+        run: node scripts/sea-build.js ccli-macos-arm64
+
+      - name: Smoke test arm64
+        run: |
+          chmod +x dist/ccli-macos-arm64
+          ./dist/ccli-macos-arm64 --version
+
+      # ── x64 slice (cross-build using downloaded x64 Node) ────────────────
+      - name: Download Node x64 binary
+        id: node-x64
+        run: |
+          NODE_VERSION="${{ steps.setup-node.outputs.node-version }}"
+          TARBALL="node-v${NODE_VERSION}-darwin-x64.tar.gz"
+          URL="https://nodejs.org/dist/v${NODE_VERSION}/${TARBALL}"
+          echo "Downloading ${URL}"
+          curl -fsSL "$URL" -o "$TARBALL"
+          tar xzf "$TARBALL"
+          NODE_X64="$(pwd)/node-v${NODE_VERSION}-darwin-x64/bin/node"
+          echo "node_x64=${NODE_X64}" >> "$GITHUB_OUTPUT"
+          file "$NODE_X64"
+
+      - name: Build x64 slice
+        run: node scripts/sea-build.js ccli-macos-x64 --node-binary "${{ steps.node-x64.outputs.node_x64 }}"
+
+      - name: Smoke test x64
+        run: |
+          chmod +x dist/ccli-macos-x64
+          arch -x86_64 ./dist/ccli-macos-x64 --version
+
+      # ── Universal binary ─────────────────────────────────────────────────
+      - name: Create universal binary
+        run: |
+          lipo -create dist/ccli-macos-arm64 dist/ccli-macos-x64 -output dist/ccli-macos-universal
+          codesign --sign - dist/ccli-macos-universal
+          file dist/ccli-macos-universal
+
+      - name: Smoke test universal (arm64)
+        run: ./dist/ccli-macos-universal --version
+
+      - name: Smoke test universal (x86_64)
+        run: arch -x86_64 ./dist/ccli-macos-universal --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ccli-macos-universal
+          path: dist/ccli-macos-universal
+
   release:
-    needs: build
+    needs: [build, build-macos]
     runs-on: ubuntu-latest
     name: Create Release
 
@@ -86,14 +147,14 @@ jobs:
       - name: Download release binaries
         run: |
           base="https://github.com/seabearDEV/codexCLI/releases/download/${GITHUB_REF_NAME}"
-          for bin in ccli-macos-arm64 ccli-linux-x64 ccli-linux-arm64; do
+          for bin in ccli-macos-universal ccli-linux-x64 ccli-linux-arm64; do
             curl -fsSL "$base/$bin" -o "$bin"
           done
 
       - name: Compute SHA256 checksums
         id: sha
         run: |
-          echo "macos_arm64=$(sha256sum ccli-macos-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          echo "macos_universal=$(sha256sum ccli-macos-universal | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "linux_x64=$(sha256sum ccli-linux-x64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
           echo "linux_arm64=$(sha256sum ccli-linux-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
@@ -107,7 +168,7 @@ jobs:
       - name: Generate formula
         env:
           CCLI_VERSION: ${{ steps.version.outputs.version }}
-          SHA_MACOS_ARM64: ${{ steps.sha.outputs.macos_arm64 }}
+          SHA_MACOS_UNIVERSAL: ${{ steps.sha.outputs.macos_universal }}
           SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
           SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
         run: |
@@ -125,8 +186,8 @@ jobs:
             end
 
             on_macos do
-              url "https://github.com/seabearDEV/codexCLI/releases/download/v$CCLI_VERSION/ccli-macos-arm64"
-              sha256 "$SHA_MACOS_ARM64"
+              url "https://github.com/seabearDEV/codexCLI/releases/download/v$CCLI_VERSION/ccli-macos-universal"
+              sha256 "$SHA_MACOS_UNIVERSAL"
             end
 
             on_linux do
