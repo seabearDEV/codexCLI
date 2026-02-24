@@ -253,7 +253,7 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
 
   if (type === 'confirm' || type === 'all') {
     const currentConfirm = loadConfirmKeys();
-    const importConfirm = validData as Record<string, unknown>;
+    const importConfirm = validData;
     const currentFlat: Record<string, string> = {};
     const importFlat: Record<string, string> = {};
     for (const k of Object.keys(currentConfirm)) currentFlat[k] = 'true';

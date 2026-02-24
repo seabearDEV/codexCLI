@@ -566,7 +566,7 @@ server.tool(
         if (type === "entries" || type === "all") {
           const importObj = type === "all" ? (obj.entries as Record<string, unknown> || {}) : obj;
           const currentFlat = flattenObject(loadData());
-          const importFlat = flattenObject(importObj as Record<string, unknown>);
+          const importFlat = flattenObject(importObj);
           lines.push(`Entries (${merge ? "merge" : "replace"}):`);
           const diff = diffEntries(currentFlat, importFlat, !!merge);
           lines.push(...(diff.length > 0 ? diff : ["  No changes"]));
