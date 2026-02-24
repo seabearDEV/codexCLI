@@ -1391,6 +1391,63 @@ describe('Commands', () => {
     });
   });
 
+  describe('exec interpolation $(key) integration', () => {
+    it('get with $(key) executes and substitutes', async () => {
+      const mockData = {
+        system: { user: 'whoami' },
+        paths: { home: '/Users/$(system.user)' },
+      };
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
+      (execSync as Mock).mockReturnValueOnce('kh\n');
+
+      await getEntry('paths.home', {});
+
+      const logCalls = (console.log as Mock).mock.calls;
+      const showedResolved = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('/Users/kh'))
+      );
+      expect(showedResolved).toBe(true);
+    });
+
+    it('run with $(key) interpolates exec before running', async () => {
+      const mockData = {
+        system: { user: 'whoami' },
+        commands: { greet: 'echo hello $(system.user)' },
+      };
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
+
+      // First call: exec interpolation of $(system.user) → 'kh'
+      // Second call: actual command execution
+      (execSync as Mock)
+        .mockReturnValueOnce('kh\n')
+        .mockReturnValueOnce(undefined);
+
+      await runCommand(['commands.greet'], { yes: true });
+
+      // The actual command should have the resolved value
+      expect(execSync).toHaveBeenCalledWith('echo hello kh', expect.objectContaining({ stdio: 'inherit' }));
+    });
+
+    it('get --source skips $(key) (shows raw)', async () => {
+      const mockData = {
+        system: { user: 'whoami' },
+        paths: { home: '/Users/$(system.user)' },
+      };
+      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
+
+      await getEntry('paths.home', { source: true });
+
+      // Should NOT have called execSync for interpolation
+      expect(execSync).not.toHaveBeenCalled();
+
+      const logCalls = (console.log as Mock).mock.calls;
+      const showedRaw = logCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('$(system.user)'))
+      );
+      expect(showedRaw).toBe(true);
+    });
+  });
+
   describe('runCommand error path', () => {
     it('sets process.exitCode when execSync throws', async () => {
       const mockData = { commands: { fail: 'exit 42' } };

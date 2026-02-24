@@ -260,6 +260,12 @@ describe('Completions', () => {
       const script = generateBashScript();
       expect(script).toContain('compopt -o nospace');
     });
+
+    it('removes colon from COMP_WORDBREAKS for colon-composed commands', () => {
+      const script = generateBashScript();
+      expect(script).toContain('COMP_WORDBREAKS="${COMP_WORDBREAKS//:/}"');
+      expect(script).toContain('_saved_wordbreaks');
+    });
   });
 
   describe('generateZshScript', () => {
@@ -278,8 +284,15 @@ describe('Completions', () => {
       expect(script).toContain('${(ko)groups}');
       // Uses _describe per group for normal items
       expect(script).toContain('_describe "$grp_name" _ccli_desc');
-      // Uses $'\t' for tab
+      // Uses $'\t' for tab and $'\x1f' unit separator for key-desc delimiting
       expect(script).toContain("$'\\t'");
+      expect(script).toContain("$'\\x1f'");
+    });
+
+    it('escapes colons in completion values for _describe', () => {
+      const script = generateZshScript();
+      // Escapes : with \: in key before passing to _describe
+      expect(script).toContain('${_ccli_key//:/\\:}');
     });
 
     it('suppresses trailing space for namespace prefixes ending in dot', () => {
@@ -433,6 +446,81 @@ describe('Completions', () => {
       const v = values(results);
       expect(v).toContain('test.key1');
       expect(v).not.toContain('test.');
+    });
+
+    it('get command includes namespace prefixes (without dot)', () => {
+      const mockData = { test: { key1: 'val1', key2: 'val2' } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli get te', 11);
+      const v = values(results);
+      expect(v).toContain('test');
+      expect(v).toContain('test.key1');
+      expect(v).toContain('test.key2');
+      const nsItem = findItem(results, 'test');
+      expect(nsItem!.description).toBe('Namespace');
+    });
+
+    it('get includes nested namespace prefixes', () => {
+      const mockData = { server: { prod: { ip: '1.2.3.4' } } };
+      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+
+      const results = getCompletions('ccli g s', 8);
+      const v = values(results);
+      expect(v).toContain('server');
+      expect(v).toContain('server.prod');
+      expect(v).toContain('server.prod.ip');
+    });
+  });
+
+  describe('colon composition for run/r commands', () => {
+    beforeEach(() => {
+      const mockData = { system: { commands: { cd: 'cd ' } }, paths: { home: '/Users/kh', github: '/Users/kh/Projects/github.com' } };
+      const mockAliases = { cd: 'system.commands.cd' };
+      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
+        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
+        return JSON.stringify(mockData);
+      });
+    });
+
+    it('completes segment after : for run command', () => {
+      const results = getCompletions('ccli run cd:paths.', 18);
+      const v = values(results);
+      expect(v).toContain('cd:paths.home');
+      expect(v).toContain('cd:paths.github');
+    });
+
+    it('completes segment after : for r shortcut', () => {
+      const results = getCompletions('ccli r cd:paths.', 16);
+      const v = values(results);
+      expect(v).toContain('cd:paths.home');
+      expect(v).toContain('cd:paths.github');
+    });
+
+    it('completes first segment without : normally', () => {
+      const results = getCompletions('ccli r cd', 9);
+      const v = values(results);
+      // "cd" is an alias, should match
+      expect(v).toContain('cd');
+    });
+
+    it('completes segment after : with alias', () => {
+      const results = getCompletions('ccli r cd:c', 11);
+      const v = values(results);
+      expect(v).toContain('cd:cd');
+    });
+
+    it('does not apply colon completion to get command', () => {
+      const results = getCompletions('ccli get cd:paths.', 18);
+      const v = values(results);
+      expect(v).not.toContain('cd:paths.home');
+    });
+
+    it('handles multiple colons (multi-segment composition)', () => {
+      const results = getCompletions('ccli r cd:paths.home:paths.', 26);
+      const v = values(results);
+      expect(v).toContain('cd:paths.home:paths.home');
+      expect(v).toContain('cd:paths.home:paths.github');
     });
   });
 

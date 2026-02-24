@@ -240,6 +240,11 @@ export function showExamples(): void {
   ex(`${b} ${g('run')} ${c('paths.myproject')} ${y('--dry -y')}`, '# Preview interpolated command');
   ex(`${b} ${g('set')} ${c('paths.myproject')} ${y('-p')}`, '# Use --prompt to avoid escaping ${}');
 
+  section('EXEC INTERPOLATION:');
+  ex(`${b} ${g('set')} ${c('system.user')} "whoami"`, '# Store a command');
+  ex(`${b} ${g('set')} ${c('paths.home')} "/Users/\\$(system.user)"`, '# $(key) executes and substitutes');
+  ex(`${b} ${g('get')} ${c('paths.home')}`, '# Resolves: /Users/kh (runs whoami)');
+
   section('SCRIPTING TIPS:');
   ex(`ssh $(${b} ${g('get')} ${c('server.ip')} ${y('-r')})`, '# Use raw output in other commands');
   ex(`${b} ${g('get')} ${c('api.key')} ${y('-d -c')}`, '# Decrypt and copy to clipboard');

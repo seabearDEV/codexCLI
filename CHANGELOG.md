@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-02-23
+
+### Added
+
+- **Exec interpolation `$(key)`** — reference a stored command with `$(key)` and its stdout is substituted at read time. Works in `get`, `run`, and tree display. Results are cached per interpolation pass so the same command only executes once.
+  - Supports recursion: stored commands can themselves contain `${key}` or `$(key)` references
+  - Circular reference detection across `${}` and `$()` boundaries
+  - 10-second timeout per command execution
+  - `--source` / `-s` shows the raw `$(key)` syntax without executing
+- Tab completion for `:` composition in `run` / `r` — e.g. `ccli r cd:paths.<TAB>` completes the segment after `:`
+- Namespace prefixes in `get` / `g` tab completion — `ccli g paths<TAB>` now includes `paths` as a candidate so zsh stops at the namespace boundary instead of forcing `paths.`
+
+### Fixed
+
+- Zsh completion script: colons in completion values (from `:` composition) no longer break `_describe` parsing
+- Bash completion script: colons no longer cause word splitting issues (removed `:` from `COMP_WORDBREAKS`)
+
 ## [0.2.1] - 2026-02-23
 
 ### Added

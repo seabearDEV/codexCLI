@@ -25,7 +25,7 @@ function getMaxCompletionItems(): number {
 }
 
 // Argument types for dynamic completion
-type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'configKey' | 'exportType' | null;
+type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'dataKeyWithNamespaces' | 'configKey' | 'exportType' | null;
 
 interface CommandDef {
   flags: Record<string, string>;
@@ -98,7 +98,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
       '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
-    argType: 'dataKey',
+    argType: 'dataKeyWithNamespaces',
     description: 'Retrieve entries',
   },
   g: {
@@ -111,7 +111,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
       '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
-    argType: 'dataKey',
+    argType: 'dataKeyWithNamespaces',
     description: 'Retrieve entries',
   },
   run: {
@@ -270,12 +270,34 @@ function getAliasNames(): string[] {
   }
 }
 
+function getNamespacePrefixes(keys: string[]): CompletionItem[] {
+  const seen = new Set<string>();
+  const result: CompletionItem[] = [];
+  for (const key of keys) {
+    let dotIndex = key.indexOf('.');
+    while (dotIndex !== -1) {
+      const ns = key.substring(0, dotIndex);
+      if (!seen.has(ns)) {
+        seen.add(ns);
+        result.push({ value: ns, description: 'Namespace', group: 'data keys' });
+      }
+      dotIndex = key.indexOf('.', dotIndex + 1);
+    }
+  }
+  return result;
+}
+
 function getDynamicValues(argType: ArgType): CompletionItem[] {
   switch (argType) {
     case 'dataKey':
-    case 'dataKeyPrefix': {
-      const keys = getDataKeys()        .map(k => ({ value: k, description: 'Entry', group: 'data keys' }));
+    case 'dataKeyPrefix':
+    case 'dataKeyWithNamespaces': {
+      const dataKeys = getDataKeys();
+      const keys = dataKeys.map(k => ({ value: k, description: 'Entry', group: 'data keys' }));
       const aliases = getAliasNames()        .map(a => ({ value: a, description: 'Alias', group: 'aliases' }));
+      if (argType === 'dataKeyWithNamespaces') {
+        return [...keys, ...getNamespacePrefixes(dataKeys), ...aliases];
+      }
       return [...keys, ...aliases];
     }
     case 'dataKeyOnly':
@@ -393,6 +415,16 @@ function getCompletionsUnlimited(compLine: string, compPoint: number): Completio
     return [];
   }
 
+  // Handle : composition for run/r commands (e.g., "cd:paths." completes the segment after :)
+  if (partial.includes(':') && (commandName === 'run' || commandName === 'r') && activeDef.argType) {
+    const colonIndex = partial.lastIndexOf(':');
+    const prefix = partial.substring(0, colonIndex + 1);
+    const segmentPartial = partial.substring(colonIndex + 1);
+    const dynamicItems = getDynamicValues(activeDef.argType);
+    const filtered = filterPrefix(dynamicItems, segmentPartial);
+    return filtered.map(item => ({ ...item, value: prefix + item.value }));
+  }
+
   // Build candidates: flags only when typing a dash, data keys otherwise
   const candidates: CompletionItem[] = [];
   const typingFlag = partial.startsWith('-');
@@ -438,9 +470,14 @@ export function generateBashScript(): string {
   const bin = getBinaryName();
   return `# Bash completion for ${bin} (CodexCLI)
 _${bin}_completions() {
+  # Remove : from word breaks so colon-composed commands (run cd:key) complete correctly
+  local _saved_wordbreaks="$COMP_WORDBREAKS"
+  COMP_WORDBREAKS="\${COMP_WORDBREAKS//:/}"
+
   local completions
   completions="$(${bin} --get-completions "$COMP_LINE" "$COMP_POINT" 2>/dev/null)"
   if [ -z "$completions" ]; then
+    COMP_WORDBREAKS="$_saved_wordbreaks"
     return
   fi
   local tab=$'\\t'
@@ -460,6 +497,8 @@ _${bin}_completions() {
   if [[ $all_dot -eq 1 && \${#COMPREPLY[@]} -gt 0 ]]; then
     compopt -o nospace
   fi
+
+  COMP_WORDBREAKS="$_saved_wordbreaks"
 }
 complete -o default -F _${bin}_completions ${bin}
 `;
@@ -469,7 +508,7 @@ export function generateZshScript(): string {
   const bin = getBinaryName();
   return `# Zsh completion for ${bin} (CodexCLI)
 _${bin}_completions() {
-  local line tab=$'\\t'
+  local line tab=$'\\t' us=$'\\x1f'
   local -A groups
   while IFS= read -r line; do
     if [[ -z "$line" ]]; then
@@ -483,7 +522,7 @@ _${bin}_completions() {
       if [[ "$grp" == "$desc" ]]; then
         grp="completions"
       fi
-      groups[\${grp}]="\${groups[\${grp}]+\${groups[\${grp}]}|}\${value}:\${desc}"
+      groups[\${grp}]="\${groups[\${grp}]+\${groups[\${grp}]}|}\${value}\${us}\${desc}"
     else
       groups[completions]="\${groups[completions]+\${groups[completions]}|}\${line}"
     fi
@@ -500,12 +539,13 @@ _${bin}_completions() {
     _${bin}_desc=()
     _${bin}_plain=()
     for _${bin}_val in "\${_${bin}_items[@]}"; do
-      local _${bin}_key="\${_${bin}_val%%:*}"
-      local _${bin}_dsc="\${_${bin}_val#*:}"
+      local _${bin}_key="\${_${bin}_val%%\${us}*}"
+      local _${bin}_dsc="\${_${bin}_val#*\${us}}"
       if [[ "\$_${bin}_key" == *. ]]; then
         _${bin}_dot+=("\$_${bin}_key")
-      elif [[ -n "\$_${bin}_dsc" ]]; then
-        _${bin}_desc+=("\$_${bin}_val")
+      elif [[ "\$_${bin}_val" == *\${us}* && -n "\$_${bin}_dsc" ]]; then
+        local _${bin}_escaped="\${_${bin}_key//:/\\:}"
+        _${bin}_desc+=("\${_${bin}_escaped}:\${_${bin}_dsc}")
       else
         _${bin}_plain+=("\$_${bin}_key")
       fi

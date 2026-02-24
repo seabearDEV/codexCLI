@@ -18,6 +18,7 @@ A command-line information store for quick reference of frequently used data.
   - [Editing Data](#editing-data)
   - [Removing Data](#removing-data)
   - [Interpolation](#interpolation)
+    - [Exec Interpolation](#exec-interpolation)
   - [Encryption](#encryption)
   - [Configuration](#configuration)
   - [Data Management](#data-management)
@@ -38,7 +39,7 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 
 - **Hierarchical Data Storage**: Store data using intuitive dot notation paths (e.g., `server.production.ip`)
 - **Command Runner**: Execute stored shell commands with dry-run, composition (`:`) and chaining (`&&`), and optional per-entry confirmation
-- **Interpolation**: Reference stored values inside other values with `${key}` syntax
+- **Interpolation**: Reference stored values with `${key}` and execute stored commands with `$(key)` — resolved at read time
 - **Aliases**: Create shortcuts to frequently accessed paths
 - **Encryption**: Password-protect sensitive values
 - **Search**: Find entries by searching keys or values
@@ -354,6 +355,37 @@ ccli get paths.myproject --source
 ccli set paths.myproject -p
 ```
 
+#### Exec Interpolation
+
+Use `$(key)` to execute a stored command and substitute its stdout. The key must reference a stored string value containing a shell command.
+
+```bash
+# Store a command
+ccli set system.user "whoami"
+
+# Reference it with $(key) — executes the command and substitutes the output
+ccli set paths.home '/Users/$(system.user)'
+
+ccli get paths.home
+# → /Users/kh
+
+# See the raw value without executing
+ccli get paths.home --source
+# → /Users/$(system.user)
+
+# Aliases work too
+ccli set system.user -a user
+ccli set paths.home '/Users/$(user)'
+```
+
+Exec interpolation supports:
+
+- **Recursion**: stored commands can contain `${key}` or `$(key)` references that resolve before execution
+- **Caching**: the same key is only executed once per interpolation pass
+- **Circular detection**: `$(a)` → `$(b)` → `$(a)` throws an error
+- **Timeout**: commands are killed after 10 seconds
+- **Cross-type references**: `${key}` values can contain `$(key)` and vice versa
+
 ### Encryption
 
 ```bash
@@ -492,8 +524,9 @@ eval "$(ccli config completions bash)"
 | Context | Completions |
 |---|---|
 | `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `config`, `data`) |
-| `ccli get <TAB>` | Flags + stored data keys + aliases |
+| `ccli get <TAB>` | Flags + stored data keys + aliases + namespace prefixes |
 | `ccli run <TAB>` | Flags + stored data keys + aliases |
+| `ccli run cd:<TAB>` | Data keys + aliases (completes the segment after `:`) |
 | `ccli set <TAB>` | Flags + namespace prefixes (one level at a time) |
 | `ccli config <TAB>` | Subcommands (`set`, `get`, `info`, `examples`, `completions`) |
 | `ccli config set <TAB>` | Config keys (`colors`, `theme`) |
