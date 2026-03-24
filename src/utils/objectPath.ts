@@ -1,23 +1,36 @@
 import { CodexData, CodexValue } from '../types';
 
+function isSafeKey(key: string): boolean {
+  return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
+}
+
 /**
  * Sets a value at a nested path using dot notation (e.g., 'user.settings.theme')
  */
 export function setNestedValue(obj: CodexData, path: string, value: string): void {
   const keys = path.split('.');
   let current = obj;
-  
+
   // Navigate to the innermost object
   for (let i = 0; i < keys.length - 1; i++) {
     const key = keys[i];
+    if (!isSafeKey(key)) {
+      // Prevent prototype pollution via special property names
+      return;
+    }
     if (!current[key] || typeof current[key] !== 'object') {
       current[key] = {};
     }
     current = current[key] as CodexData;
   }
-  
+
+  const lastKey = keys[keys.length - 1];
+  if (!isSafeKey(lastKey)) {
+    // Prevent prototype pollution at the final assignment
+    return;
+  }
   // Set the value at the innermost level
-  current[keys[keys.length - 1]] = value;
+  current[lastKey] = value;
 }
 
 /**
