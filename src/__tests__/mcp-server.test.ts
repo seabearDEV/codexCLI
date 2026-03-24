@@ -65,12 +65,22 @@ function getNestedMock(obj: any, path: string): any {
 }
 function setNestedMock(obj: any, path: string, value: any): void {
   const parts = path.split('.');
+  const lastIndex = parts.length - 1;
   let cur = obj;
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
-    cur = cur[parts[i]];
+  for (let i = 0; i < lastIndex; i++) {
+    const key = parts[i];
+    // Prevent prototype pollution via unsafe path segments
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+      return;
+    }
+    if (!cur[key] || typeof cur[key] !== 'object') cur[key] = {};
+    cur = cur[key];
   }
-  cur[parts[parts.length - 1]] = value;
+  const lastKey = parts[lastIndex];
+  if (lastKey === '__proto__' || lastKey === 'constructor' || lastKey === 'prototype') {
+    return;
+  }
+  cur[lastKey] = value;
 }
 function flattenMock(obj: any, prefix = ''): Record<string, string> {
   const result: Record<string, string> = {};
