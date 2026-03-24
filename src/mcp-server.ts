@@ -715,12 +715,16 @@ server.tool(
 );
 
 // --- Start server ---
-async function main(): Promise<void> {
+export async function startMcpServer(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
-main().catch((err) => {
-  process.stderr.write(`MCP server error: ${err}\n`);
-  process.exit(1);
-});
+// Auto-start when run directly (e.g. `node dist/mcp-server.js` or `cclid-mcp`)
+// When imported by index.ts for the `mcp-server` subcommand, the caller invokes startMcpServer() explicitly.
+if (process.argv[1] && (process.argv[1].endsWith('mcp-server.js') || process.argv[1].endsWith('cclid-mcp'))) {
+  startMcpServer().catch((err) => {
+    process.stderr.write(`MCP server error: ${err}\n`);
+    process.exit(1);
+  });
+}

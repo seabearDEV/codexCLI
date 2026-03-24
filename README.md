@@ -593,19 +593,55 @@ CodexCLI includes a built-in [Model Context Protocol](https://modelcontextprotoc
 
 #### Claude Code
 
+**Homebrew / binary install:**
+
+```bash
+claude mcp add codexcli -- ccli mcp-server
+```
+
+**npm global install** (`npm install -g .`) — dev mode:
+
+```bash
+claude mcp add codexcli -- cclid mcp-server
+```
+
+**From source** (development):
+
 ```bash
 claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 ```
 
-If you installed from source via `npm install -g .`, you can also use:
-
-```bash
-claude mcp add codexcli -- cclid-mcp
-```
+> The standalone `cclid-mcp` command also still works for npm installs.
 
 #### Claude Desktop
 
-Add the following to your Claude Desktop MCP config file:
+**Homebrew / binary install:**
+
+```json
+{
+  "mcpServers": {
+    "codexcli": {
+      "command": "ccli",
+      "args": ["mcp-server"]
+    }
+  }
+}
+```
+
+**npm global install** (dev mode):
+
+```json
+{
+  "mcpServers": {
+    "codexcli": {
+      "command": "cclid",
+      "args": ["mcp-server"]
+    }
+  }
+}
+```
+
+**From source:**
 
 ```json
 {
@@ -656,6 +692,10 @@ ccli rm system.llm.instructions
 ### Verifying the MCP Server
 
 ```bash
+# Binary / Homebrew install:
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1.0"}}}' | ccli mcp-server
+
+# From source:
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1.0"}}}' | node dist/mcp-server.js
 ```
 

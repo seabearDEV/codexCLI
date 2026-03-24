@@ -326,6 +326,15 @@ dataCommand
     await commands.resetData(type, options);
   });
 
+// MCP server subcommand: allows binary/Homebrew installs to run the MCP server
+codexCLI
+  .command('mcp-server')
+  .description('Start the MCP (Model Context Protocol) server over stdio')
+  .action(async () => {
+    const { startMcpServer } = await import('./mcp-server');
+    await startMcpServer();
+  });
+
 // Hidden backward-compat shim: `ccli completions <bash|zsh|install>` still works
 // (existing users have `eval "$(ccli completions zsh)"` in their RC files)
 const completionsShim = codexCLI
