@@ -113,7 +113,7 @@ export function showHelp(): void {
     console.log(`  ${color.green(nameCol)} ${color.yellow(shortcutCol)} ${argsCol} ${desc}`);
   };
   cmd('set',      's',  '<key> [value]',      'Set an entry (value optional with -a)');
-  cmd('get',      'g',  '[key]',              'Retrieve entries or specific data');
+  cmd('get',      'g',  '[key]',              'List keys or retrieve entries (-v for values)');
   cmd('run',      'r',  '<keys...>',          'Execute stored command(s) (: compose, && chain)');
   cmd('find',     'f',  '<term>',             'Find entries by key or value');
   cmd('edit',     'e',  '<key>',              'Open an entry in $EDITOR for editing');
@@ -265,7 +265,8 @@ export function formatTree(
   colorize?: boolean,
   raw = false,
   searchTerm?: string,
-  source = false
+  source = false,
+  keysOnly = false
 ): string {
   const colorEnabled = colorize ?? isColorEnabled();
   const lines: string[] = [];
@@ -286,7 +287,9 @@ export function formatTree(
     if (typeof value === 'object' && value !== null) {
       lines.push(`${fullPrefix}${displayKey}${aliasDisplay}`);
       const childPrefix = prefix + (isLast ? ' '.repeat(4) : '│   ');
-      lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, raw, searchTerm, source));
+      lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, raw, searchTerm, source, keysOnly));
+    } else if (keysOnly) {
+      lines.push(`${fullPrefix}${displayKey}${aliasDisplay}`);
     } else {
       const rawValue = String(value);
       let resolved = rawValue;
@@ -318,7 +321,7 @@ export function formatTree(
 /**
  * Display data in a tree format (prints to stdout)
  */
-export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string> = {}, prefix = '', path = '', raw = false, searchTerm?: string, source = false): void {
-  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, raw, searchTerm, source));
+export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string> = {}, prefix = '', path = '', raw = false, searchTerm?: string, source = false, keysOnly = false): void {
+  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, raw, searchTerm, source, keysOnly));
 }
 

@@ -19,6 +19,19 @@ export function printWarning(message: string): void {
   console.log(color.yellow('⚠ ') + message);
 }
 
+export function displayKeys(keys: string[], keyToAliasMap?: Record<string, string>): void {
+  const aliasMap = keyToAliasMap ?? buildKeyToAliasMap();
+  for (const key of keys) {
+    const colorizedPath = colorizePathByLevels(key);
+    const alias = aliasMap[key];
+    if (alias) {
+      console.log(`${colorizedPath} ${color.blue('(' + alias + ')')}`);
+    } else {
+      console.log(colorizedPath);
+    }
+  }
+}
+
 export function displayEntries(entries: Record<string, string>, keyToAliasMap?: Record<string, string>): void {
   const aliasMap = keyToAliasMap ?? buildKeyToAliasMap();
   const confirmKeys = loadConfirmKeys();

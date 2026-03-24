@@ -86,10 +86,11 @@ server.tool(
     key: z.string().optional().describe("Dot-notation key to retrieve (omit for all entries)"),
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
     aliases_only: z.boolean().optional().describe("Show aliases only"),
+    values: z.boolean().optional().describe("Include values in output (default: false for all entries, true when a key is specified)"),
     decrypt: z.boolean().optional().describe("Decrypt an encrypted value"),
     password: z.string().optional().describe("Password for decryption (required when decrypt is true)"),
   },
-  async ({ key, format, aliases_only, decrypt: decryptOpt, password }) => {
+  async ({ key, format, aliases_only, values, decrypt: decryptOpt, password }) => {
     try {
       const data = loadData();
       const keyToAliasMap = buildKeyToAliasMap();
@@ -111,12 +112,17 @@ server.tool(
 
         // Entries
         if (Object.keys(data).length > 0) {
+          const showValues = values ?? false;
           if (format === "tree") {
-            sections.push(formatTree(data, keyToAliasMap, '', '', false));
+            sections.push(formatTree(data, keyToAliasMap, '', '', false, false, undefined, false, !showValues));
           } else {
             const flat = flattenObject(data);
-            const lines = Object.entries(flat).map(([k, v]) => `${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
-            sections.push(lines.join("\n"));
+            if (showValues) {
+              const lines = Object.entries(flat).map(([k, v]) => `${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
+              sections.push(lines.join("\n"));
+            } else {
+              sections.push(Object.keys(flat).join("\n"));
+            }
           }
         } else {
           sections.push("No entries found.");

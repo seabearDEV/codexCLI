@@ -161,17 +161,21 @@ After setting an entry, you'll be asked interactively whether it should require 
 ### Retrieving Data
 
 ```bash
-# Get a specific entry
-ccli get server.production.ip
-
-# Get all entries in a namespace
-ccli get server
-
-# Get all entries
+# List all keys (default)
 ccli get
 
-# Display as a tree structure
-ccli get server --tree
+# List all keys with values
+ccli get -v
+
+# Get a specific entry (always shows value)
+ccli get server.production.ip
+
+# Get all entries in a namespace (always shows values)
+ccli get server
+
+# Display as a tree structure (keys only by default)
+ccli get --tree
+ccli get --tree --values   # tree with values
 
 # Output raw value without colors (for scripting)
 ccli get server.production.ip --raw
@@ -559,7 +563,7 @@ ccli --debug get server.production
 | Command | Alias | Signature | Description |
 |---|---|---|---|
 | `set` | `s` | `<key> [value]` | Set an entry (value optional with `-a`; supports `key=val` batch) |
-| `get` | `g` | `[key]` | Retrieve entries or specific data |
+| `get` | `g` | `[key]` | List keys (default) or retrieve entries with `-v` |
 | `run` | `r` | `<keys...>` | Execute stored command(s) (`:` compose, `&&` chain) |
 | `find` | `f` | `<term>` | Find entries by key or value |
 | `edit` | `e` | `<key>` | Open an entry's value in `$EDITOR` |

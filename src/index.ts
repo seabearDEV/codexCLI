@@ -128,15 +128,16 @@ codexCLI
 codexCLI
   .command('get [key]')
   .alias('g')
-  .description('Retrieve entries or specific data')
+  .description('List keys or retrieve entries (-v for values)')
   .option('-t, --tree', 'Display data in a hierarchical tree structure')
   .option('-r, --raw', 'Output plain text without colors (for scripting)')
   .option('-s, --source', 'Show stored value before interpolation')
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
   .option('-c, --copy', 'Copy value to clipboard')
   .option('-a, --aliases', 'Show aliases only')
+  .option('-v, --values', 'Include values in output (default when a key is specified)')
   .option('-j, --json', 'Output as JSON (for scripting)')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, json?: boolean }) => {
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, json?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }

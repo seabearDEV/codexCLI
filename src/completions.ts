@@ -65,6 +65,8 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--source': 'Show source/raw output',
   '--confirm': 'Require confirmation to run',
   '--no-confirm': 'Remove confirmation requirement',
+  '--values': 'Include values in output',
+  '-v': 'Include values in output',
   '--json': 'Output as JSON',
   '-j': 'Output as JSON',
   '--preview': 'Preview changes without modifying',
@@ -96,10 +98,11 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
+      '--values': FLAG_DESCRIPTIONS['--values'], '-v': FLAG_DESCRIPTIONS['-v'],
       '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
     argType: 'dataKeyWithNamespaces',
-    description: 'Retrieve entries',
+    description: 'List keys or retrieve entries',
   },
   g: {
     flags: {
@@ -109,10 +112,11 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
       '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
       '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
+      '--values': FLAG_DESCRIPTIONS['--values'], '-v': FLAG_DESCRIPTIONS['-v'],
       '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
     },
     argType: 'dataKeyWithNamespaces',
-    description: 'Retrieve entries',
+    description: 'List keys or retrieve entries',
   },
   run: {
     flags: {

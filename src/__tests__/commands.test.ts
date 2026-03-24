@@ -1061,8 +1061,8 @@ describe('Commands', () => {
       expect(showedRaw).toBe(true);
     });
 
-    it('outputs all entries as plain key: value lines with --raw', () => {
-      getEntry(undefined, { raw: true });
+    it('outputs all entries as plain key: value lines with --raw --values', () => {
+      getEntry(undefined, { raw: true, values: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const output = logCalls.map(c => c[0]).join('\n');

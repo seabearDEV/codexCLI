@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- **`get` default output is now keys-only** — `ccli get` (with no key) now lists keys without values, reducing noise as the data store grows. Use `-v` / `--values` to include values. When a specific key is provided (e.g., `ccli get server`), values are always shown.
+- MCP `codex_get` tool: added `values` parameter (default `false` when no key specified, `true` when a key is provided)
+
 ## [0.3.0] - 2026-02-23
 
 ### Added

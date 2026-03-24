@@ -10,6 +10,7 @@ export interface GetOptions {
   copy?: boolean | undefined;
   aliases?: boolean | undefined;
   json?: boolean | undefined;
+  values?: boolean | undefined;
 }
 
 export interface SearchOptions {

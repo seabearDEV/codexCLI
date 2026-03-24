@@ -63,7 +63,7 @@ describe('Completions', () => {
 
       const getItem = findItem(results, 'get');
       expect(getItem).toBeDefined();
-      expect(getItem!.description).toBe('Retrieve entries');
+      expect(getItem!.description).toBe('List keys or retrieve entries');
       expect(getItem!.group).toBe('commands');
     });
 

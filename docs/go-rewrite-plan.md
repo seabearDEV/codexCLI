@@ -183,7 +183,7 @@ import (
 | Command | Alias | Args | Key Flags |
 |---|---|---|---|
 | `set` | `s` | `<key> [value...]` | `-f` force, `-e` encrypt, `-a <alias>`, `-p` prompt, `-c` clear, `--confirm/--no-confirm` |
-| `get` | `g` | `[key]` | `-t` tree, `-r` raw, `-s` source, `-d` decrypt, `-c` copy, `-a` aliases, `-j` json |
+| `get` | `g` | `[key]` | `-t` tree, `-r` raw, `-s` source, `-d` decrypt, `-c` copy, `-a` aliases, `-v` values, `-j` json |
 | `run` | `r` | `<keys...>` | `-y` yes, `--dry`, `-d` decrypt, `--source` |
 | `find` | `f` | `<term>` | `-e` entries, `-a` aliases, `-t` tree, `-j` json |
 | `edit` | `e` | `<key>` | `-d` decrypt |

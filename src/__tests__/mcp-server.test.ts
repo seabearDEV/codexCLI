@@ -217,7 +217,7 @@ describe('MCP Server Tools', () => {
   describe('codex_get', () => {
     it('returns all entries', async () => {
       Object.assign(mockData, { server: { ip: '10.0.0.1' } });
-      const result = await toolHandlers['codex_get']({ key: undefined, format: undefined });
+      const result = await toolHandlers['codex_get']({ key: undefined, format: undefined, values: true });
       expect(result.content[0].text).toContain('server.ip: 10.0.0.1');
     });
 
@@ -261,7 +261,7 @@ describe('MCP Server Tools', () => {
     it('shows [encrypted] for encrypted values in flat listing', async () => {
       const encrypted = encryptValue('secret', 'pass');
       Object.assign(mockData, { api: { key: encrypted }, plain: { val: 'visible' } });
-      const result = await toolHandlers['codex_get']({ key: undefined, format: undefined });
+      const result = await toolHandlers['codex_get']({ key: undefined, format: undefined, values: true });
       expect(result.content[0].text).toContain('api.key: [encrypted]');
       expect(result.content[0].text).toContain('plain.val: visible');
     });

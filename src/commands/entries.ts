@@ -13,7 +13,7 @@ import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, resolve
 import { hasConfirm, setConfirm, removeConfirm, removeConfirmForKey } from '../confirm';
 import { debug } from '../utils/debug';
 import { GetOptions } from '../types';
-import { printSuccess, printWarning, printError, displayEntries, displayAliases, askConfirmation, askPassword } from './helpers';
+import { printSuccess, printWarning, printError, displayEntries, displayKeys, displayAliases, askConfirmation, askPassword } from './helpers';
 import { copyToClipboard } from '../utils/clipboard';
 import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
@@ -229,6 +229,18 @@ export async function setEntry(key: string, value: string | undefined, force = f
 }
 
 function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<string, string>, options: GetOptions): void {
+  // Keys-only mode: no key specified and --values not set
+  if (!options.values) {
+    if (options.raw) {
+      for (const k of Object.keys(flat)) {
+        console.log(k);
+      }
+      return;
+    }
+    displayKeys(Object.keys(flat), aliasMap);
+    return;
+  }
+
   const entries = options.source
     ? flat as Record<string, CodexValue>
     : interpolateObject(flat as Record<string, CodexValue>);
@@ -253,7 +265,7 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
   }
 
   if (options.tree) {
-    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source);
+    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values);
     return;
   }
 
@@ -262,7 +274,7 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
 
 function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (options.tree) {
-    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source);
+    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values);
     return;
   }
 
@@ -356,7 +368,8 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.copy) {
       printWarning('--copy only works with a single value, not a subtree.');
     }
-    displaySubtree(key, value, aliasMap, options);
+    // When a specific key is provided, always show values
+    displaySubtree(key, value, aliasMap, { ...options, values: true });
     return;
   }
 
