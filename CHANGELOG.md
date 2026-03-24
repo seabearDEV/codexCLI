@@ -4,12 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.4.0] - 2026-03-24
 
 ### Changed
 
 - **`get` default output is now keys-only** — `ccli get` (with no key) now lists keys without values, reducing noise as the data store grows. Use `-v` / `--values` to include values. When a specific key is provided (e.g., `ccli get server`), values are always shown.
 - MCP `codex_get` tool: added `values` parameter (default `false` when no key specified, `true` when a key is provided)
+
+### Fixed
+
+- Prototype-polluting function in nested object helpers (code scanning alerts #1 and #2)
+
+### Dependencies
+
+- Bump hono from 4.12.0 to 4.12.7
+- Bump @hono/node-server from 1.19.9 to 1.19.10
+- Bump express-rate-limit from 8.2.1 to 8.3.0
+- Bump flatted from 3.3.3 to 3.4.2
+- Bump minimatch from 10.2.2 to 10.2.4
+- Bump rollup from 4.57.1 to 4.59.0
 
 ## [0.3.0] - 2026-02-23
 
