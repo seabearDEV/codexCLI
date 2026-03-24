@@ -37,10 +37,22 @@ function errorResponse(text: string) {
   return { content: [{ type: "text" as const, text }], isError: true };
 }
 
-const server = new McpServer({
-  name: "codexcli",
-  version,
-});
+ensureDataDirectoryExists();
+
+const DEFAULT_LLM_INSTRUCTIONS = `You are connected to the CodexCLI data store via MCP. Default behavior: when a user provides a dot-notation key without explicit intent, use codex_get to retrieve it. Only use codex_set when explicitly asked to store or update a value. Use codex_run only when asked to execute a command. Use codex_get with no key to browse all entries (keys only by default). Use the depth parameter to limit how deep the key listing goes (e.g. depth: 1 for top-level namespaces). Use the values parameter to include values in the output.`;
+
+const llmInstructions = (() => {
+  try {
+    loadData();
+    const val = getValue('system.llm.instructions');
+    return typeof val === 'string' ? val : DEFAULT_LLM_INSTRUCTIONS;
+  } catch { return DEFAULT_LLM_INSTRUCTIONS; }
+})();
+
+const server = new McpServer(
+  { name: "codexcli", version },
+  { ...(llmInstructions && { instructions: llmInstructions }) },
+);
 
 // --- codex_set ---
 server.tool(

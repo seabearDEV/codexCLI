@@ -637,6 +637,22 @@ Add the following to your Claude Desktop MCP config file:
 | `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
 
+### LLM Instructions
+
+When an AI agent connects via MCP, CodexCLI automatically sends instructions that guide how the agent interacts with your data store (e.g., defaulting to reads over writes, using depth-limited browsing).
+
+The default instructions are built into the server. To customize them, set the `system.llm.instructions` key — your version takes priority:
+
+```bash
+ccli set system.llm.instructions "Your custom instructions here"
+```
+
+To revert to the defaults, simply remove the key:
+
+```bash
+ccli rm system.llm.instructions
+```
+
 ### Verifying the MCP Server
 
 ```bash
