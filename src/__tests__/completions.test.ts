@@ -227,7 +227,10 @@ describe('Completions', () => {
     });
 
     it('includes global flags when typing a dash', () => {
+      const origRows = process.stdout.rows;
+      process.stdout.rows = 100;
       const results = getCompletions('ccli get -', 10);
+      process.stdout.rows = origRows;
       const v = values(results);
       expect(v).toContain('--debug');
       expect(v).toContain('--version');
@@ -235,7 +238,10 @@ describe('Completions', () => {
     });
 
     it('includes global flags with descriptions', () => {
+      const origRows = process.stdout.rows;
+      process.stdout.rows = 100;
       const results = getCompletions('ccli get -', 10);
+      process.stdout.rows = origRows;
       const debugItem = findItem(results, '--debug');
       expect(debugItem).toBeDefined();
       expect(debugItem!.description).toBe('Enable debug output');

@@ -176,9 +176,14 @@ ccli get server
 # List keys in a namespace with values
 ccli get server -v
 
+# Limit key depth (1 = top-level, 2 = two levels, etc.)
+ccli get -k 1
+ccli get -k 2 -v           # two levels with values
+
 # Display as a tree structure (keys only by default)
 ccli get --tree
 ccli get --tree --values   # tree with values
+ccli get --tree -k 2       # tree limited to 2 levels
 
 # Output raw value without colors (for scripting)
 ccli get server.production.ip --raw

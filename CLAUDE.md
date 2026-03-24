@@ -1,1 +1,1 @@
-Before exploring the codebase, run codex_get context.codexcli for project context.
+Before exploring the codebase, run codex_get codexcli.context for project context.

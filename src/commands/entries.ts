@@ -265,20 +265,20 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
   }
 
   if (options.tree) {
-    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values);
+    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
     return;
   }
 
-  displayFlatEntries(flattenObject(data), aliasMap, options);
+  displayFlatEntries(flattenObject(data, '', options.depth), aliasMap, options);
 }
 
 function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (options.tree) {
-    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values);
+    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
     return;
   }
 
-  const flat = flattenObject({ [key]: value });
+  const flat = flattenObject({ [key]: value }, '', options.depth);
 
   if (Object.keys(flat).length === 0) {
     console.log(`No entries found under '${key}'.`);

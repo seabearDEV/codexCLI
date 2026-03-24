@@ -266,7 +266,9 @@ export function formatTree(
   raw = false,
   searchTerm?: string,
   source = false,
-  keysOnly = false
+  keysOnly = false,
+  maxDepth?: number,
+  currentDepth = 1
 ): string {
   const colorEnabled = colorize ?? isColorEnabled();
   const lines: string[] = [];
@@ -286,9 +288,11 @@ export function formatTree(
 
     if (typeof value === 'object' && value !== null) {
       lines.push(`${fullPrefix}${displayKey}${aliasDisplay}`);
-      const childPrefix = prefix + (isLast ? ' '.repeat(4) : '│   ');
-      lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, raw, searchTerm, source, keysOnly));
-    } else if (keysOnly) {
+      if (maxDepth === undefined || currentDepth < maxDepth) {
+        const childPrefix = prefix + (isLast ? ' '.repeat(4) : '│   ');
+        lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, raw, searchTerm, source, keysOnly, maxDepth, currentDepth + 1));
+      }
+    } else if (keysOnly || (maxDepth !== undefined && currentDepth <= maxDepth)) {
       lines.push(`${fullPrefix}${displayKey}${aliasDisplay}`);
     } else {
       const rawValue = String(value);
@@ -321,7 +325,7 @@ export function formatTree(
 /**
  * Display data in a tree format (prints to stdout)
  */
-export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string> = {}, prefix = '', path = '', raw = false, searchTerm?: string, source = false, keysOnly = false): void {
-  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, raw, searchTerm, source, keysOnly));
+export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string> = {}, prefix = '', path = '', raw = false, searchTerm?: string, source = false, keysOnly = false, maxDepth?: number): void {
+  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, raw, searchTerm, source, keysOnly, maxDepth));
 }
 

@@ -11,6 +11,7 @@ export interface GetOptions {
   aliases?: boolean | undefined;
   json?: boolean | undefined;
   values?: boolean | undefined;
+  depth?: number | undefined;
 }
 
 export interface SearchOptions {

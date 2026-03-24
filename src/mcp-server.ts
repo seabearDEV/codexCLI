@@ -87,10 +87,11 @@ server.tool(
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
     aliases_only: z.boolean().optional().describe("Show aliases only"),
     values: z.boolean().optional().describe("Include values in output (default: false; leaf values always include their value)"),
+    depth: z.number().optional().describe("Limit key depth (e.g. 1 for top-level only, 2 for two levels)"),
     decrypt: z.boolean().optional().describe("Decrypt an encrypted value"),
     password: z.string().optional().describe("Password for decryption (required when decrypt is true)"),
   },
-  async ({ key, format, aliases_only, values, decrypt: decryptOpt, password }) => {
+  async ({ key, format, aliases_only, values, depth, decrypt: decryptOpt, password }) => {
     try {
       const data = loadData();
       const keyToAliasMap = buildKeyToAliasMap();
@@ -114,9 +115,9 @@ server.tool(
         if (Object.keys(data).length > 0) {
           const showValues = values ?? false;
           if (format === "tree") {
-            sections.push(formatTree(data, keyToAliasMap, '', '', false, false, undefined, false, !showValues));
+            sections.push(formatTree(data, keyToAliasMap, '', '', false, false, undefined, false, !showValues, depth));
           } else {
-            const flat = flattenObject(data);
+            const flat = flattenObject(data, '', depth);
             if (showValues) {
               const lines = Object.entries(flat).map(([k, v]) => `${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
               sections.push(lines.join("\n"));
@@ -168,9 +169,9 @@ server.tool(
       // Object subtree
       const showSubtreeValues = values ?? false;
       if (format === "tree") {
-        return textResponse(formatTree(value, keyToAliasMap, '', resolvedKey, false, false, undefined, false, !showSubtreeValues));
+        return textResponse(formatTree(value, keyToAliasMap, '', resolvedKey, false, false, undefined, false, !showSubtreeValues, depth));
       }
-      const flat = flattenObject(value, resolvedKey);
+      const flat = flattenObject(value, resolvedKey, depth);
       if (showSubtreeValues) {
         const interpFlat = interpolateObject(flat as Record<string, import("./types").CodexValue>);
         const lines = Object.entries(interpFlat).map(([k, v]) => {

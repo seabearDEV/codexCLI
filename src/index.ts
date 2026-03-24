@@ -136,8 +136,9 @@ codexCLI
   .option('-c, --copy', 'Copy value to clipboard')
   .option('-a, --aliases', 'Show aliases only')
   .option('-v, --values', 'Include values in output')
+  .option('-k, --depth <n>', 'Limit key depth (e.g. -k 1 for top-level only)', parseInt)
   .option('-j, --json', 'Output as JSON (for scripting)')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, json?: boolean }) => {
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }
