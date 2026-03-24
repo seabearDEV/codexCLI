@@ -1073,8 +1073,8 @@ describe('Commands', () => {
       expect(output).not.toMatch(/\x1b\[/);
     });
 
-    it('outputs subtree entries as plain key: value lines with --raw', () => {
-      getEntry('server', { raw: true });
+    it('outputs subtree entries as plain key: value lines with --raw --values', () => {
+      getEntry('server', { raw: true, values: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const output = logCalls.map(c => c[0]).join('\n');
@@ -1092,12 +1092,12 @@ describe('Commands', () => {
       expect(console.log).not.toHaveBeenCalled();
     });
 
-    it('masks encrypted values in raw subtree output', () => {
+    it('masks encrypted values in raw subtree output with --values', () => {
       const encryptedVal = encryptValue('secret', 'pass');
       const mockData = { api: { key: encryptedVal, name: 'public' } };
       (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockData));
 
-      getEntry('api', { raw: true });
+      getEntry('api', { raw: true, values: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const output = logCalls.map(c => c[0]).join('\n');

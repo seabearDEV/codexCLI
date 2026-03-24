@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Changed
 
-- **`get` default output is now keys-only** — `ccli get` (with no key) now lists keys without values, reducing noise as the data store grows. Use `-v` / `--values` to include values. When a specific key is provided (e.g., `ccli get server`), values are always shown.
+- **`get` default output is now keys-only** — `ccli get` now lists keys without values, reducing noise as the data store grows. Use `-v` / `--values` to include values. Leaf values (e.g., `ccli get server.ip`) always show their value.
 - MCP `codex_get` tool: added `values` parameter (default `false` when no key specified, `true` when a key is provided)
 
 ### Fixed

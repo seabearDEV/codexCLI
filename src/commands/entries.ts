@@ -368,8 +368,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.copy) {
       printWarning('--copy only works with a single value, not a subtree.');
     }
-    // When a specific key is provided, always show values
-    displaySubtree(key, value, aliasMap, { ...options, values: true });
+    displaySubtree(key, value, aliasMap, options);
     return;
   }
 

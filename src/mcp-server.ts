@@ -86,7 +86,7 @@ server.tool(
     key: z.string().optional().describe("Dot-notation key to retrieve (omit for all entries)"),
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
     aliases_only: z.boolean().optional().describe("Show aliases only"),
-    values: z.boolean().optional().describe("Include values in output (default: false for all entries, true when a key is specified)"),
+    values: z.boolean().optional().describe("Include values in output (default: false; leaf values always include their value)"),
     decrypt: z.boolean().optional().describe("Decrypt an encrypted value"),
     password: z.string().optional().describe("Password for decryption (required when decrypt is true)"),
   },
@@ -165,17 +165,21 @@ server.tool(
         return textResponse(`${resolvedKey}: ${display}`);
       }
 
-      // Object subtree — interpolate leaf values
+      // Object subtree
+      const showSubtreeValues = values ?? false;
       if (format === "tree") {
-        return textResponse(formatTree(value, keyToAliasMap, '', resolvedKey, false));
+        return textResponse(formatTree(value, keyToAliasMap, '', resolvedKey, false, false, undefined, false, !showSubtreeValues));
       }
       const flat = flattenObject(value, resolvedKey);
-      const interpFlat = interpolateObject(flat as Record<string, import("./types").CodexValue>);
-      const lines = Object.entries(interpFlat).map(([k, v]) => {
-        const strVal = typeof v === 'string' ? v : JSON.stringify(v);
-        return `${k}: ${isEncrypted(strVal) ? '[encrypted]' : strVal}`;
-      });
-      return textResponse(lines.join("\n"));
+      if (showSubtreeValues) {
+        const interpFlat = interpolateObject(flat as Record<string, import("./types").CodexValue>);
+        const lines = Object.entries(interpFlat).map(([k, v]) => {
+          const strVal = typeof v === 'string' ? v : JSON.stringify(v);
+          return `${k}: ${isEncrypted(strVal) ? '[encrypted]' : strVal}`;
+        });
+        return textResponse(lines.join("\n"));
+      }
+      return textResponse(Object.keys(flat).join("\n"));
     } catch (err) {
       return errorResponse(`Error retrieving entry: ${String(err)}`);
     }

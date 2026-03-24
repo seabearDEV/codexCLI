@@ -244,7 +244,7 @@ describe('MCP Server Tools', () => {
 
     it('returns a subtree in flat format', async () => {
       Object.assign(mockData, { db: { host: 'localhost', port: '5432' } });
-      const result = await toolHandlers['codex_get']({ key: 'db', format: undefined });
+      const result = await toolHandlers['codex_get']({ key: 'db', format: undefined, values: true });
       expect(result.content[0].text).toContain('db.host: localhost');
       expect(result.content[0].text).toContain('db.port: 5432');
     });
@@ -279,7 +279,7 @@ describe('MCP Server Tools', () => {
     it('shows [encrypted] for encrypted values in subtree flat format', async () => {
       const encrypted = encryptValue('secret', 'pass');
       Object.assign(mockData, { api: { key: encrypted, name: 'myapi' } });
-      const result = await toolHandlers['codex_get']({ key: 'api', format: undefined });
+      const result = await toolHandlers['codex_get']({ key: 'api', format: undefined, values: true });
       expect(result.content[0].text).toContain('api.key: [encrypted]');
       expect(result.content[0].text).toContain('api.name: myapi');
     });

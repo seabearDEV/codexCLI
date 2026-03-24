@@ -167,11 +167,14 @@ ccli get
 # List all keys with values
 ccli get -v
 
-# Get a specific entry (always shows value)
+# Get a specific entry (leaf values always show their value)
 ccli get server.production.ip
 
-# Get all entries in a namespace (always shows values)
+# List keys in a namespace
 ccli get server
+
+# List keys in a namespace with values
+ccli get server -v
 
 # Display as a tree structure (keys only by default)
 ccli get --tree
