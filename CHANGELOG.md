@@ -4,12 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.4.0] - 2026-03-24
+## [0.5.0] - 2026-03-24
+
+### Added
+
+- **`--depth` / `-k <n>` flag on `get`** — limit key depth for progressive browsing (e.g., `-k 1` for top-level namespaces, `-k 2` for two levels). Works in both flat and tree modes.
+- MCP `codex_get` tool: added `depth` parameter for depth-limited key listing
 
 ### Changed
 
 - **`get` default output is now keys-only** — `ccli get` now lists keys without values, reducing noise as the data store grows. Use `-v` / `--values` to include values. Leaf values (e.g., `ccli get server.ip`) always show their value.
-- MCP `codex_get` tool: added `values` parameter (default `false` when no key specified, `true` when a key is provided)
+- MCP `codex_get` tool: added `values` parameter (default `false`; leaf values always include their value)
 
 ### Fixed
 
