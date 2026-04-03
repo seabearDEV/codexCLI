@@ -22,6 +22,7 @@ import {
 import {
   ensureDataDirectoryExists,
 } from "./utils/paths";
+import { findProjectFile } from "./store";
 import { hasConfirm, loadConfirmKeys, saveConfirmKeys } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
@@ -104,24 +105,52 @@ server.tool(
     decrypt: z.boolean().optional().describe("Decrypt an encrypted value"),
     password: z.string().optional().describe("Password for decryption (required when decrypt is true)"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
+    all: z.boolean().optional().describe("Show entries from all scopes (project + global) when listing"),
   },
-  async ({ key, format, aliases_only, values, depth, decrypt: decryptOpt, password, scope: scopeParam }) => {
+  async ({ key, format, aliases_only, values, depth, decrypt: decryptOpt, password, scope: scopeParam, all: showAll }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
-      const data = loadData(scope);
+      const hasProject = !!findProjectFile();
+      // For listings: default to project-only when project exists (unless --all or explicit scope)
+      const listingScope: Scope = scopeParam ? scopeParam as Scope : (hasProject && !showAll) ? 'project' : 'auto';
+      // For single-key lookups: auto fallthrough
+      const lookupScope = (scopeParam ?? 'auto') as Scope;
+      const data = loadData(listingScope);
       const keyToAliasMap = buildKeyToAliasMap();
 
       // No key — return entries and/or aliases
       if (!key) {
         // Aliases only
         if (aliases_only) {
-          const aliases = loadAliases(scope);
+          const aliases = loadAliases(listingScope);
           const entries = Object.entries(aliases);
           if (entries.length === 0) {
             return textResponse("No aliases defined.");
           }
           const lines = entries.map(([a, t]) => `${a} -> ${t}`);
           return textResponse(lines.join("\n"));
+        }
+
+        // Show all scopes with section headers
+        if (showAll && hasProject) {
+          const sections: string[] = [];
+          for (const s of ['project', 'global'] as const) {
+            const sData = loadData(s);
+            const label = s === 'project' ? 'Project' : 'Global';
+            sections.push(`${label}:`);
+            if (Object.keys(sData).length > 0) {
+              const flat = flattenObject(sData, '', depth);
+              const showValues = values ?? false;
+              if (showValues) {
+                const lines = Object.entries(flat).map(([k, v]) => `  ${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
+                sections.push(lines.join("\n"));
+              } else {
+                sections.push(Object.keys(flat).map(k => `  ${k}`).join("\n"));
+              }
+            } else {
+              sections.push("  No entries found.");
+            }
+          }
+          return textResponse(sections.join("\n"));
         }
 
         const sections: string[] = [];
@@ -148,8 +177,8 @@ server.tool(
       }
 
       // Resolve potential alias
-      const resolvedKey = resolveKey(key, scope);
-      const value = getValue(resolvedKey, scope);
+      const resolvedKey = resolveKey(key, lookupScope);
+      const value = getValue(resolvedKey, lookupScope);
 
       if (value === undefined) {
         return errorResponse(`Key '${key}' not found.`);

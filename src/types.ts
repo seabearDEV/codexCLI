@@ -13,6 +13,7 @@ export interface GetOptions {
   values?: boolean | undefined;
   depth?: number | undefined;
   global?: boolean | undefined;
+  all?: boolean | undefined;
 }
 
 export interface SearchOptions {

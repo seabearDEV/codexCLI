@@ -120,12 +120,13 @@ export function showHelp(): void {
   cmd('copy',     'cp', '<source> <dest>',    'Copy an entry to a new key');
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
+  cmd('init',     '',   '',                   'Create project-scoped .codexcli.json');
   cmd('config',   '',   '<subcommand>',       'View or change configuration settings');
-  cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset, projectfile)');
+  cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
   console.log();
   console.log('SUBCOMMANDS:');
   console.log(`  ${color.green('config')}       set, get, info, examples, completions <bash|zsh|install>`);
-  console.log(`  ${color.green('data')}         export, import, reset, projectfile`);
+  console.log(`  ${color.green('data')}         export <type>, import <type> <file>, reset <type>`);
   console.log();
   console.log(`  Use ${color.yellow('--help')} with any command for options (e.g. ${bin} set --help)`);
 
@@ -168,7 +169,7 @@ export function showExamples(): void {
   ex(`${b} ${g('set')} ${c('a')}=1 ${c('b')}=2 ${c('c')}=3`, '# Batch set multiple key=value pairs');
 
   section('RETRIEVING DATA:');
-  ex(`${b} ${g('get')}`, '# List all entries and aliases');
+  ex(`${b} ${g('get')}`, '# List keys in the current scope');
   ex(`${b} ${g('get')} ${y('-a')}`, '# List aliases only');
   ex(`${b} ${g('get')} ${c('server.ip')}`, '# Get a specific value');
   ex(`${b} ${g('get')} ${c('server')}`, '# Get everything under a namespace');
@@ -217,8 +218,13 @@ export function showExamples(): void {
   ex(`${b} ${g('data import')} all backup.json`, '# Import data and aliases');
   ex(`${b} ${g('data reset')} entries`, '# Clear all data (prompts first)');
   ex(`${b} ${g('data reset')} all ${y('-f')}`, '# Clear everything without confirmation');
-  ex(`${b} ${g('data projectfile')}`, '# Create project-scoped .codexcli.json in cwd');
-  ex(`${b} ${g('data projectfile')} ${y('--remove')}`, '# Remove the project file');
+
+  section('PROJECT-SCOPED DATA:');
+  ex(`${b} ${g('init')}`, '# Create .codexcli.json in the current directory');
+  ex(`${b} ${g('init')} ${y('--remove')}`, '# Remove the project file');
+  ex(`${b} ${g('get')}`, '# Show project entries (when inside a project)');
+  ex(`${b} ${g('get')} ${y('-G')}`, '# Show global entries only');
+  ex(`${b} ${g('get')} ${y('-A')}`, '# Show both scopes with section headers');
   ex(`${b} ${g('set')} key val ${y('-G')}`, '# Write to global store (bypass project file)');
 
   section('CONFIGURATION:');

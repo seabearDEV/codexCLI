@@ -21,8 +21,8 @@ A command-line information store for quick reference of frequently used data.
     - [Exec Interpolation](#exec-interpolation)
   - [Encryption](#encryption)
   - [Configuration](#configuration)
-  - [Data Management](#data-management)
   - [Project-Scoped Data](#project-scoped-data)
+  - [Data Management](#data-management)
   - [Shell Wrapper](#shell-wrapper)
   - [Shell Tab-Completion](#shell-tab-completion)
   - [Scripting Tips](#scripting-tips)
@@ -162,11 +162,13 @@ After setting an entry, you'll be asked interactively whether it should require 
 
 ### Retrieving Data
 
+When inside a project directory (one with a `.codexcli.json`), `get` shows project entries by default. Use `-G` for global entries or `-A` for both. Outside a project, `get` shows global entries. Looking up a specific key always falls through from project to global automatically.
+
 ```bash
-# List all keys (default)
+# List keys in the current scope
 ccli get
 
-# List all keys with values
+# List keys with values
 ccli get -v
 
 # Get a specific entry (leaf values always show their value)
@@ -177,6 +179,12 @@ ccli get server
 
 # List keys in a namespace with values
 ccli get server -v
+
+# Show global entries only (when inside a project)
+ccli get -G
+
+# Show entries from all scopes with section headers
+ccli get -A
 
 # Limit key depth (1 = top-level, 2 = two levels, etc.)
 ccli get -k 1
@@ -450,6 +458,42 @@ Available settings:
 | `colors` | `true` / `false`             | Enable/disable colored output |
 | `theme`  | `default` / `dark` / `light` | UI theme                      |
 
+### Project-Scoped Data
+
+CodexCLI supports per-project data files that live alongside your code. When you're inside a project directory, commands automatically target the project store. Global data is still accessible via `-G`.
+
+```bash
+# Initialize a project data file in the current directory
+ccli init
+
+# Set project-specific entries (writes to .codexcli.json)
+ccli set build.cmd "npm run build"
+ccli set test.cmd "npm test"
+ccli set deploy.staging "./deploy.sh staging"
+
+# get shows project entries only (when inside a project)
+ccli get
+
+# Single-key lookups fall through to global transparently
+ccli get paths.github    # not in project → found in global
+
+# Use -G to see global entries only
+ccli get -G
+
+# Use -A to see both scopes with section headers
+ccli get -A
+
+# Use -G to explicitly write to global while inside a project
+ccli set server.ip 192.168.1.100 -G
+
+# Remove the project file
+ccli init --remove
+```
+
+The project file (`.codexcli.json`) uses the same `{ entries, aliases, confirm }` format as the global store. You can commit it to version control to share project data with your team, or add it to `.gitignore` for personal use.
+
+**Scope flags:** The `-G` / `--global` flag is available on `set`, `get`, `run`, `find`, `copy`, `edit`, `rename`, and `remove`. Data management commands (`export`, `import`, `reset`) also support `-P` / `--project` for explicit targeting.
+
 ### Data Management
 
 All data (entries, aliases, confirm metadata) is stored in a single `data.json` file — `~/.codexcli/data.json` for global data, `.codexcli.json` for project-scoped data.
@@ -490,32 +534,6 @@ ccli data reset all -f
 ```
 
 > **Auto-backup:** Before destructive operations (`data reset`, non-merge `data import`), CodexCLI automatically creates a timestamped backup in `~/.codexcli/.backups/`.
-
-### Project-Scoped Data
-
-Create a project-local data file that sits alongside your code. Project entries take precedence on reads, with automatic fallthrough to global data.
-
-```bash
-# Create a .codexcli.json in the current directory
-ccli data projectfile
-
-# All set/get/run commands now default to the project file
-ccli set project.build "npm run build"
-ccli set project.test "npm test"
-
-# Use --global / -G to explicitly target the global store
-ccli set server.ip 192.168.1.100 -G
-
-# Get merges both scopes (project wins on conflict)
-ccli get
-
-# Remove the project file
-ccli data projectfile --remove
-```
-
-The project file uses the same format as the global store (`{ entries, aliases, confirm }`) and can be committed to version control or added to `.gitignore`.
-
-The `--global` / `-G` flag is available on `set`, `get`, `run`, `find`, `copy`, `edit`, `rename`, and `remove`. Data management commands (`export`, `import`, `reset`) also support `--project` / `-P`.
 
 ### Shell Wrapper
 
@@ -568,14 +586,14 @@ eval "$(ccli config completions bash)"
 
 | Context | Completions |
 |---|---|
-| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `config`, `data`) |
+| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `init`, `config`, `data`) |
 | `ccli get <TAB>` | Flags + stored data keys + aliases + namespace prefixes |
 | `ccli run <TAB>` | Flags + stored data keys + aliases |
 | `ccli run cd:<TAB>` | Data keys + aliases (completes the segment after `:`) |
 | `ccli set <TAB>` | Flags + namespace prefixes (one level at a time) |
 | `ccli config <TAB>` | Subcommands (`set`, `get`, `info`, `examples`, `completions`) |
 | `ccli config set <TAB>` | Config keys (`colors`, `theme`) |
-| `ccli data <TAB>` | Subcommands (`export`, `import`, `reset`, `projectfile`) |
+| `ccli data <TAB>` | Subcommands (`export`, `import`, `reset`) |
 | `ccli data export <TAB>` | `entries`, `aliases`, `confirm`, `all` |
 
 ### Scripting Tips
@@ -613,13 +631,14 @@ ccli --debug get server.production
 | `remove` | `rm` | `<key>` | Remove an entry and its alias |
 | `rename` | `rn` | `<old> <new>` | Rename an entry key or alias |
 | `config` | | `<subcommand>` | View or change configuration settings |
-| `data` | | `<subcommand>` | Manage stored data (export, import, reset, projectfile) |
+| `init` | | | Create project-scoped `.codexcli.json` (`--remove` to delete) |
+| `data` | | `<subcommand>` | Manage stored data (export, import, reset) |
 
 **Config subcommands:** `set <key> <value>`, `get [key]`, `info`, `examples`, `completions <bash\|zsh\|install>`
 
-**Data subcommands:** `export <type>`, `import <type> <file>`, `reset <type>`, `projectfile`
+**Data subcommands:** `export <type>`, `import <type> <file>`, `reset <type>`
 
-**Global flag:** Most data commands accept `--global` / `-G` to bypass project-scoped data and target the global store directly.
+**Scope flags:** `-G` / `--global` targets the global store. `-A` / `--all` on `get` shows both scopes with section headers.
 
 ## MCP Server (AI Agent Integration)
 
@@ -715,7 +734,7 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
 
-All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When omitted, it defaults to project if a `.codexcli.json` exists, otherwise global.
+All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli.json` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.
 
 ### LLM Instructions
 

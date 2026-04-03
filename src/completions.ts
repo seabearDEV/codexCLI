@@ -83,6 +83,8 @@ const GLOBAL_FLAGS: Record<string, string> = {
   '-G': 'Target global data store',
   '--project': 'Target project data store',
   '-P': 'Target project data store',
+  '--all': 'Show all scopes (project + global)',
+  '-A': 'Show all scopes (project + global)',
 };
 
 const CLI_TREE: Record<string, CommandDef> = {
@@ -108,6 +110,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--depth': FLAG_DESCRIPTIONS['--depth'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
       '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
+      '--all': FLAG_DESCRIPTIONS['--all'], '-A': FLAG_DESCRIPTIONS['-A'],
     },
     argType: 'dataKeyWithNamespaces',
     description: 'List keys or retrieve entries',
@@ -124,6 +127,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--depth': FLAG_DESCRIPTIONS['--depth'], '-k': FLAG_DESCRIPTIONS['-k'],
       '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
       '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
+      '--all': FLAG_DESCRIPTIONS['--all'], '-A': FLAG_DESCRIPTIONS['-A'],
     },
     argType: 'dataKeyWithNamespaces',
     description: 'List keys or retrieve entries',
@@ -151,6 +155,11 @@ const CLI_TREE: Record<string, CommandDef> = {
     },
     argType: 'dataKey',
     description: 'Execute a stored command',
+  },
+  init: {
+    flags: { '--remove': 'Remove the project file' },
+    argType: null,
+    description: 'Create project-scoped data file',
   },
   find: {
     flags: {

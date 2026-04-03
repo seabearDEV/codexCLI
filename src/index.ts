@@ -140,7 +140,8 @@ codexCLI
   .option('-k, --depth <n>', 'Limit key depth (e.g. -k 1 for top-level only)', parseInt)
   .option('-j, --json', 'Output as JSON (for scripting)')
   .option('-G, --global', 'Target global data store')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean }) => {
+  .option('-A, --all', 'Show entries from all scopes (project + global)')
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }
@@ -343,8 +344,17 @@ dataCommand
   });
 
 dataCommand
-  .command('projectfile')
+  .command('projectfile', { hidden: true })
   .description('Create or remove a project-scoped .codexcli.json')
+  .option('--remove', 'Remove the project file')
+  .action((options: { remove?: boolean }) => {
+    commands.handleProjectFile(options);
+  });
+
+// Init command: create/remove project-scoped data file
+codexCLI
+  .command('init')
+  .description('Create a project-scoped .codexcli.json in the current directory')
   .option('--remove', 'Remove the project file')
   .action((options: { remove?: boolean }) => {
     commands.handleProjectFile(options);

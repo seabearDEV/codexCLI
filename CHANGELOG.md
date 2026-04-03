@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] - 2026-04-02
+
+### Added
+
+- **`ccli init`** — top-level command to create/remove project-scoped `.codexcli.json` (replaces `ccli data projectfile`).
+- **`--all` / `-A` flag on `get`** — shows entries from both project and global scopes with section headers.
+- MCP `codex_get`: `all` parameter for listing both scopes.
+
+### Changed
+
+- **`ccli get` now shows project entries only** when inside a project directory. Previously showed merged project + global entries with `[P]` markers. Use `-G` for global only, `-A` for both.
+- Single-key lookups (`ccli get specific.key`) still fall through project → global transparently.
+- `ccli data projectfile` is now a hidden alias for `ccli init`.
+- Removed `[P]` prefix markers from listing output.
+
 ## [0.6.1] - 2026-04-02
 
 ### Added

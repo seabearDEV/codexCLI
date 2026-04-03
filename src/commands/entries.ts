@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadData, handleError, getValue, setValue, removeValue, Scope, getEntriesFlat } from '../storage';
+import { loadData, handleError, getValue, setValue, removeValue, Scope } from '../storage';
 import { flattenObject } from '../utils/objectPath';
 import { findProjectFile } from '../store';
 import { CodexValue } from '../types';
@@ -235,7 +235,7 @@ export async function setEntry(key: string, value: string | undefined, force = f
   }
 }
 
-function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<string, string>, options: GetOptions, projectKeys?: Set<string>): void {
+function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<string, string>, options: GetOptions): void {
   // Keys-only mode: no key specified and --values not set
   if (!options.values) {
     if (options.raw) {
@@ -244,7 +244,7 @@ function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<strin
       }
       return;
     }
-    displayKeys(Object.keys(flat), aliasMap, projectKeys);
+    displayKeys(Object.keys(flat), aliasMap);
     return;
   }
 
@@ -260,10 +260,48 @@ function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<strin
     return;
   }
 
-  displayEntries(entries as Record<string, string>, aliasMap, projectKeys);
+  displayEntries(entries as Record<string, string>, aliasMap);
 }
 
-function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions, projectKeys?: Set<string>): void {
+function jsonFlatEntries(data: Record<string, string> | Record<string, CodexValue>): Record<string, string> {
+  const flat = flattenObject(data);
+  const result: Record<string, string> = {};
+  for (const [k, v] of Object.entries(flat)) {
+    if (isEncrypted(v)) {
+      result[k] = '[encrypted]';
+    } else {
+      try { result[k] = interpolate(v); } catch { result[k] = v; }
+    }
+  }
+  return result;
+}
+
+function displayScopedEntries(scope: 'project' | 'global', aliasMap: Record<string, string>, options: GetOptions): void {
+  const label = scope === 'project' ? 'Project' : 'Global';
+  const data = loadData(scope);
+
+  if (Object.keys(data).length === 0) {
+    if (!options.raw) {
+      console.log(color.bold(`${label}:`));
+      console.log(color.gray('  No entries'));
+      console.log('');
+    }
+    return;
+  }
+
+  if (!options.raw) {
+    console.log(color.bold(`${label}:`));
+  }
+
+  if (options.tree) {
+    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
+  } else {
+    displayFlatEntries(flattenObject(data, '', options.depth), aliasMap, options);
+  }
+  console.log('');
+}
+
+function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (Object.keys(data).length === 0) {
     if (options.raw) return;
     console.log(color.gray(`No entries found. Add one with "${getBinaryName()} set <key> <value>"`));
@@ -276,10 +314,10 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
     return;
   }
 
-  displayFlatEntries(flattenObject(data, '', options.depth), aliasMap, options, projectKeys);
+  displayFlatEntries(flattenObject(data, '', options.depth), aliasMap, options);
 }
 
-function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions, projectKeys?: Set<string>): void {
+function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (options.tree) {
     displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
     return;
@@ -292,53 +330,44 @@ function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap
     return;
   }
 
-  displayFlatEntries(flat, aliasMap, options, projectKeys);
+  displayFlatEntries(flat, aliasMap, options);
 }
 
 export async function getEntry(key?: string, options: GetOptions = {}): Promise<void> {
   debug('getEntry called', { key, options });
-  const scope = toScope(options.global);
+
+  // Resolve listing scope: --global → global, --all → both, default → project if exists else global
+  const hasProject = !!findProjectFile();
+  const listingScope: Scope | undefined = options.global ? 'global' : (hasProject && !options.all) ? 'project' : undefined;
+  // For single-key lookups, use auto fallthrough (project → global)
+  const lookupScope = toScope(options.global);
 
   const aliasMap = buildKeyToAliasMap();
 
   // --json output mode
   if (options.json) {
     if (!key) {
-      if (options.aliases) {
-        console.log(JSON.stringify(loadAliases(scope), null, 2));
-      } else {
-        const data = loadData(scope);
-        const flat = flattenObject(data);
-        const result: Record<string, string> = {};
-        for (const [k, v] of Object.entries(flat)) {
-          if (isEncrypted(v)) {
-            result[k] = '[encrypted]';
-          } else {
-            try { result[k] = interpolate(v); } catch { result[k] = v; }
-          }
-        }
+      if (options.all && hasProject) {
+        const result: Record<string, unknown> = {};
+        result.project = jsonFlatEntries(loadData('project'));
+        result.global = jsonFlatEntries(loadData('global'));
         console.log(JSON.stringify(result, null, 2));
+      } else if (options.aliases) {
+        console.log(JSON.stringify(loadAliases(listingScope), null, 2));
+      } else {
+        console.log(JSON.stringify(jsonFlatEntries(loadData(listingScope)), null, 2));
       }
       return;
     }
 
-    const val = getValue(key, scope);
+    const val = getValue(key, lookupScope);
     if (val === undefined) {
       console.error(JSON.stringify({ error: `Entry '${key}' not found` }));
       process.exitCode = 1;
       return;
     }
     if (typeof val === 'object' && val !== null) {
-      const flat = flattenObject({ [key]: val });
-      const result: Record<string, string> = {};
-      for (const [k, v] of Object.entries(flat)) {
-        if (isEncrypted(v)) {
-          result[k] = '[encrypted]';
-        } else {
-          try { result[k] = interpolate(v); } catch { result[k] = v; }
-        }
-      }
-      console.log(JSON.stringify(result, null, 2));
+      console.log(JSON.stringify(jsonFlatEntries(flattenObject({ [key]: val })), null, 2));
     } else {
       const strVal = String(val);
       let displayVal: string;
@@ -355,22 +384,24 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   if (!key) {
     // -a → aliases only
     if (options.aliases) {
-      const aliases = loadAliases(scope);
+      const aliases = loadAliases(listingScope);
       displayAliases(aliases);
       return;
     }
 
-    const data = loadData(scope);
-    // Compute project keys for [P] marker when showing merged results
-    let projectKeys: Set<string> | undefined;
-    if (!scope && findProjectFile()) {
-      projectKeys = new Set(Object.keys(getEntriesFlat('project')));
+    // --all: show both scopes with section headers
+    if (options.all && hasProject) {
+      displayScopedEntries('project', aliasMap, options);
+      displayScopedEntries('global', aliasMap, options);
+      return;
     }
-    displayAllEntries(data, aliasMap, options, projectKeys);
+
+    const data = loadData(listingScope);
+    displayAllEntries(data, aliasMap, options);
     return;
   }
 
-  const value = getValue(key, scope);
+  const value = getValue(key, lookupScope);
 
   if (value === undefined) {
     console.error(`Entry '${key}' not found`);
@@ -381,11 +412,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.copy) {
       printWarning('--copy only works with a single value, not a subtree.');
     }
-    let projectKeys: Set<string> | undefined;
-    if (!scope && findProjectFile()) {
-      projectKeys = new Set(Object.keys(getEntriesFlat('project')));
-    }
-    displaySubtree(key, value, aliasMap, options, projectKeys);
+    displaySubtree(key, value, aliasMap, options);
     return;
   }
 

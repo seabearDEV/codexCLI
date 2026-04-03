@@ -19,34 +19,32 @@ export function printWarning(message: string): void {
   console.log(color.yellow('⚠ ') + message);
 }
 
-export function displayKeys(keys: string[], keyToAliasMap?: Record<string, string>, projectKeys?: Set<string>): void {
+export function displayKeys(keys: string[], keyToAliasMap?: Record<string, string>): void {
   const aliasMap = keyToAliasMap ?? buildKeyToAliasMap();
   for (const key of keys) {
     const colorizedPath = colorizePathByLevels(key);
     const alias = aliasMap[key];
-    const scopeTag = projectKeys?.has(key) ? color.magenta('[P] ') : '';
     if (alias) {
-      console.log(`${scopeTag}${colorizedPath} ${color.blue('(' + alias + ')')}`);
+      console.log(`${colorizedPath} ${color.blue('(' + alias + ')')}`);
     } else {
-      console.log(`${scopeTag}${colorizedPath}`);
+      console.log(colorizedPath);
     }
   }
 }
 
-export function displayEntries(entries: Record<string, string>, keyToAliasMap?: Record<string, string>, projectKeys?: Set<string>): void {
+export function displayEntries(entries: Record<string, string>, keyToAliasMap?: Record<string, string>): void {
   const aliasMap = keyToAliasMap ?? buildKeyToAliasMap();
   const confirmKeys = loadConfirmKeys();
   Object.entries(entries).forEach(([key, value]) => {
     const colorizedPath = colorizePathByLevels(key);
     const alias = aliasMap[key];
-    const scopeTag = projectKeys?.has(key) ? color.magenta('[P] ') : '';
     const confirmTag = confirmKeys[key] ? ` ${color.red('[confirm]')}` : '';
     const displayed = isEncrypted(value) ? '[encrypted]' : interpretEscapes(value);
     const lines = displayed.split('\n');
 
     const prefix = alias
-      ? `${scopeTag}${colorizedPath} ${color.blue('(' + alias + ')')}${confirmTag}:`
-      : `${scopeTag}${colorizedPath}${confirmTag}:`;
+      ? `${colorizedPath} ${color.blue('(' + alias + ')')}${confirmTag}:`
+      : `${colorizedPath}${confirmTag}:`;
 
     const termWidth = process.stdout.columns || 80;
 
