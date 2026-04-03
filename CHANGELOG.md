@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-04-02
+
+### Added
+
+- **`mcp-server --cwd <dir>`** — set the working directory for the MCP server so it detects project-scoped `.codexcli.json` files. Pass this when registering the server (e.g., `claude mcp add codexcli -- ccli mcp-server --cwd /path/to/project`).
+- Updated default LLM instructions to guide AI agents on using project vs. global scope.
+
 ## [0.6.0] - 2026-04-02
 
 ### Added
@@ -14,8 +21,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **MCP `scope` parameter** — all data-touching MCP tools (`codex_set`, `codex_get`, `codex_remove`, `codex_copy`, `codex_search`, `codex_run`, `codex_alias_*`, `codex_export`, `codex_import`, `codex_reset`) accept optional `scope: "project" | "global"`.
 - Tab completion for `data projectfile` subcommand and `--global` / `-G` flags on all data commands.
 - `config info` now shows project file path (or "none") alongside the unified data file path.
-- **`mcp-server --cwd <dir>`** — set the working directory for the MCP server so it detects project-scoped `.codexcli.json` files. Pass this when registering the server (e.g., `claude mcp add codexcli -- ccli mcp-server --cwd /path/to/project`).
-- Updated default LLM instructions to guide AI agents on using project vs. global scope.
 
 ### Changed
 
