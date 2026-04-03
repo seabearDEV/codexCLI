@@ -1,21 +1,14 @@
-import * as fs from 'fs';
-import { handleError, handleOperation, loadData, saveData, getErrorMessage, clearDataCache } from '../storage';
+import { handleError, handleOperation, loadData, saveData, getErrorMessage, clearDataCache, getValue, setValue, removeValue, getEntriesFlat } from '../storage';
 
-vi.mock('fs', () => {
-  const mock = {
-    existsSync: vi.fn(),
-    readFileSync: vi.fn(),
-    writeFileSync: vi.fn(),
-    renameSync: vi.fn(),
-    statSync: vi.fn(),
-    openSync: vi.fn(() => 3),
-    writeSync: vi.fn(),
-    closeSync: vi.fn(),
-    unlinkSync: vi.fn(),
-    constants: { O_CREAT: 0x40, O_EXCL: 0x80, O_WRONLY: 0x01 }
-  };
-  return { default: mock, ...mock };
-});
+vi.mock('../store', () => ({
+  loadEntries: vi.fn(() => ({})),
+  saveEntries: vi.fn(),
+  loadEntriesMerged: vi.fn(() => ({})),
+  clearStoreCaches: vi.fn(),
+  findProjectFile: vi.fn(() => null),
+  clearProjectFileCache: vi.fn(),
+  getEffectiveScope: vi.fn(() => 'global'),
+}));
 
 vi.mock('../formatting', () => ({
   color: {
@@ -24,9 +17,7 @@ vi.mock('../formatting', () => ({
   }
 }));
 
-vi.mock('../utils/paths', () => ({
-  getDataFilePath: vi.fn(() => '/mock/entries.json')
-}));
+import { loadEntries, saveEntries, loadEntriesMerged, clearStoreCaches, findProjectFile } from '../store';
 
 describe('Storage', () => {
   const originalConsoleError = console.error;
@@ -34,10 +25,8 @@ describe('Storage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    clearDataCache();
     console.error = vi.fn();
     delete process.env.DEBUG;
-    (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
   });
 
   afterEach(() => {
@@ -111,60 +100,6 @@ describe('Storage', () => {
     });
   });
 
-  describe('loadData', () => {
-    it('returns {} when file does not exist', () => {
-      (fs.existsSync as Mock).mockReturnValue(false);
-
-      const data = loadData();
-      expect(data).toEqual({});
-    });
-
-    it('returns parsed data for valid JSON', () => {
-      (fs.existsSync as Mock).mockReturnValue(true);
-      (fs.readFileSync as Mock).mockReturnValue(
-        JSON.stringify({ server: { ip: '1.2.3.4' } })
-      );
-
-      const data = loadData();
-      expect(data).toEqual({ server: { ip: '1.2.3.4' } });
-    });
-
-    it('returns {} for invalid JSON', () => {
-      (fs.existsSync as Mock).mockReturnValue(true);
-      (fs.readFileSync as Mock).mockReturnValue('not json');
-
-      const data = loadData();
-      expect(data).toEqual({});
-      expect(console.error).toHaveBeenCalled();
-    });
-  });
-
-  describe('saveData', () => {
-    it('writes formatted JSON via atomic write (tmp + rename)', () => {
-      saveData({ key: 'value' });
-
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        '/mock/entries.json.tmp',
-        JSON.stringify({ key: 'value' }, null, 2),
-        { encoding: 'utf8', mode: 0o600 }
-      );
-      expect(fs.renameSync).toHaveBeenCalledWith(
-        '/mock/entries.json.tmp',
-        '/mock/entries.json'
-      );
-    });
-
-    it('handles writeFileSync errors gracefully', () => {
-      (fs.writeFileSync as Mock).mockImplementationOnce(() => {
-        throw new Error('disk error');
-      });
-
-      saveData({ key: 'value' });
-
-      expect(console.error).toHaveBeenCalled();
-    });
-  });
-
   describe('getErrorMessage', () => {
     it('extracts message from an Error instance', () => {
       expect(getErrorMessage(new Error('oops'))).toBe('oops');
@@ -179,46 +114,59 @@ describe('Storage', () => {
     });
   });
 
-  describe('caching', () => {
-    it('returns cached data on second call with same mtime', () => {
-      (fs.existsSync as Mock).mockReturnValue(true);
-      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify({ key: 'value' }));
-      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
+  describe('loadData', () => {
+    it('delegates to loadEntriesMerged for auto scope', () => {
+      (loadEntriesMerged as Mock).mockReturnValue({ key: 'value' });
 
-      const first = loadData();
-      const second = loadData();
-
-      expect(first).toEqual({ key: 'value' });
-      expect(second).toEqual({ key: 'value' });
-      expect(fs.readFileSync).toHaveBeenCalledTimes(1);
+      const result = loadData();
+      expect(result).toEqual({ key: 'value' });
+      expect(loadEntriesMerged).toHaveBeenCalled();
     });
 
-    it('re-reads when mtime changes', () => {
-      (fs.existsSync as Mock).mockReturnValue(true);
-      (fs.readFileSync as Mock)
-        .mockReturnValueOnce(JSON.stringify({ key: 'old' }))
-        .mockReturnValueOnce(JSON.stringify({ key: 'new' }));
-      (fs.statSync as Mock)
-        .mockReturnValueOnce({ mtimeMs: 1000 })
-        .mockReturnValueOnce({ mtimeMs: 2000 });
+    it('delegates to loadEntries for explicit scope', () => {
+      (loadEntries as Mock).mockReturnValue({ key: 'value' });
 
-      const first = loadData();
-      const second = loadData();
+      const result = loadData('global');
+      expect(result).toEqual({ key: 'value' });
+      expect(loadEntries).toHaveBeenCalledWith('global');
+    });
+  });
 
-      expect(first).toEqual({ key: 'old' });
-      expect(second).toEqual({ key: 'new' });
-      expect(fs.readFileSync).toHaveBeenCalledTimes(2);
+  describe('saveData', () => {
+    it('delegates to saveEntries', () => {
+      saveData({ key: 'value' });
+      expect(saveEntries).toHaveBeenCalledWith({ key: 'value' }, undefined);
     });
 
-    it('updates cache on saveData (write-through)', () => {
-      (fs.existsSync as Mock).mockReturnValue(true);
-      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 2000 });
+    it('passes scope through', () => {
+      saveData({ key: 'value' }, 'global');
+      expect(saveEntries).toHaveBeenCalledWith({ key: 'value' }, 'global');
+    });
+  });
 
-      saveData({ saved: 'data' });
-      const loaded = loadData();
+  describe('getValue', () => {
+    it('returns nested value via loadEntries', () => {
+      (loadEntries as Mock).mockReturnValue({ server: { ip: '1.2.3.4' } });
 
-      expect(loaded).toEqual({ saved: 'data' });
-      expect(fs.readFileSync).not.toHaveBeenCalled();
+      const result = getValue('server.ip', 'global');
+      expect(result).toBe('1.2.3.4');
+    });
+
+    it('falls through from project to global with auto scope', () => {
+      (findProjectFile as Mock).mockReturnValue('/some/.codexcli.json');
+      (loadEntries as Mock)
+        .mockReturnValueOnce({}) // project: no value
+        .mockReturnValueOnce({ server: { ip: '1.2.3.4' } }); // global: has value
+
+      const result = getValue('server.ip');
+      expect(result).toBe('1.2.3.4');
+    });
+  });
+
+  describe('clearDataCache', () => {
+    it('delegates to clearStoreCaches', () => {
+      clearDataCache();
+      expect(clearStoreCaches).toHaveBeenCalled();
     });
   });
 });

@@ -20,7 +20,7 @@ export function createAutoBackup(label: string): string | null {
     const backupSubDir = path.join(backupDir, `${label}-${timestamp}`);
     fs.mkdirSync(backupSubDir, { mode: 0o700 });
 
-    const filesToBackup = ['entries.json', 'aliases.json', 'confirm.json'];
+    const filesToBackup = ['data.json', 'entries.json', 'aliases.json', 'confirm.json'];
     let backedUp = 0;
 
     for (const file of filesToBackup) {

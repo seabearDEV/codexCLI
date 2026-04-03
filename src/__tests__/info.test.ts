@@ -23,6 +23,20 @@ vi.mock('../alias', () => ({
   })),
 }));
 
+vi.mock('../confirm', () => ({
+  loadConfirmKeys: vi.fn(() => ({})),
+}));
+
+vi.mock('../store', () => ({
+  findProjectFile: vi.fn(() => null),
+  clearProjectFileCache: vi.fn(),
+}));
+
+vi.mock('../utils/paths', () => ({
+  getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
+  getConfigFilePath: vi.fn(() => '/mock/config.json'),
+}));
+
 vi.mock('fs', () => {
   const mock = {
     existsSync: vi.fn().mockReturnValue(true),
@@ -68,8 +82,7 @@ describe('showInfo', () => {
   it('shows storage paths', () => {
     showInfo();
     const output = getOutput();
-    expect(output).toContain('entries.json');
-    expect(output).toContain('aliases.json');
+    expect(output).toContain('data.json');
     expect(output).toContain('config.json');
   });
 
@@ -108,7 +121,7 @@ describe('showInfo with empty data', () => {
     // Should contain "0" for both counts
     const lines = output.split('\n');
     const entriesLine = lines.find(l => l.includes('Entries:'));
-    const aliasesLine = lines.find(l => l.includes('Aliases:') && !l.includes('aliases.json'));
+    const aliasesLine = lines.find(l => l.includes('Aliases:'));
     expect(entriesLine).toContain('0');
     expect(aliasesLine).toContain('0');
   });

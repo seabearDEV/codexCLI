@@ -52,7 +52,8 @@ codexCLI
   .option('-c, --clear', 'Clear terminal and scrollback after setting (removes sensitive input from history)')
   .option('--confirm', 'Require confirmation before running this entry')
   .option('--no-confirm', 'Remove confirmation requirement from this entry')
-  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean }) => {
+  .option('-G, --global', 'Target global data store')
+  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean, global?: boolean }) => {
     // Batch mode: `set a=1 b=2 c=3`
     if (key.includes('=')) {
       const pairs = [key, ...valueArray];
@@ -118,7 +119,7 @@ codexCLI
     } else {
       value = valueArray.join(' ');
     }
-    await commands.setEntry(resolveKey(key.replace(/:$/, '')), value, options.force, options.encrypt, options.alias, options.confirm);
+    await commands.setEntry(resolveKey(key.replace(/:$/, '')), value, options.force, options.encrypt, options.alias, options.confirm, options.global);
     if (options.clear) {
       process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
     }
@@ -138,7 +139,8 @@ codexCLI
   .option('-v, --values', 'Include values in output')
   .option('-k, --depth <n>', 'Limit key depth (e.g. -k 1 for top-level only)', parseInt)
   .option('-j, --json', 'Output as JSON (for scripting)')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean }) => {
+  .option('-G, --global', 'Target global data store')
+  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean }) => {
     if (key) {
       key = resolveKey(key.replace(/:$/, ''));
     }
@@ -155,7 +157,8 @@ codexCLI
   .option('-d, --decrypt', 'Decrypt an encrypted command before running')
   .option('-c, --capture', 'Capture output for piping (instead of inheriting stdio)')
   .option('--source', 'Output command to stdout for shell eval (used by shell wrapper)')
-  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean }) => {
+  .option('-G, --global', 'Target global data store')
+  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, global?: boolean }) => {
     await commands.runCommand(keys, options);
   });
 
@@ -165,8 +168,9 @@ codexCLI
   .alias('cp')
   .description('Copy an entry to a new key')
   .option('-f, --force', 'Skip confirmation prompt')
-  .action(async (source: string, dest: string, options: { force?: boolean }) => {
-    await commands.copyEntry(resolveKey(source.replace(/:$/, '')), dest, options.force);
+  .option('-G, --global', 'Target global data store')
+  .action(async (source: string, dest: string, options: { force?: boolean, global?: boolean }) => {
+    await commands.copyEntry(resolveKey(source.replace(/:$/, '')), dest, options.force, options.global);
   });
 
 // Find command
@@ -178,12 +182,14 @@ codexCLI
   .option('-a, --aliases', 'Search only in aliases')
   .option('-t, --tree', 'Display results in a hierarchical tree structure')
   .option('-j, --json', 'Output as JSON (for scripting)')
-  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean }) => {
+  .option('-G, --global', 'Target global data store')
+  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, global?: boolean }) => {
     await withPager(() => commands.searchEntries(term, {
       entries: options.entries,
       aliases: options.aliases,
       tree: options.tree,
-      json: options.json
+      json: options.json,
+      global: options.global,
     }));
   });
 
@@ -193,7 +199,8 @@ codexCLI
   .alias('e')
   .description('Open an entry in $EDITOR for editing')
   .option('-d, --decrypt', 'Decrypt an encrypted value before editing')
-  .action(async (key: string, options: { decrypt?: boolean }) => {
+  .option('-G, --global', 'Target global data store')
+  .action(async (key: string, options: { decrypt?: boolean, global?: boolean }) => {
     await commands.editEntry(resolveKey(key.replace(/:$/, '')), options);
   });
 
@@ -204,11 +211,12 @@ codexCLI
   .description('Rename an entry key or alias')
   .option('-a, --alias', 'Rename an alias instead of an entry key')
   .option('--set-alias <name>', 'Set an alias on the renamed key')
-  .action((oldName: string, newName: string, options: { alias?: boolean, setAlias?: string }) => {
+  .option('-G, --global', 'Target global data store')
+  .action((oldName: string, newName: string, options: { alias?: boolean, setAlias?: string, global?: boolean }) => {
     if (options.alias) {
-      commands.renameEntry(oldName, newName, true);
+      commands.renameEntry(oldName, newName, true, undefined, options.global);
     } else {
-      commands.renameEntry(resolveKey(oldName.replace(/:$/, '')), newName, false, options.setAlias);
+      commands.renameEntry(resolveKey(oldName.replace(/:$/, '')), newName, false, options.setAlias, options.global);
     }
   });
 
@@ -219,9 +227,11 @@ codexCLI
   .description('Remove an entry')
   .option('-a, --alias', 'Remove the alias only (keep the entry)')
   .option('-f, --force', 'Skip confirmation prompt')
-  .action(async (key: string, options: { alias?: boolean, force?: boolean }) => {
+  .option('-G, --global', 'Target global data store')
+  .action(async (key: string, options: { alias?: boolean, force?: boolean, global?: boolean }) => {
     if (options.alias) {
-      const removed = removeAlias(key);
+      const scope = options.global ? 'global' as const : undefined;
+      const removed = removeAlias(key, scope);
       if (removed) {
         console.log(`Alias '${key}' removed successfully.`);
       } else {
@@ -229,7 +239,7 @@ codexCLI
         process.exitCode = 1;
       }
     } else {
-      await commands.removeEntry(resolveKey(key.replace(/:$/, '')), options.force);
+      await commands.removeEntry(resolveKey(key.replace(/:$/, '')), options.force, options.global);
     }
   });
 
@@ -304,7 +314,9 @@ dataCommand
   .description('Export data or aliases to a file')
   .option('-o, --output <file>', 'Output file path')
   .option('--pretty', 'Pretty-print the output')
-  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean }) => {
+  .option('-G, --global', 'Export from global data store only')
+  .option('-P, --project', 'Export from project data store only')
+  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean, global?: boolean, project?: boolean }) => {
     await withPager(() => commands.exportData(type, options));
   });
 
@@ -314,7 +326,9 @@ dataCommand
   .option('-m, --merge', 'Merge with existing data instead of replacing')
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-p, --preview', 'Preview changes without modifying data')
-  .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean, preview?: boolean }) => {
+  .option('-G, --global', 'Import into global data store')
+  .option('-P, --project', 'Import into project data store')
+  .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean, preview?: boolean, global?: boolean, project?: boolean }) => {
     await commands.importData(type, file, options);
   });
 
@@ -322,8 +336,18 @@ dataCommand
   .command('reset <type>')
   .description('Reset data or aliases to empty state')
   .option('-f, --force', 'Skip confirmation prompt')
-  .action(async (type: string, options: { force?: boolean }) => {
+  .option('-G, --global', 'Reset global data store only')
+  .option('-P, --project', 'Reset project data store only')
+  .action(async (type: string, options: { force?: boolean, global?: boolean, project?: boolean }) => {
     await commands.resetData(type, options);
+  });
+
+dataCommand
+  .command('projectfile')
+  .description('Create or remove a project-scoped .codexcli.json')
+  .option('--remove', 'Remove the project file')
+  .action((options: { remove?: boolean }) => {
+    commands.handleProjectFile(options);
   });
 
 // MCP server subcommand: allows binary/Homebrew installs to run the MCP server

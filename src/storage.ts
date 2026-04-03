@@ -1,18 +1,13 @@
-import fs from 'fs';
 import { color } from './formatting';
-import { getDataFilePath } from './utils/paths';
 import { getNestedValue, setNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
 import { CodexData, CodexValue } from './types';
 import { debug } from './utils/debug';
-import { saveJsonSorted } from './utils/saveJsonSorted';
+import { Scope, loadEntries, saveEntries, loadEntriesMerged, clearStoreCaches, findProjectFile } from './store';
 
-// Mtime-based cache for data
-let dataCache: CodexData | null = null;
-let dataCacheMtime: number | null = null;
+export { Scope } from './store';
 
 export function clearDataCache(): void {
-  dataCache = null;
-  dataCacheMtime = null;
+  clearStoreCaches();
 }
 
 /**
@@ -53,86 +48,84 @@ export function handleError(message: string, error: unknown, context?: string): 
 /**
  * Load data from storage
  */
-export function loadData(): CodexData {
-  const filePath = getDataFilePath();
-  debug('loadData: using JSON backend', { filePath });
-
-  // Fast path: check cache via mtime before hitting the filesystem
-  if (dataCache !== null && dataCacheMtime !== null) {
-    try {
-      if (fs.statSync(filePath).mtimeMs === dataCacheMtime) {
-        return dataCache;
-      }
-    } catch {
-      dataCache = null;
-      dataCacheMtime = null;
-    }
+export function loadData(scope?: Scope | undefined): CodexData {
+  debug('loadData called', { scope });
+  if (!scope || scope === 'auto') {
+    return loadEntriesMerged();
   }
-
-  if (!fs.existsSync(filePath)) {
-    return {};
-  }
-
-  const currentMtime = fs.statSync(filePath).mtimeMs;
-  const result = handleOperation(() => {
-    const content = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(content) as CodexData;
-  }, `Failed to load data from ${filePath}`) ?? {};
-
-  dataCache = result;
-  dataCacheMtime = currentMtime;
-
-  return result;
+  return loadEntries(scope);
 }
 
 /**
  * Save data to storage
  */
-export function saveData(data: CodexData): void {
-  const filePath = getDataFilePath();
-
-  const result = handleOperation(() => {
-    saveJsonSorted(filePath, data);
-    return true;
-  }, `Failed to save data to ${filePath}`);
-
-  if (result) {
-    dataCache = data;
-    dataCacheMtime = fs.statSync(filePath).mtimeMs;
-  }
+export function saveData(data: CodexData, scope?: Scope | undefined): void {
+  saveEntries(data, scope);
 }
 
 // ── Per-key operations ─────────────────────────────────────────────────
 
 /**
- * Get a value or subtree by dot-path key without loading all data.
+ * Get a value or subtree by dot-path key.
+ * With 'auto' scope: checks project first, falls through to global.
  */
-export function getValue(key: string): CodexValue | undefined {
-  return getNestedValue(loadData(), key);
+export function getValue(key: string, scope?: Scope | undefined): CodexValue | undefined {
+  if (!scope || scope === 'auto') {
+    // Fallthrough: project first, then global
+    if (findProjectFile()) {
+      const projectVal = getNestedValue(loadEntries('project'), key);
+      if (projectVal !== undefined) return projectVal;
+      return getNestedValue(loadEntries('global'), key);
+    }
+    return getNestedValue(loadEntries('global'), key);
+  }
+  return getNestedValue(loadEntries(scope), key);
 }
 
 /**
- * Set a single leaf value by dot-path key without rewriting all data.
+ * Set a single leaf value by dot-path key.
  */
-export function setValue(key: string, value: string): void {
-  const data = loadData();
+export function setValue(key: string, value: string, scope?: Scope | undefined): void {
+  const effectiveScope = scope ?? 'auto';
+  const data = loadEntries(effectiveScope);
   setNestedValue(data, key, value);
-  saveData(data);
+  saveEntries(data, effectiveScope);
 }
 
 /**
  * Remove an entry (and children) by dot-path key. Returns true if anything was removed.
+ * With 'auto' scope: removes from whichever scope contains it (project preferred).
  */
-export function removeValue(key: string): boolean {
-  const data = loadData();
+export function removeValue(key: string, scope?: Scope | undefined): boolean {
+  if (!scope || scope === 'auto') {
+    if (findProjectFile()) {
+      const projectData = loadEntries('project');
+      if (getNestedValue(projectData, key) !== undefined) {
+        const removed = removeNestedValue(projectData, key);
+        if (removed) saveEntries(projectData, 'project');
+        return removed;
+      }
+    }
+    // Fall through to global
+    const globalData = loadEntries('global');
+    const removed = removeNestedValue(globalData, key);
+    if (removed) saveEntries(globalData, 'global');
+    return removed;
+  }
+
+  const data = loadEntries(scope);
   const removed = removeNestedValue(data, key);
-  if (removed) saveData(data);
+  if (removed) saveEntries(data, scope);
   return removed;
 }
 
 /**
- * Return all entries as flat dot-path → value pairs.
+ * Return all entries as flat dot-path -> value pairs.
+ * With 'auto' scope: merges project over global.
  */
-export function getEntriesFlat(): Record<string, string> {
-  return flattenObject(loadData());
+export function getEntriesFlat(scope?: Scope | undefined): Record<string, string> {
+  if (!scope || scope === 'auto') {
+    return flattenObject(loadEntriesMerged());
+  }
+  return flattenObject(loadEntries(scope));
 }

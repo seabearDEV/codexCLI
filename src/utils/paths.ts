@@ -90,3 +90,55 @@ export function getConfigFilePath(): string {
 export function getConfirmFilePath(): string {
   return path.join(getDataDirectory(), 'confirm.json');
 }
+
+/**
+ * Get the path to the unified data file (data.json)
+ */
+export function getUnifiedDataFilePath(): string {
+  return path.join(getDataDirectory(), 'data.json');
+}
+
+// Cached project file path (null = not searched yet, string = found, '' = not found)
+let projectFileCache: string | null = null;
+
+/**
+ * Walk up from cwd to find a .codexcli.json project file.
+ * Returns the absolute path if found, null otherwise.
+ */
+export function findProjectFile(): string | null {
+  if (projectFileCache !== null) {
+    return projectFileCache === '' ? null : projectFileCache;
+  }
+
+  const globalDir = getDataDirectory();
+  let dir = process.cwd();
+  const root = path.parse(dir).root;
+
+  while (true) {
+    // Don't match files inside the global data directory
+    if (path.resolve(dir) === path.resolve(globalDir)) {
+      projectFileCache = '';
+      return null;
+    }
+
+    const candidate = path.join(dir, '.codexcli.json');
+    if (fs.existsSync(candidate)) {
+      projectFileCache = candidate;
+      return candidate;
+    }
+
+    const parent = path.dirname(dir);
+    if (parent === dir || dir === root) {
+      projectFileCache = '';
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+/**
+ * Clear the cached project file path (for tests and after create/remove)
+ */
+export function clearProjectFileCache(): void {
+  projectFileCache = null;
+}

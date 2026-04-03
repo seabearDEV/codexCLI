@@ -80,7 +80,8 @@ function displaySearchResults(
 
 export function searchEntries(searchTerm: string, options: SearchOptions = {}): void {
   debug('searchEntries called', { searchTerm, options });
-  const flattenedData = options.aliases ? {} : getEntriesFlat();
+  const scope = options.global ? 'global' as const : undefined;
+  const flattenedData = options.aliases ? {} : getEntriesFlat(scope);
 
   if (Object.keys(flattenedData).length === 0 && !options.aliases) {
     console.log('No entries to search in.');
@@ -89,7 +90,7 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
 
   const lcSearchTerm = searchTerm.toLowerCase();
 
-  const aliases = loadAliases();
+  const aliases = loadAliases(scope);
   const dataMatches = options.aliases ? {} : searchDataEntries(flattenedData, lcSearchTerm);
   const aliasMatches = options.entries ? {} : searchAliasEntries(aliases, lcSearchTerm);
 

@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadData, handleError, getValue, setValue, removeValue } from '../storage';
+import { loadData, handleError, getValue, setValue, removeValue, Scope } from '../storage';
 import { flattenObject } from '../utils/objectPath';
 import { CodexValue } from '../types';
 import { displayTree } from '../formatting';
@@ -19,8 +19,13 @@ import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
 import { getBinaryName } from '../utils/binaryName';
 
-export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean, capture?: boolean }): Promise<void> {
+function toScope(global?: boolean | undefined): Scope | undefined {
+  return global ? 'global' : undefined;
+}
+
+export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean, capture?: boolean, global?: boolean }): Promise<void> {
   debug('runCommand called', { keys, options });
+  const scope = toScope(options.global);
   try {
     const commands: string[] = [];
     const resolvedKeys: string[] = [];
@@ -31,9 +36,9 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
       const resolvedSegments: string[] = [];
 
       for (const segment of segments) {
-        const resolvedKey = resolveKey(segment);
+        const resolvedKey = resolveKey(segment, scope);
         resolvedKeys.push(resolvedKey);
-        let value = getValue(resolvedKey);
+        let value = getValue(resolvedKey, scope);
 
         if (value === undefined) {
           printError(`Entry '${segment}' not found.`);
@@ -140,21 +145,22 @@ async function promptAndEncrypt(value: string): Promise<string | null> {
   return encryptValue(value, password);
 }
 
-async function handlePostSetConfirm(key: string, confirm: boolean | undefined): Promise<void> {
+async function handlePostSetConfirm(key: string, confirm: boolean | undefined, scope?: Scope | undefined): Promise<void> {
   if (confirm === true) {
-    setConfirm(key);
+    setConfirm(key, scope);
   } else if (confirm === false) {
-    removeConfirm(key);
+    removeConfirm(key, scope);
   } else if (process.stdin.isTTY) {
     const answer = await askConfirmation('Require confirmation to run? [y/N] ');
     if (answer.toLowerCase() === 'y') {
-      setConfirm(key);
+      setConfirm(key, scope);
     }
   }
 }
 
-export async function setEntry(key: string, value: string | undefined, force = false, encrypt = false, alias?: string, confirm?: boolean): Promise<void> {
-  debug('setEntry called', { key, force, encrypt, alias, confirm });
+export async function setEntry(key: string, value: string | undefined, force = false, encrypt = false, alias?: string, confirm?: boolean, global?: boolean): Promise<void> {
+  debug('setEntry called', { key, force, encrypt, alias, confirm, global });
+  const scope = toScope(global);
   try {
     ensureDataDirectoryExists();
 
@@ -162,21 +168,21 @@ export async function setEntry(key: string, value: string | undefined, force = f
     if (value === undefined) {
       // Handle --confirm / --no-confirm on an existing entry (no value needed)
       if (confirm !== undefined) {
-        const existing = getValue(key);
+        const existing = getValue(key, scope);
         if (existing === undefined) {
           printError(`Entry '${key}' not found. Cannot update confirm on a non-existent entry.`);
           process.exitCode = 1;
           return;
         }
         if (confirm) {
-          setConfirm(key);
+          setConfirm(key, scope);
           printSuccess(`Entry '${key}' now requires confirmation to run.`);
         } else {
-          removeConfirm(key);
+          removeConfirm(key, scope);
           printSuccess(`Entry '${key}' no longer requires confirmation to run.`);
         }
         if (alias) {
-          setAlias(alias, key);
+          setAlias(alias, key, scope);
         }
         return;
       }
@@ -185,17 +191,17 @@ export async function setEntry(key: string, value: string | undefined, force = f
         process.exitCode = 1;
         return;
       }
-      const existing = getValue(key);
+      const existing = getValue(key, scope);
       if (existing === undefined) {
         printError(`Entry '${key}' not found. Cannot set alias on a non-existent entry.`);
         process.exitCode = 1;
         return;
       }
-      setAlias(alias, key);
+      setAlias(alias, key, scope);
       return;
     }
 
-    const existing = getValue(key);
+    const existing = getValue(key, scope);
     if (existing !== undefined && !force && process.stdin.isTTY) {
       const displayVal = typeof existing === 'object'
         ? JSON.stringify(existing)
@@ -215,14 +221,14 @@ export async function setEntry(key: string, value: string | undefined, force = f
       storedValue = encrypted;
     }
 
-    setValue(key, storedValue);
+    setValue(key, storedValue, scope);
     console.log(`Entry '${key}' set successfully.`);
 
     if (alias) {
-      setAlias(alias, key);
+      setAlias(alias, key, scope);
     }
 
-    await handlePostSetConfirm(key, confirm);
+    await handlePostSetConfirm(key, confirm, scope);
   } catch (error) {
     handleError('Failed to set entry:', error);
   }
@@ -290,6 +296,7 @@ function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap
 
 export async function getEntry(key?: string, options: GetOptions = {}): Promise<void> {
   debug('getEntry called', { key, options });
+  const scope = toScope(options.global);
 
   const aliasMap = buildKeyToAliasMap();
 
@@ -297,9 +304,9 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   if (options.json) {
     if (!key) {
       if (options.aliases) {
-        console.log(JSON.stringify(loadAliases(), null, 2));
+        console.log(JSON.stringify(loadAliases(scope), null, 2));
       } else {
-        const data = loadData();
+        const data = loadData(scope);
         const flat = flattenObject(data);
         const result: Record<string, string> = {};
         for (const [k, v] of Object.entries(flat)) {
@@ -314,7 +321,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
       return;
     }
 
-    const val = getValue(key);
+    const val = getValue(key, scope);
     if (val === undefined) {
       console.error(JSON.stringify({ error: `Entry '${key}' not found` }));
       process.exitCode = 1;
@@ -347,17 +354,17 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   if (!key) {
     // -a → aliases only
     if (options.aliases) {
-      const aliases = loadAliases();
+      const aliases = loadAliases(scope);
       displayAliases(aliases);
       return;
     }
 
-    const data = loadData();
+    const data = loadData(scope);
     displayAllEntries(data, aliasMap, options);
     return;
   }
 
-  const value = getValue(key);
+  const value = getValue(key, scope);
 
   if (value === undefined) {
     console.error(`Entry '${key}' not found`);
@@ -440,8 +447,9 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   displayEntries({ [key]: displayValue }, aliasMap);
 }
 
-export async function editEntry(key: string, options: { decrypt?: boolean } = {}): Promise<void> {
+export async function editEntry(key: string, options: { decrypt?: boolean, global?: boolean } = {}): Promise<void> {
   debug('editEntry called', { key, options });
+  const scope = toScope(options.global);
   try {
     const editor = process.env.VISUAL ?? process.env.EDITOR;
     if (!editor) {
@@ -450,7 +458,7 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
       return;
     }
 
-    let value = getValue(key);
+    let value = getValue(key, scope);
 
     if (value === undefined) {
       printError(`Entry '${key}' not found.`);
@@ -510,7 +518,7 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
         storedValue = encryptValue(newValue, password);
       }
 
-      setValue(key, storedValue);
+      setValue(key, storedValue, scope);
       printSuccess(`Entry '${key}' updated successfully.`);
     } finally {
       try { fs.unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
@@ -520,10 +528,11 @@ export async function editEntry(key: string, options: { decrypt?: boolean } = {}
   }
 }
 
-export async function removeEntry(key: string, force = false): Promise<void> {
-  debug('removeEntry called', { key, force });
+export async function removeEntry(key: string, force = false, global?: boolean): Promise<void> {
+  debug('removeEntry called', { key, force, global });
+  const scope = toScope(global);
 
-  const existing = getValue(key);
+  const existing = getValue(key, scope);
   if (existing === undefined) {
     printWarning(`Entry '${key}' not found.`);
     return;
@@ -537,28 +546,29 @@ export async function removeEntry(key: string, force = false): Promise<void> {
     }
   }
 
-  removeValue(key);
+  removeValue(key, scope);
 
   // Cascade delete: remove any aliases pointing to this key or its children
-  removeAliasesForKey(key);
+  removeAliasesForKey(key, scope);
 
   // Cascade delete: remove confirm metadata for this key or its children
-  removeConfirmForKey(key);
+  removeConfirmForKey(key, scope);
 
   printSuccess(`Entry '${key}' removed successfully.`);
 }
 
-export async function copyEntry(sourceKey: string, destKey: string, force = false): Promise<void> {
-  debug('copyEntry called', { sourceKey, destKey, force });
+export async function copyEntry(sourceKey: string, destKey: string, force = false, global?: boolean): Promise<void> {
+  debug('copyEntry called', { sourceKey, destKey, force, global });
+  const scope = toScope(global);
   try {
-    const value = getValue(sourceKey);
+    const value = getValue(sourceKey, scope);
     if (value === undefined) {
       printError(`Entry '${sourceKey}' not found.`);
       process.exitCode = 1;
       return;
     }
 
-    const existing = getValue(destKey);
+    const existing = getValue(destKey, scope);
     if (existing !== undefined && !force && process.stdin.isTTY) {
       const displayVal = typeof existing === 'object'
         ? JSON.stringify(existing)
@@ -572,12 +582,12 @@ export async function copyEntry(sourceKey: string, destKey: string, force = fals
     }
 
     if (typeof value === 'string') {
-      setValue(destKey, value);
+      setValue(destKey, value, scope);
     } else {
       const flat = flattenObject({ [sourceKey]: value });
       for (const [flatKey, flatVal] of Object.entries(flat)) {
         const suffix = flatKey.slice(sourceKey.length);
-        setValue(destKey + suffix, String(flatVal));
+        setValue(destKey + suffix, String(flatVal), scope);
       }
     }
 
@@ -587,13 +597,14 @@ export async function copyEntry(sourceKey: string, destKey: string, force = fals
   }
 }
 
-export function renameEntry(oldKey: string, newKey: string, aliasMode = false, newAlias?: string): void {
-  debug('renameEntry called', { oldKey, newKey, aliasMode, newAlias });
+export function renameEntry(oldKey: string, newKey: string, aliasMode = false, newAlias?: string, global?: boolean): void {
+  debug('renameEntry called', { oldKey, newKey, aliasMode, newAlias, global });
+  const scope = toScope(global);
 
   if (aliasMode) {
-    const result = renameAlias(oldKey, newKey);
+    const result = renameAlias(oldKey, newKey, scope);
     if (!result) {
-      const aliases = loadAliases();
+      const aliases = loadAliases(scope);
       if (!(oldKey in aliases)) {
         printError(`Alias '${oldKey}' not found.`);
       } else {
@@ -607,14 +618,14 @@ export function renameEntry(oldKey: string, newKey: string, aliasMode = false, n
   }
 
   // Entry key rename
-  const value = getValue(oldKey);
+  const value = getValue(oldKey, scope);
   if (value === undefined) {
     printError(`Entry '${oldKey}' not found.`);
     process.exitCode = 1;
     return;
   }
 
-  const existing = getValue(newKey);
+  const existing = getValue(newKey, scope);
   if (existing !== undefined) {
     printError(`Entry '${newKey}' already exists. Remove it first or choose a different key.`);
     process.exitCode = 1;
@@ -623,41 +634,41 @@ export function renameEntry(oldKey: string, newKey: string, aliasMode = false, n
 
   // Move the value
   if (typeof value === 'string') {
-    setValue(newKey, value);
+    setValue(newKey, value, scope);
   } else {
     // For subtrees, flatten and re-set each leaf under the new prefix
     const flat = flattenObject({ [oldKey]: value });
     for (const [flatKey, flatVal] of Object.entries(flat)) {
       const suffix = flatKey.slice(oldKey.length);
-      setValue(newKey + suffix, String(flatVal));
+      setValue(newKey + suffix, String(flatVal), scope);
     }
   }
-  removeValue(oldKey);
+  removeValue(oldKey, scope);
 
   // Update aliases: re-point any alias targeting oldKey (or children) to newKey
-  const aliases = loadAliases();
+  const aliases = loadAliases(scope);
   const oldPrefix = oldKey + '.';
   for (const [alias, target] of Object.entries(aliases)) {
     if (typeof target !== 'string') continue;
     if (target === oldKey) {
-      removeAlias(alias);
-      setAlias(alias, newKey);
+      removeAlias(alias, scope);
+      setAlias(alias, newKey, scope);
     } else if (target.startsWith(oldPrefix)) {
       const newTarget = newKey + target.slice(oldKey.length);
-      removeAlias(alias);
-      setAlias(alias, newTarget);
+      removeAlias(alias, scope);
+      setAlias(alias, newTarget, scope);
     }
   }
 
   // Move confirm metadata
   if (hasConfirm(oldKey)) {
-    removeConfirm(oldKey);
-    setConfirm(newKey);
+    removeConfirm(oldKey, scope);
+    setConfirm(newKey, scope);
   }
 
   // Set a new alias on the renamed key
   if (newAlias) {
-    setAlias(newAlias, newKey);
+    setAlias(newAlias, newKey, scope);
   }
 
   printSuccess(`Entry '${oldKey}' renamed to '${newKey}'.`);

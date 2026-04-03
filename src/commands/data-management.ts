@@ -1,16 +1,24 @@
-import { loadData, saveData, handleError } from '../storage';
+import { loadData, saveData, handleError, Scope } from '../storage';
 import { color } from '../formatting';
 import fs from 'fs';
 import { loadAliases, saveAliases } from '../alias';
 import { loadConfirmKeys, saveConfirmKeys } from '../confirm';
 import { CodexData, ExportOptions, ImportOptions, ResetOptions } from '../types';
 import path from 'path';
-import { validateDataType, confirmOrAbort, getInvalidDataTypeMessage, printSuccess, printError } from './helpers';
+import { validateDataType, confirmOrAbort, getInvalidDataTypeMessage, printSuccess, printError, printWarning } from './helpers';
 import { deepMerge } from '../utils/deepMerge';
 import { flattenObject } from '../utils/objectPath';
 import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
+import { findProjectFile, clearProjectFileCache } from '../store';
+import { saveJsonSorted } from '../utils/saveJsonSorted';
+
+function resolveScope(options: { global?: boolean | undefined, project?: boolean | undefined }): Scope | undefined {
+  if (options.global) return 'global';
+  if (options.project) return 'project';
+  return undefined;
+}
 
 export function exportData(type: string, options: ExportOptions): void {
   debug('exportData called', { type, options });
@@ -20,6 +28,7 @@ export function exportData(type: string, options: ExportOptions): void {
       return;
     }
 
+    const scope = resolveScope(options);
     const defaultDir = process.cwd();
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const indent = options.pretty ? 2 : 0;
@@ -35,19 +44,19 @@ export function exportData(type: string, options: ExportOptions): void {
 
     if (type === 'entries' || type === 'all') {
       const outputFile = getOutputFile('entries', `codexcli-entries-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData()), null, indent), { encoding: 'utf8', mode: 0o600 });
+      fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData(scope)), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Entries exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'aliases' || type === 'all') {
       const outputFile = getOutputFile('aliases', `codexcli-aliases-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadAliases(), null, indent), { encoding: 'utf8', mode: 0o600 });
+      fs.writeFileSync(outputFile, JSON.stringify(loadAliases(scope), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Aliases exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'confirm' || type === 'all') {
       const outputFile = getOutputFile('confirm', `codexcli-confirm-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(), null, indent), { encoding: 'utf8', mode: 0o600 });
+      fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(scope), null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Confirm keys exported to: ${color.cyan(outputFile)}`);
     }
   } catch (error) {
@@ -57,6 +66,7 @@ export function exportData(type: string, options: ExportOptions): void {
 
 export async function importData(type: string, file: string, options: ImportOptions): Promise<void> {
   debug('importData called', { type, file, options });
+  const scope = resolveScope(options);
   try {
     // Validate type parameter
     if (!validateDataType(type)) {
@@ -105,13 +115,13 @@ export async function importData(type: string, file: string, options: ImportOpti
     }
 
     if (type === 'entries' || type === 'all') {
-      const currentData = options.merge ? loadData() : {};
+      const currentData = options.merge ? loadData(scope) : {};
 
       const newData = options.merge
         ? deepMerge(currentData, validData)
         : validData;
 
-      saveData(newData as CodexData);
+      saveData(newData as CodexData, scope);
       printSuccess(`Entries ${options.merge ? 'merged' : 'imported'} successfully`);
     }
 
@@ -122,22 +132,22 @@ export async function importData(type: string, file: string, options: ImportOpti
         return;
       }
 
-      const currentAliases = options.merge ? loadAliases() : {};
+      const currentAliases = options.merge ? loadAliases(scope) : {};
 
       const newAliases = options.merge
         ? { ...currentAliases, ...(validData as Record<string, string>) }
         : validData;
 
-      saveAliases(newAliases as Record<string, string>);
+      saveAliases(newAliases as Record<string, string>, scope);
       printSuccess(`Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
     }
 
     if (type === 'confirm' || type === 'all') {
-      const currentConfirm = options.merge ? loadConfirmKeys() : {};
+      const currentConfirm = options.merge ? loadConfirmKeys(scope) : {};
       const newConfirm = options.merge
         ? { ...currentConfirm, ...(validData as Record<string, true>) }
         : validData;
-      saveConfirmKeys(newConfirm as Record<string, true>);
+      saveConfirmKeys(newConfirm as Record<string, true>, scope);
       printSuccess(`Confirm keys ${options.merge ? 'merged' : 'imported'} successfully`);
     }
   } catch (error) {
@@ -147,6 +157,7 @@ export async function importData(type: string, file: string, options: ImportOpti
 
 export async function resetData(type: string, options: ResetOptions): Promise<void> {
   debug('resetData called', { type, options });
+  const scope = resolveScope(options);
   try {
     // Validate type parameter
     if (!validateDataType(type)) {
@@ -166,19 +177,19 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
 
     // Reset entries
     if (type === 'entries' || type === 'all') {
-      saveData({});
+      saveData({}, scope);
       printSuccess('Entries have been reset to an empty state');
     }
 
     // Reset aliases
     if (type === 'aliases' || type === 'all') {
-      saveAliases({});
+      saveAliases({}, scope);
       printSuccess('Aliases have been reset to an empty state');
     }
 
     // Reset confirm keys
     if (type === 'confirm' || type === 'all') {
-      saveConfirmKeys({});
+      saveConfirmKeys({}, scope);
       printSuccess('Confirm keys have been reset to an empty state');
     }
   } catch (error) {
@@ -273,4 +284,27 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
   }
 
   console.log(color.gray('\nThis is a preview. No data was modified.'));
+}
+
+export function handleProjectFile(options: { remove?: boolean }): void {
+  if (options.remove) {
+    const projectFile = findProjectFile();
+    if (!projectFile) {
+      printError('No .codexcli.json found in current directory tree.');
+      return;
+    }
+    fs.unlinkSync(projectFile);
+    clearProjectFileCache();
+    printSuccess(`Removed: ${projectFile}`);
+    return;
+  }
+
+  const target = path.join(process.cwd(), '.codexcli.json');
+  if (fs.existsSync(target)) {
+    printWarning('.codexcli.json already exists in current directory.');
+    return;
+  }
+  saveJsonSorted(target, { entries: {}, aliases: {}, confirm: {} });
+  clearProjectFileCache();
+  printSuccess(`Created: ${target}`);
 }

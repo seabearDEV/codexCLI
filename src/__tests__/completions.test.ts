@@ -7,14 +7,32 @@ import { clearConfigCache } from '../config';
 vi.mock('fs', () => {
   const mock = {
     existsSync: vi.fn().mockReturnValue(true),
-    readFileSync: vi.fn().mockReturnValue(JSON.stringify({})),
+    readFileSync: vi.fn().mockReturnValue(JSON.stringify({ entries: {}, aliases: {}, confirm: {} })),
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
     appendFileSync: vi.fn(),
+    renameSync: vi.fn(),
     statSync: vi.fn().mockReturnValue({ mtimeMs: 1000 }),
+    openSync: vi.fn(() => 3),
+    writeSync: vi.fn(),
+    closeSync: vi.fn(),
+    unlinkSync: vi.fn(),
+    constants: { O_CREAT: 0x40, O_EXCL: 0x80, O_WRONLY: 0x01 },
   };
   return { default: mock, ...mock };
 });
+
+vi.mock('../utils/paths', () => ({
+  getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
+  getDataDirectory: vi.fn(() => '/mock'),
+  getDataFilePath: vi.fn(() => '/mock/entries.json'),
+  getAliasFilePath: vi.fn(() => '/mock/aliases.json'),
+  getConfirmFilePath: vi.fn(() => '/mock/confirm.json'),
+  getConfigFilePath: vi.fn(() => '/mock/config.json'),
+  ensureDataDirectoryExists: vi.fn(),
+  findProjectFile: vi.fn(() => null),
+  clearProjectFileCache: vi.fn(),
+}));
 
 /** Extract just the .value strings from CompletionItem[] for simpler assertions */
 function values(items: CompletionItem[]): string[] {
@@ -312,10 +330,9 @@ describe('Completions', () => {
     it('returns data keys and alias names for dataKey commands', () => {
       const mockData = { server: { ip: '1.2.3.4' } };
       const mockAliases = { myip: 'server.ip' };
-      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
-        return JSON.stringify(mockData);
-      });
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: mockAliases, confirm: {} })
+      );
 
       const results = getCompletions('ccli get ', 9);
       const v = values(results);
@@ -325,7 +342,9 @@ describe('Completions', () => {
 
     it('returns data keys with "Entry" description', () => {
       const mockData = { server: { ip: '1.2.3.4' } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli get ', 9);
       const keyItem = findItem(results, 'server.ip');
@@ -335,10 +354,9 @@ describe('Completions', () => {
 
     it('returns alias names with "Alias" description', () => {
       const mockAliases = { myip: 'server.ip' };
-      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
-        return JSON.stringify({});
-      });
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: {}, aliases: mockAliases, confirm: {} })
+      );
 
       const results = getCompletions('ccli get ', 9);
       const aliasItem = findItem(results, 'myip');
@@ -372,7 +390,9 @@ describe('Completions', () => {
   describe('dataKeyPrefix for set/s commands', () => {
     it('completes to namespace prefix instead of full key', () => {
       const mockData = { test: { key1: 'val1', key2: 'val2' } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli set te', 11);
       const v = values(results);
@@ -383,7 +403,9 @@ describe('Completions', () => {
 
     it('shows leaf keys when partial includes the namespace dot', () => {
       const mockData = { test: { key1: 'val1', key2: 'val2' } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli set test.', 14);
       const v = values(results);
@@ -393,7 +415,9 @@ describe('Completions', () => {
 
     it('deduplicates namespace prefixes', () => {
       const mockData = { server: { prod: { ip: '1.2.3.4' }, dev: { ip: '5.6.7.8' } } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli s ', 7);
       const v = values(results);
@@ -403,7 +427,9 @@ describe('Completions', () => {
 
     it('completes nested namespace one level at a time', () => {
       const mockData = { server: { prod: { ip: '1.2.3.4' }, dev: { ip: '5.6.7.8' } } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli set server.', 16);
       const v = values(results);
@@ -414,7 +440,9 @@ describe('Completions', () => {
 
     it('shows full key at leaf level', () => {
       const mockData = { server: { prod: { ip: '1.2.3.4' } } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli set server.prod.', 21);
       const v = values(results);
@@ -424,10 +452,9 @@ describe('Completions', () => {
     it('includes aliases without truncation', () => {
       const mockData = { test: { key1: 'val1' } };
       const mockAliases = { myalias: 'test.key1' };
-      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
-        return JSON.stringify(mockData);
-      });
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: mockAliases, confirm: {} })
+      );
 
       const results = getCompletions('ccli set m', 10);
       const v = values(results);
@@ -436,7 +463,9 @@ describe('Completions', () => {
 
     it('marks truncated values as Namespace', () => {
       const mockData = { test: { key1: 'val1' } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli set te', 11);
       const item = findItem(results, 'test.');
@@ -446,7 +475,9 @@ describe('Completions', () => {
 
     it('does not affect get command (still returns full keys)', () => {
       const mockData = { test: { key1: 'val1' } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli get te', 11);
       const v = values(results);
@@ -456,7 +487,9 @@ describe('Completions', () => {
 
     it('get command includes namespace prefixes (without dot)', () => {
       const mockData = { test: { key1: 'val1', key2: 'val2' } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli get te', 11);
       const v = values(results);
@@ -469,7 +502,9 @@ describe('Completions', () => {
 
     it('get includes nested namespace prefixes', () => {
       const mockData = { server: { prod: { ip: '1.2.3.4' } } };
-      (fs.readFileSync as Mock).mockImplementation(() => JSON.stringify(mockData));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: {}, confirm: {} })
+      );
 
       const results = getCompletions('ccli g s', 8);
       const v = values(results);
@@ -483,10 +518,9 @@ describe('Completions', () => {
     beforeEach(() => {
       const mockData = { system: { commands: { cd: 'cd ' } }, paths: { home: '/Users/kh', github: '/Users/kh/Projects/github.com' } };
       const mockAliases = { cd: 'system.commands.cd' };
-      (fs.readFileSync as Mock).mockImplementation((filePath: string) => {
-        if (filePath.includes('aliases')) return JSON.stringify(mockAliases);
-        return JSON.stringify(mockData);
-      });
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: mockData, aliases: mockAliases, confirm: {} })
+      );
     });
 
     it('completes segment after : for run command', () => {
@@ -532,7 +566,9 @@ describe('Completions', () => {
 
   describe('getCompletions edge cases', () => {
     beforeEach(() => {
-      (fs.readFileSync as Mock).mockReturnValue(JSON.stringify({}));
+      (fs.readFileSync as Mock).mockReturnValue(
+        JSON.stringify({ entries: {}, aliases: {}, confirm: {} })
+      );
     });
 
     it('returns top-level commands for unknown command', () => {

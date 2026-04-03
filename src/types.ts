@@ -12,6 +12,7 @@ export interface GetOptions {
   json?: boolean | undefined;
   values?: boolean | undefined;
   depth?: number | undefined;
+  global?: boolean | undefined;
 }
 
 export interface SearchOptions {
@@ -19,21 +20,28 @@ export interface SearchOptions {
   aliases?: boolean | undefined;
   tree?: boolean | undefined;
   json?: boolean | undefined;
+  global?: boolean | undefined;
 }
 
 export interface ExportOptions {
   output?: string;
   pretty?: boolean;
+  global?: boolean | undefined;
+  project?: boolean | undefined;
 }
 
 export interface ImportOptions {
   merge?: boolean;
   force?: boolean;
   preview?: boolean;
+  global?: boolean | undefined;
+  project?: boolean | undefined;
 }
 
 export interface ResetOptions {
   force?: boolean;
+  global?: boolean | undefined;
+  project?: boolean | undefined;
 }
 
 /**

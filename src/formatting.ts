@@ -121,11 +121,11 @@ export function showHelp(): void {
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
   cmd('config',   '',   '<subcommand>',       'View or change configuration settings');
-  cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
+  cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset, projectfile)');
   console.log();
   console.log('SUBCOMMANDS:');
   console.log(`  ${color.green('config')}       set, get, info, examples, completions <bash|zsh|install>`);
-  console.log(`  ${color.green('data')}         export <type>, import <type> <file>, reset <type>`);
+  console.log(`  ${color.green('data')}         export, import, reset, projectfile`);
   console.log();
   console.log(`  Use ${color.yellow('--help')} with any command for options (e.g. ${bin} set --help)`);
 
@@ -217,6 +217,9 @@ export function showExamples(): void {
   ex(`${b} ${g('data import')} all backup.json`, '# Import data and aliases');
   ex(`${b} ${g('data reset')} entries`, '# Clear all data (prompts first)');
   ex(`${b} ${g('data reset')} all ${y('-f')}`, '# Clear everything without confirmation');
+  ex(`${b} ${g('data projectfile')}`, '# Create project-scoped .codexcli.json in cwd');
+  ex(`${b} ${g('data projectfile')} ${y('--remove')}`, '# Remove the project file');
+  ex(`${b} ${g('set')} key val ${y('-G')}`, '# Write to global store (bypass project file)');
 
   section('CONFIGURATION:');
   ex(`${b} ${g('config')}`, '# Show all settings');

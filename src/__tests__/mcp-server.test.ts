@@ -145,6 +145,16 @@ vi.mock('../utils/paths', () => ({
   getAliasFilePath: vi.fn(() => '/mock/aliases.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
   getConfirmFilePath: vi.fn(() => '/mock/confirm.json'),
+  getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
+  getDataDirectory: vi.fn(() => '/mock'),
+  findProjectFile: vi.fn(() => null),
+  clearProjectFileCache: vi.fn(),
+}));
+
+vi.mock('../store', () => ({
+  findProjectFile: vi.fn(() => null),
+  clearProjectFileCache: vi.fn(),
+  clearStoreCaches: vi.fn(),
 }));
 
 vi.mock('../formatting', () => ({

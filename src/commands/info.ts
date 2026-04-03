@@ -5,7 +5,8 @@ import { version } from '../../package.json';
 import { getEntriesFlat } from '../storage';
 import { loadAliases } from '../alias';
 import { loadConfirmKeys } from '../confirm';
-import { getDataFilePath, getAliasFilePath, getConfigFilePath, getConfirmFilePath } from '../utils/paths';
+import { getUnifiedDataFilePath, getConfigFilePath } from '../utils/paths';
+import { findProjectFile } from '../store';
 import { color } from '../formatting';
 import { getBinaryName } from '../utils/binaryName';
 
@@ -28,10 +29,10 @@ export function showInfo(): void {
 
   console.log();
 
-  label('Entries', getDataFilePath());
-  label('Aliases', getAliasFilePath());
-  label('Confirm', getConfirmFilePath());
+  label('Data', getUnifiedDataFilePath());
   label('Config', getConfigFilePath());
+  const projectFile = findProjectFile();
+  label('Project', projectFile ?? color.gray('none'));
 
   console.log();
 

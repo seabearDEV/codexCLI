@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { execSync } from "child_process";
 
-import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat } from "./storage";
+import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Scope } from "./storage";
 import { CodexData } from "./types";
 import {
   flattenObject,
@@ -58,11 +58,12 @@ const server = new McpServer(
 server.tool(
   "codex_set",
   "Set an entry in the CodexCLI data store",
-  { key: z.string().describe("Dot-notation key (e.g. server.prod.ip)"), value: z.string().describe("Value to store"), alias: z.string().optional().describe("Create an alias for this key"), encrypt: z.boolean().optional().describe("Encrypt the value with the provided password"), password: z.string().optional().describe("Password for encryption (required when encrypt is true)") },
-  async ({ key, value, alias, encrypt, password }) => {
+  { key: z.string().describe("Dot-notation key (e.g. server.prod.ip)"), value: z.string().describe("Value to store"), alias: z.string().optional().describe("Create an alias for this key"), encrypt: z.boolean().optional().describe("Encrypt the value with the provided password"), password: z.string().optional().describe("Password for encryption (required when encrypt is true)"), scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
+  async ({ key, value, alias, encrypt, password, scope: scopeParam }) => {
     try {
+      const scope = (scopeParam ?? 'auto') as Scope;
       ensureDataDirectoryExists();
-      const resolved = resolveKey(key);
+      const resolved = resolveKey(key, scope);
       let storedValue = value;
       if (encrypt) {
         if (!password) {
@@ -70,9 +71,9 @@ server.tool(
         }
         storedValue = encryptValue(value, password);
       }
-      setValue(resolved, storedValue);
+      setValue(resolved, storedValue, scope);
       if (alias) {
-        const aliases = loadAliases();
+        const aliases = loadAliases(scope);
         // Enforce one alias per entry: remove any existing alias for the same target
         for (const [existingAlias, target] of Object.entries(aliases)) {
           if (target === resolved && existingAlias !== alias) {
@@ -80,7 +81,7 @@ server.tool(
           }
         }
         aliases[alias] = resolved;
-        saveAliases(aliases);
+        saveAliases(aliases, scope);
         return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}\nAlias set: ${alias} -> ${resolved}`);
       }
       return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}`);
@@ -102,17 +103,19 @@ server.tool(
     depth: z.number().optional().describe("Limit key depth (e.g. 1 for top-level only, 2 for two levels)"),
     decrypt: z.boolean().optional().describe("Decrypt an encrypted value"),
     password: z.string().optional().describe("Password for decryption (required when decrypt is true)"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ key, format, aliases_only, values, depth, decrypt: decryptOpt, password }) => {
+  async ({ key, format, aliases_only, values, depth, decrypt: decryptOpt, password, scope: scopeParam }) => {
     try {
-      const data = loadData();
+      const scope = (scopeParam ?? 'auto') as Scope;
+      const data = loadData(scope);
       const keyToAliasMap = buildKeyToAliasMap();
 
       // No key — return entries and/or aliases
       if (!key) {
         // Aliases only
         if (aliases_only) {
-          const aliases = loadAliases();
+          const aliases = loadAliases(scope);
           const entries = Object.entries(aliases);
           if (entries.length === 0) {
             return textResponse("No aliases defined.");
@@ -145,8 +148,8 @@ server.tool(
       }
 
       // Resolve potential alias
-      const resolvedKey = resolveKey(key);
-      const value = getValue(resolvedKey);
+      const resolvedKey = resolveKey(key, scope);
+      const value = getValue(resolvedKey, scope);
 
       if (value === undefined) {
         return errorResponse(`Key '${key}' not found.`);
@@ -206,26 +209,28 @@ server.tool(
   {
     key: z.string().describe("Dot-notation key to remove"),
     is_alias: z.boolean().optional().describe("If true, remove the alias only (keep the entry)"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ key, is_alias }) => {
+  async ({ key, is_alias, scope: scopeParam }) => {
     try {
+      const scope = (scopeParam ?? 'auto') as Scope;
       if (is_alias) {
-        const aliases = loadAliases();
+        const aliases = loadAliases(scope);
         if (!(key in aliases)) {
           return errorResponse(`Alias '${key}' not found.`);
         }
         delete aliases[key];
-        saveAliases(aliases);
+        saveAliases(aliases, scope);
         return textResponse(`Alias removed: ${key}`);
       }
 
-      const resolvedKey = resolveKey(key);
-      const removed = removeValue(resolvedKey);
+      const resolvedKey = resolveKey(key, scope);
+      const removed = removeValue(resolvedKey, scope);
       if (!removed) {
         return errorResponse(`Key '${key}' not found.`);
       }
       // Cascade delete: remove any aliases pointing to this key or its children
-      removeAliasesForKey(resolvedKey);
+      removeAliasesForKey(resolvedKey, scope);
       return textResponse(`Removed: ${resolvedKey}`);
     } catch (err) {
       return errorResponse(`Error removing entry: ${String(err)}`);
@@ -241,29 +246,31 @@ server.tool(
     source: z.string().describe("Source dot-notation key to copy from"),
     dest: z.string().describe("Destination dot-notation key to copy to"),
     force: z.boolean().optional().describe("Overwrite destination if it already exists"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ source, dest, force }) => {
+  async ({ source, dest, force, scope: scopeParam }) => {
     try {
+      const scope = (scopeParam ?? 'auto') as Scope;
       ensureDataDirectoryExists();
-      const resolvedSource = resolveKey(source);
-      const value = getValue(resolvedSource);
+      const resolvedSource = resolveKey(source, scope);
+      const value = getValue(resolvedSource, scope);
 
       if (value === undefined) {
         return errorResponse(`Key '${source}' not found.`);
       }
 
-      const existing = getValue(dest);
+      const existing = getValue(dest, scope);
       if (existing !== undefined && !force) {
         return errorResponse(`Key '${dest}' already exists. Pass force: true to overwrite.`);
       }
 
       if (typeof value === "string") {
-        setValue(dest, value);
+        setValue(dest, value, scope);
       } else {
         const flat = flattenObject({ [resolvedSource]: value });
         for (const [flatKey, flatVal] of Object.entries(flat)) {
           const suffix = flatKey.slice(resolvedSource.length);
-          setValue(dest + suffix, String(flatVal));
+          setValue(dest + suffix, String(flatVal), scope);
         }
       }
 
@@ -282,15 +289,17 @@ server.tool(
     searchTerm: z.string().describe("Term to search for (case-insensitive)"),
     aliasesOnly: z.boolean().optional().describe("Search only in aliases"),
     entriesOnly: z.boolean().optional().describe("Search only in data entries"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ searchTerm, aliasesOnly, entriesOnly }) => {
+  async ({ searchTerm, aliasesOnly, entriesOnly, scope: scopeParam }) => {
     try {
+      const scope = (scopeParam ?? 'auto') as Scope;
       const term = searchTerm.toLowerCase();
       const results: string[] = [];
 
       if (!aliasesOnly) {
 
-        const flat = getEntriesFlat();
+        const flat = getEntriesFlat(scope);
         for (const [k, v] of Object.entries(flat)) {
           const encrypted = isEncrypted(v);
           const keyMatch = k.toLowerCase().includes(term);
@@ -303,7 +312,7 @@ server.tool(
       }
 
       if (!entriesOnly) {
-        const aliases = loadAliases();
+        const aliases = loadAliases(scope);
         for (const [alias, target] of Object.entries(aliases)) {
           if (
             alias.toLowerCase().includes(term) ||
@@ -331,10 +340,12 @@ server.tool(
   {
     alias: z.string().describe("Alias name"),
     path: z.string().describe("Dot-notation path the alias points to"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ alias, path }) => {
+  async ({ alias, path, scope: scopeParam }) => {
     try {
-      const aliases = loadAliases();
+      const scope = (scopeParam ?? 'auto') as Scope;
+      const aliases = loadAliases(scope);
       // Enforce one alias per entry: remove any existing alias for the same target
       for (const [existingAlias, target] of Object.entries(aliases)) {
         if (target === path && existingAlias !== alias) {
@@ -342,7 +353,7 @@ server.tool(
         }
       }
       aliases[alias] = path;
-      saveAliases(aliases);
+      saveAliases(aliases, scope);
       return textResponse(`Alias set: ${alias} -> ${path}`);
     } catch (err) {
       return errorResponse(`Error setting alias: ${String(err)}`);
@@ -354,15 +365,16 @@ server.tool(
 server.tool(
   "codex_alias_remove",
   "Remove an alias",
-  { alias: z.string().describe("Alias name to remove") },
-  async ({ alias }) => {
+  { alias: z.string().describe("Alias name to remove"), scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
+  async ({ alias, scope: scopeParam }) => {
     try {
-      const aliases = loadAliases();
+      const scope = (scopeParam ?? 'auto') as Scope;
+      const aliases = loadAliases(scope);
       if (!(alias in aliases)) {
         return errorResponse(`Alias '${alias}' not found.`);
       }
       delete aliases[alias];
-      saveAliases(aliases);
+      saveAliases(aliases, scope);
       return textResponse(`Alias removed: ${alias}`);
     } catch (err) {
       return errorResponse(`Error removing alias: ${String(err)}`);
@@ -374,10 +386,11 @@ server.tool(
 server.tool(
   "codex_alias_list",
   "List all aliases",
-  {},
-  async () => {
+  { scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
+  async ({ scope: scopeParam }) => {
     try {
-      const aliases = loadAliases();
+      const scope = (scopeParam ?? 'auto') as Scope;
+      const aliases = loadAliases(scope);
       const entries = Object.entries(aliases);
       if (entries.length === 0) {
         return textResponse("No aliases defined.");
@@ -399,10 +412,12 @@ server.tool(
     dry: z.boolean().optional().describe("If true, return the command without executing it"),
     force: z.boolean().optional().describe("If true, skip the confirm check for entries marked --confirm"),
     capture: z.boolean().optional().describe("Capture output (MCP always captures; included for API consistency)"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ key, dry, force }) => {
-    const resolvedKey = resolveKey(key);
-    const value = getValue(resolvedKey);
+  async ({ key, dry, force, scope: scopeParam }) => {
+    const scope = (scopeParam ?? 'auto') as Scope;
+    const resolvedKey = resolveKey(key, scope);
+    const value = getValue(resolvedKey, scope);
 
     if (value === undefined) {
       return errorResponse(`Key '${key}' not found.`);
@@ -509,21 +524,23 @@ server.tool(
   {
     type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to export"),
     pretty: z.boolean().optional().describe("Pretty-print the JSON (default false)"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ type, pretty }) => {
+  async ({ type, pretty, scope: scopeParam }) => {
     try {
+      const scope = (scopeParam ?? 'auto') as Scope;
       const indent = pretty ? 2 : 0;
 
       if (type === "all") {
-        const combined = { entries: maskEncryptedValues(loadData()), aliases: loadAliases(), confirm: loadConfirmKeys() };
+        const combined = { entries: maskEncryptedValues(loadData(scope)), aliases: loadAliases(scope), confirm: loadConfirmKeys(scope) };
         return textResponse(JSON.stringify(combined, null, indent));
       }
 
       if (type === "confirm") {
-        return textResponse(JSON.stringify(loadConfirmKeys(), null, indent));
+        return textResponse(JSON.stringify(loadConfirmKeys(scope), null, indent));
       }
 
-      const content = type === "entries" ? maskEncryptedValues(loadData()) : loadAliases();
+      const content = type === "entries" ? maskEncryptedValues(loadData(scope)) : loadAliases(scope);
       return textResponse(JSON.stringify(content, null, indent));
     } catch (err) {
       return errorResponse(`Error exporting: ${String(err)}`);
@@ -540,8 +557,9 @@ server.tool(
     json: z.string().describe("JSON string to import"),
     merge: z.boolean().optional().describe("Merge with existing data instead of replacing (default false)"),
     preview: z.boolean().optional().describe("Preview changes without modifying data (returns diff text)"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ type, json, merge, preview }) => {
+  async ({ type, json, merge, preview, scope: scopeParam }) => {
     try {
       let parsed: unknown;
       try {
@@ -555,6 +573,7 @@ server.tool(
       }
 
       const obj = parsed as Record<string, unknown>;
+      const scope = (scopeParam ?? 'auto') as Scope;
 
       // Preview mode: compute diff and return without modifying data
       if (preview) {
@@ -588,7 +607,7 @@ server.tool(
 
         if (type === "entries" || type === "all") {
           const importObj = type === "all" ? (obj.entries as Record<string, unknown> || {}) : obj;
-          const currentFlat = flattenObject(loadData());
+          const currentFlat = flattenObject(loadData(scope));
           const importFlat = flattenObject(importObj);
           lines.push(`Entries (${merge ? "merge" : "replace"}):`);
           const diff = diffEntries(currentFlat, importFlat, !!merge);
@@ -597,7 +616,7 @@ server.tool(
 
         if (type === "aliases" || type === "all") {
           const importObj = type === "all" ? (obj.aliases as Record<string, string> || {}) : obj as Record<string, string>;
-          const currentAliases = loadAliases();
+          const currentAliases = loadAliases(scope);
           const currentFlat: Record<string, string> = {};
           const importFlat: Record<string, string> = {};
           for (const [k, v] of Object.entries(currentAliases)) currentFlat[k] = v;
@@ -609,7 +628,7 @@ server.tool(
 
         if (type === "confirm" || type === "all") {
           const importObj = type === "all" ? (obj.confirm as Record<string, unknown> || {}) : obj;
-          const currentConfirm = loadConfirmKeys();
+          const currentConfirm = loadConfirmKeys(scope);
           const currentFlat: Record<string, string> = {};
           const importFlat: Record<string, string> = {};
           for (const k of Object.keys(currentConfirm)) currentFlat[k] = "true";
@@ -642,38 +661,38 @@ server.tool(
           return errorResponse("Alias values must all be strings (dot-notation paths).");
         }
 
-        const currentData = merge ? loadData() : {};
-        saveData((merge ? deepMerge(currentData, dataObj) : dataObj) as CodexData);
+        const currentData = merge ? loadData(scope) : {};
+        saveData((merge ? deepMerge(currentData, dataObj) : dataObj) as CodexData, scope);
 
-        const currentAliases = merge ? loadAliases() : {};
-        saveAliases(merge ? { ...currentAliases, ...(aliasesObj as Record<string, string>) } : aliasesObj as Record<string, string>);
+        const currentAliases = merge ? loadAliases(scope) : {};
+        saveAliases(merge ? { ...currentAliases, ...(aliasesObj as Record<string, string>) } : aliasesObj as Record<string, string>, scope);
 
         // Import confirm keys if present; reset to empty when replacing and key is absent
         const confirmVal = obj.confirm;
         if (confirmVal && typeof confirmVal === "object" && !Array.isArray(confirmVal)) {
-          const currentConfirm = merge ? loadConfirmKeys() : {};
-          saveConfirmKeys(merge ? { ...currentConfirm, ...(confirmVal as Record<string, true>) } : confirmVal as Record<string, true>);
+          const currentConfirm = merge ? loadConfirmKeys(scope) : {};
+          saveConfirmKeys(merge ? { ...currentConfirm, ...(confirmVal as Record<string, true>) } : confirmVal as Record<string, true>, scope);
         } else if (!merge) {
-          saveConfirmKeys({});
+          saveConfirmKeys({}, scope);
         }
       } else if (type === "entries") {
-        const current = merge ? loadData() : {};
+        const current = merge ? loadData(scope) : {};
         const newData = merge ? deepMerge(current, obj) : obj;
-        saveData(newData as CodexData);
+        saveData(newData as CodexData, scope);
       } else if (type === "confirm") {
-        const currentConfirm = merge ? loadConfirmKeys() : {};
+        const currentConfirm = merge ? loadConfirmKeys(scope) : {};
         const newConfirm = merge ? { ...currentConfirm, ...(obj as Record<string, true>) } : obj;
-        saveConfirmKeys(newConfirm as Record<string, true>);
+        saveConfirmKeys(newConfirm as Record<string, true>, scope);
       } else {
         if (Object.values(obj).some(v => typeof v !== "string")) {
           return errorResponse("Alias values must all be strings (dot-notation paths).");
         }
 
-        const current = merge ? loadAliases() : {};
+        const current = merge ? loadAliases(scope) : {};
         const newAliases = merge
           ? { ...current, ...(obj as Record<string, string>) }
           : obj;
-        saveAliases(newAliases as Record<string, string>);
+        saveAliases(newAliases as Record<string, string>, scope);
       }
 
       const typeLabel = { all: "Entries, aliases, and confirm keys", entries: "Entries", aliases: "Aliases", confirm: "Confirm keys" }[type];
@@ -692,17 +711,19 @@ server.tool(
   "Reset entries and/or aliases to empty state",
   {
     type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to reset"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ type }) => {
+  async ({ type, scope: scopeParam }) => {
     try {
+      const scope = (scopeParam ?? 'auto') as Scope;
       if (type === "entries" || type === "all") {
-        saveData({});
+        saveData({}, scope);
       }
       if (type === "aliases" || type === "all") {
-        saveAliases({});
+        saveAliases({}, scope);
       }
       if (type === "confirm" || type === "all") {
-        saveConfirmKeys({});
+        saveConfirmKeys({}, scope);
       }
       const typeLabel = { all: "Entries, aliases, and confirm keys", entries: "Entries", aliases: "Aliases", confirm: "Confirm keys" }[type];
       return textResponse(

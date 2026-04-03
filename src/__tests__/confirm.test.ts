@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import {
   loadConfirmKeys,
   saveConfirmKeys,
@@ -9,45 +8,34 @@ import {
   clearConfirmCache
 } from '../confirm';
 
-vi.mock('fs', () => {
-  const mock = {
-    existsSync: vi.fn(),
-    readFileSync: vi.fn(),
-    writeFileSync: vi.fn(),
-    renameSync: vi.fn(),
-    mkdirSync: vi.fn(),
-    statSync: vi.fn(),
-    openSync: vi.fn(() => 3),
-    writeSync: vi.fn(),
-    closeSync: vi.fn(),
-    unlinkSync: vi.fn(),
-    constants: { O_CREAT: 0x40, O_EXCL: 0x80, O_WRONLY: 0x01 }
+vi.mock('../store', () => {
+  let confirmKeys: Record<string, true> = {};
+  return {
+    loadConfirmMap: vi.fn(() => ({ ...confirmKeys })),
+    saveConfirmMap: vi.fn((data: Record<string, true>) => { confirmKeys = { ...data }; }),
+    loadConfirmMapMerged: vi.fn(() => ({ ...confirmKeys })),
+    clearStoreCaches: vi.fn(() => { confirmKeys = {}; }),
+    findProjectFile: vi.fn(() => null),
+    clearProjectFileCache: vi.fn(),
   };
-  return { default: mock, ...mock };
 });
 
-vi.mock('../config', () => ({
-  loadConfig: vi.fn(() => ({ colors: true, theme: 'default', backend: 'json' }))
-}));
+import { loadConfirmMap, saveConfirmMap, loadConfirmMapMerged, clearStoreCaches } from '../store';
 
 describe('Confirm Metadata', () => {
   const originalConsoleLog = console.log;
   const originalConsoleError = console.error;
 
   beforeEach(() => {
-    vi.resetAllMocks();
-    clearConfirmCache();
+    vi.clearAllMocks();
+    const defaultConfirm = {
+      'commands.deploy': true as const,
+      'commands.rm-logs': true as const,
+    };
+    (loadConfirmMap as Mock).mockReturnValue({ ...defaultConfirm });
+    (loadConfirmMapMerged as Mock).mockReturnValue({ ...defaultConfirm });
     console.log = vi.fn();
     console.error = vi.fn();
-
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
-
-    const mockConfirm = {
-      'commands.deploy': true,
-      'commands.rm-logs': true
-    };
-    (fs.readFileSync as Mock).mockReturnValue(JSON.stringify(mockConfirm));
   });
 
   afterEach(() => {
@@ -56,72 +44,29 @@ describe('Confirm Metadata', () => {
   });
 
   describe('loadConfirmKeys', () => {
-    it('loads confirm keys from file', () => {
+    it('loads confirm keys from store (merged)', () => {
       const keys = loadConfirmKeys();
 
       expect(keys['commands.deploy']).toBe(true);
       expect(keys['commands.rm-logs']).toBe(true);
     });
 
-    it('returns empty object if confirm file does not exist', () => {
-      (fs.existsSync as Mock).mockReturnValueOnce(false);
+    it('returns empty object if no confirm keys exist', () => {
+      (loadConfirmMapMerged as Mock).mockReturnValue({});
 
       const keys = loadConfirmKeys();
       expect(Object.keys(keys).length).toBe(0);
-    });
-
-    it('handles invalid JSON gracefully', () => {
-      (fs.readFileSync as Mock).mockReturnValueOnce('invalid json');
-
-      const keys = loadConfirmKeys();
-      expect(Object.keys(keys).length).toBe(0);
-      expect(console.error).toHaveBeenCalled();
-    });
-
-    it('returns {} for empty file content', () => {
-      (fs.readFileSync as Mock).mockReturnValueOnce('');
-
-      const keys = loadConfirmKeys();
-      expect(keys).toEqual({});
-    });
-
-    it('returns {} silently for SyntaxError with "Unexpected end"', () => {
-      (fs.readFileSync as Mock).mockReturnValueOnce('{"key":');
-
-      const keys = loadConfirmKeys();
-      expect(keys).toEqual({});
-      expect(console.error).not.toHaveBeenCalled();
     });
   });
 
   describe('saveConfirmKeys', () => {
-    it('writes sorted keys to file', () => {
+    it('delegates to saveConfirmMap', () => {
       saveConfirmKeys({ 'z.key': true, 'a.key': true });
 
-      expect(fs.writeFileSync).toHaveBeenCalled();
-      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const saved = JSON.parse(savedCall[1]);
-      const sortedKeys = Object.keys(saved);
-      expect(sortedKeys).toEqual(['a.key', 'z.key']);
-    });
-
-    it('creates directory when it does not exist', () => {
-      (fs.existsSync as Mock).mockReturnValue(false);
-
-      saveConfirmKeys({ 'my.key': true });
-
-      expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true, mode: 0o700 });
-      expect(fs.writeFileSync).toHaveBeenCalled();
-    });
-
-    it('logs error when writeFileSync throws', () => {
-      (fs.writeFileSync as Mock).mockImplementationOnce(() => {
-        throw new Error('disk full');
-      });
-
-      saveConfirmKeys({ 'my.key': true });
-
-      expect(console.error).toHaveBeenCalledWith('Error saving confirm keys:', expect.any(Error));
+      expect(saveConfirmMap).toHaveBeenCalledWith(
+        { 'z.key': true, 'a.key': true },
+        undefined
+      );
     });
   });
 
@@ -129,12 +74,10 @@ describe('Confirm Metadata', () => {
     it('adds a key to confirm set', () => {
       setConfirm('commands.new');
 
-      expect(fs.writeFileSync).toHaveBeenCalled();
-      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const saved = JSON.parse(savedCall[1]);
-      expect(saved['commands.new']).toBe(true);
-      // Existing keys should still be there
-      expect(saved['commands.deploy']).toBe(true);
+      expect(saveConfirmMap).toHaveBeenCalled();
+      const savedData = (saveConfirmMap as Mock).mock.calls[0][0];
+      expect(savedData['commands.new']).toBe(true);
+      expect(savedData['commands.deploy']).toBe(true);
     });
   });
 
@@ -142,17 +85,18 @@ describe('Confirm Metadata', () => {
     it('removes a key from confirm set', () => {
       removeConfirm('commands.deploy');
 
-      expect(fs.writeFileSync).toHaveBeenCalled();
-      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const saved = JSON.parse(savedCall[1]);
-      expect(saved['commands.deploy']).toBeUndefined();
-      expect(saved['commands.rm-logs']).toBe(true);
+      expect(saveConfirmMap).toHaveBeenCalled();
+      const savedData = (saveConfirmMap as Mock).mock.calls[0][0];
+      expect(savedData['commands.deploy']).toBeUndefined();
+      expect(savedData['commands.rm-logs']).toBe(true);
     });
 
     it('does nothing when key is not in confirm set', () => {
       removeConfirm('nonexistent.key');
 
-      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      // With no project file, checks global scope only
+      // nonexistent.key is not in the mock, so no save
+      expect(saveConfirmMap).not.toHaveBeenCalled();
     });
   });
 
@@ -170,64 +114,32 @@ describe('Confirm Metadata', () => {
     it('removes the exact key', () => {
       removeConfirmForKey('commands.deploy');
 
-      expect(fs.writeFileSync).toHaveBeenCalled();
-      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const saved = JSON.parse(savedCall[1]);
-      expect(saved['commands.deploy']).toBeUndefined();
-      expect(saved['commands.rm-logs']).toBe(true);
+      expect(saveConfirmMap).toHaveBeenCalled();
+      const savedData = (saveConfirmMap as Mock).mock.calls[0][0];
+      expect(savedData['commands.deploy']).toBeUndefined();
+      expect(savedData['commands.rm-logs']).toBe(true);
     });
 
     it('cascade-deletes children of a parent key', () => {
       removeConfirmForKey('commands');
 
-      expect(fs.writeFileSync).toHaveBeenCalled();
-      const savedCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const saved = JSON.parse(savedCall[1]);
-      expect(Object.keys(saved).length).toBe(0);
+      expect(saveConfirmMap).toHaveBeenCalled();
+      const savedData = (saveConfirmMap as Mock).mock.calls[0][0];
+      expect(Object.keys(savedData).length).toBe(0);
     });
 
     it('does nothing when no matching keys exist', () => {
       removeConfirmForKey('nonexistent');
 
-      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      // Global store is checked; no matching keys, no save
+      expect(saveConfirmMap).not.toHaveBeenCalled();
     });
   });
 
-  describe('caching', () => {
-    it('returns cached keys on second call with same mtime', () => {
-      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 1000 });
-
-      const first = loadConfirmKeys();
-      const second = loadConfirmKeys();
-
-      expect(first).toEqual(second);
-      expect(fs.readFileSync).toHaveBeenCalledTimes(1);
-    });
-
-    it('re-reads when mtime changes', () => {
-      (fs.statSync as Mock)
-        .mockReturnValueOnce({ mtimeMs: 1000 })
-        .mockReturnValueOnce({ mtimeMs: 2000 });
-      (fs.readFileSync as Mock)
-        .mockReturnValueOnce(JSON.stringify({ 'a.key': true }))
-        .mockReturnValueOnce(JSON.stringify({ 'b.key': true }));
-
-      const first = loadConfirmKeys();
-      const second = loadConfirmKeys();
-
-      expect(first).toEqual({ 'a.key': true });
-      expect(second).toEqual({ 'b.key': true });
-      expect(fs.readFileSync).toHaveBeenCalledTimes(2);
-    });
-
-    it('updates cache on saveConfirmKeys (write-through)', () => {
-      (fs.statSync as Mock).mockReturnValue({ mtimeMs: 2000 });
-
-      saveConfirmKeys({ 'saved.key': true });
-      const loaded = loadConfirmKeys();
-
-      expect(loaded).toEqual({ 'saved.key': true });
-      expect(fs.readFileSync).not.toHaveBeenCalled();
+  describe('clearConfirmCache', () => {
+    it('delegates to clearStoreCaches', () => {
+      clearConfirmCache();
+      expect(clearStoreCaches).toHaveBeenCalled();
     });
   });
 });
