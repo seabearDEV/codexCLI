@@ -635,6 +635,12 @@ CodexCLI includes a built-in [Model Context Protocol](https://modelcontextprotoc
 claude mcp add codexcli -- ccli mcp-server
 ```
 
+**With project-scoped data** (pass `--cwd` so the server detects `.codexcli.json`):
+
+```bash
+claude mcp add codexcli -- ccli mcp-server --cwd /path/to/project
+```
+
 **npm global install** (`npm install -g .`) — dev mode:
 
 ```bash

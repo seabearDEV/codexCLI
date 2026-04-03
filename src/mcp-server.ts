@@ -39,7 +39,7 @@ function errorResponse(text: string) {
 
 ensureDataDirectoryExists();
 
-const DEFAULT_LLM_INSTRUCTIONS = `You are connected to the CodexCLI data store via MCP. Default behavior: when a user provides a dot-notation key without explicit intent, use codex_get to retrieve it. Only use codex_set when explicitly asked to store or update a value. Use codex_run only when asked to execute a command. Use codex_get with no key to browse all entries (keys only by default). Use the depth parameter to limit how deep the key listing goes (e.g. depth: 1 for top-level namespaces). Use the values parameter to include values in the output.`;
+const DEFAULT_LLM_INSTRUCTIONS = `You are connected to the CodexCLI data store via MCP. Default behavior: when a user provides a dot-notation key without explicit intent, use codex_get to retrieve it. Only use codex_set when explicitly asked to store or update a value. Use codex_run only when asked to execute a command. Use codex_get with no key to browse all entries (keys only by default). Use the depth parameter to limit how deep the key listing goes (e.g. depth: 1 for top-level namespaces). Use the values parameter to include values in the output. CodexCLI supports project-scoped data via .codexcli.json files. If the server was started with --cwd pointing to a project, scope defaults to project when a .codexcli.json exists. Use scope: "global" to target the user's global store, or scope: "project" to explicitly target the project store.`;
 
 const llmInstructions = (() => {
   try {
@@ -744,6 +744,11 @@ export async function startMcpServer(): Promise<void> {
 // Auto-start when run directly (e.g. `node dist/mcp-server.js` or `cclid-mcp`)
 // When imported by index.ts for the `mcp-server` subcommand, the caller invokes startMcpServer() explicitly.
 if (process.argv[1] && (process.argv[1].endsWith('mcp-server.js') || process.argv[1].endsWith('cclid-mcp'))) {
+  // Support --cwd <dir> to set working directory for project-scoped data detection
+  const cwdIdx = process.argv.indexOf('--cwd');
+  if (cwdIdx !== -1 && process.argv[cwdIdx + 1]) {
+    process.chdir(process.argv[cwdIdx + 1]);
+  }
   startMcpServer().catch((err) => {
     process.stderr.write(`MCP server error: ${err}\n`);
     process.exit(1);

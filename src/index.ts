@@ -354,7 +354,11 @@ dataCommand
 codexCLI
   .command('mcp-server')
   .description('Start the MCP (Model Context Protocol) server over stdio')
-  .action(async () => {
+  .option('--cwd <dir>', 'Set working directory (enables project-scoped data detection)')
+  .action(async (options: { cwd?: string }) => {
+    if (options.cwd) {
+      process.chdir(options.cwd);
+    }
     const { startMcpServer } = await import('./mcp-server');
     await startMcpServer();
   });
