@@ -366,8 +366,9 @@ codexCLI
   .description('Start the MCP (Model Context Protocol) server over stdio')
   .option('--cwd <dir>', 'Set working directory (enables project-scoped data detection)')
   .action(async (options: { cwd?: string }) => {
-    if (options.cwd) {
-      process.chdir(options.cwd);
+    const projectDir = process.env.CODEX_PROJECT_DIR ?? options.cwd;
+    if (projectDir) {
+      process.chdir(projectDir);
     }
     const { startMcpServer } = await import('./mcp-server');
     await startMcpServer();

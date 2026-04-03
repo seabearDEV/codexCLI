@@ -1,0 +1,47 @@
+{
+  "aliases": {},
+  "confirm": {},
+  "entries": {
+    "project": {
+      "name": "CodexCLI",
+      "description": "CLI tool and MCP server for storing, organizing, and retrieving structured data with dot notation",
+      "stack": "TypeScript, Node.js, Commander.js, Vitest, MCP SDK (@modelcontextprotocol/sdk)"
+    },
+    "commands": {
+      "build": "npm run build",
+      "test": "npm test",
+      "lint": "npm run lint",
+      "dev": "npm run dev:watch",
+      "test.watch": "npm run test:watch"
+    },
+    "arch": {
+      "storage": "Unified data.json with { entries, aliases, confirm } sections. Global at ~/.codexcli/data.json, project at .codexcli.json",
+      "store": "src/store.ts is the core — ScopedStore with mtime caching, auto-migration from old 3-file format, project file detection via directory walk-up",
+      "scope": "Scope type: 'project' | 'global' | 'auto'. Auto uses project if .codexcli.json exists, else global. Single-key lookups fall through project -> global. Listings show one scope at a time.",
+      "mcp": "src/mcp-server.ts exposes 15 tools via MCP SDK. All data tools accept optional scope parameter. codex_context is the session bootstrap tool.",
+      "cli": "src/index.ts uses Commander.js. Commands: set/get/run/find/edit/copy/rename/remove/init/config/data. Aliases: s/g/r/f/e/cp/rn/rm.",
+      "binary": "Production ccli is a Node.js SEA binary. Dev cclid is npm-linked. getBinaryName() detects which via argv."
+    },
+    "conventions": {
+      "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",
+      "output": "All user-facing text uses getBinaryName() from src/utils/binaryName.ts — never hardcode ccli",
+      "tests": "Vitest with globals. Unit tests mock fs and store module. Integration tests use real temp dirs via CODEX_DATA_DIR env var.",
+      "atomicWrites": "All file writes use saveJsonSorted -> withFileLock -> atomicWriteFileSync (tmp file + rename)"
+    },
+    "context": {
+      "migration": "On first access, auto-migrates old separate files (entries.json + aliases.json + confirm.json) to unified data.json. Old files renamed to .backup.",
+      "configSeparate": "config.json stays separate from data.json — it is user preference not project data",
+      "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to detect project files since its process.cwd() may not be the project root"
+    },
+    "files": {
+      "entry": "src/index.ts (CLI entry), src/mcp-server.ts (MCP entry)",
+      "store": "src/store.ts (unified store, caching, migration, scope resolution)",
+      "storage": "src/storage.ts (thin wrapper — loadData, getValue, setValue delegate to store)",
+      "alias": "src/alias.ts (alias CRUD — resolveKey, setAlias, removeAliasesForKey)",
+      "confirm": "src/confirm.ts (confirm flag CRUD — hasConfirm, setConfirm)",
+      "commands": "src/commands/entries.ts (set/get/run/remove/copy/edit/rename handlers)",
+      "completions": "src/completions.ts (CLI_TREE defines all commands, getDynamicValues for tab completion)",
+      "formatting": "src/formatting.ts (showHelp, showExamples, displayTree, color utilities)"
+    }
+  }
+}

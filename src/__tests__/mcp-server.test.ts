@@ -698,4 +698,31 @@ describe('MCP Server Tools', () => {
     });
   });
 
+  describe('codex_context', () => {
+    it('returns flat entries and aliases', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' }, db: { host: 'localhost' } });
+      Object.assign(mockAliases, { srv: 'server.ip' });
+
+      const result = await toolHandlers['codex_context']({});
+      const text = result.content[0].text;
+      expect(text).toContain('server.ip: 10.0.0.1');
+      expect(text).toContain('db.host: localhost');
+      expect(text).toContain('srv -> server.ip');
+    });
+
+    it('returns message when no entries stored', async () => {
+      const result = await toolHandlers['codex_context']({});
+      expect(result.content[0].text).toContain('No entries stored');
+    });
+
+    it('shows entries without aliases section when no aliases exist', async () => {
+      Object.assign(mockData, { key: 'value' });
+
+      const result = await toolHandlers['codex_context']({});
+      const text = result.content[0].text;
+      expect(text).toContain('key: value');
+      expect(text).not.toContain('Aliases:');
+    });
+  });
+
 });

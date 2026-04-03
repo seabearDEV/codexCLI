@@ -460,16 +460,18 @@ Available settings:
 
 ### Project-Scoped Data
 
-CodexCLI supports per-project data files that live alongside your code. When you're inside a project directory, commands automatically target the project store. Global data is still accessible via `-G`.
+CodexCLI supports per-project data files that live alongside your code. The `.codexcli.json` file is designed to be committed to version control, creating a shared knowledge base that persists across sessions, team members, and AI agents.
 
 ```bash
 # Initialize a project data file in the current directory
 ccli init
 
-# Set project-specific entries (writes to .codexcli.json)
-ccli set build.cmd "npm run build"
-ccli set test.cmd "npm test"
-ccli set deploy.staging "./deploy.sh staging"
+# Store project knowledge
+ccli set commands.build "npm run build"
+ccli set commands.test "npm test"
+ccli set arch.api "REST endpoints in src/routes/, validated by Zod schemas"
+ccli set conventions.errors "Always use AppError class from src/utils/errors.ts"
+ccli set context.auth "JWT tokens expire after 1h, refresh via /api/refresh"
 
 # get shows project entries only (when inside a project)
 ccli get
@@ -490,9 +492,32 @@ ccli set server.ip 192.168.1.100 -G
 ccli init --remove
 ```
 
-The project file (`.codexcli.json`) uses the same `{ entries, aliases, confirm }` format as the global store. You can commit it to version control to share project data with your team, or add it to `.gitignore` for personal use.
+**Scope flags:** The `-G` / `--global` flag is available on `set`, `get`, `run`, `find`, `copy`, `edit`, `rename`, and `remove`. Data management commands (`export`, `import`, `reset`) also support `-P` / `--project`.
 
-**Scope flags:** The `-G` / `--global` flag is available on `set`, `get`, `run`, `find`, `copy`, `edit`, `rename`, and `remove`. Data management commands (`export`, `import`, `reset`) also support `-P` / `--project` for explicit targeting.
+#### Recommended Schema
+
+When using CodexCLI as a project knowledge base (especially with AI agents via MCP), we recommend organizing entries under these namespaces:
+
+| Namespace | Purpose | Examples |
+|---|---|---|
+| `project.*` | Basic metadata | `project.name`, `project.stack`, `project.description` |
+| `commands.*` | Build, test, deploy commands | `commands.build`, `commands.test`, `commands.deploy.staging` |
+| `arch.*` | Architecture and design decisions | `arch.storage`, `arch.api`, `arch.auth` |
+| `conventions.*` | Coding patterns, naming, style | `conventions.types`, `conventions.errors`, `conventions.testing` |
+| `context.*` | Non-obvious gotchas, edge cases | `context.migration`, `context.legacy`, `context.performance` |
+| `files.*` | Key file paths and their roles | `files.entry`, `files.config`, `files.routes` |
+| `deps.*` | Notable dependencies and why | `deps.commander`, `deps.vitest`, `deps.zod` |
+
+Keep values concise — one sentence or a short command. Use multiple keys under the same namespace for detail. Don't store things easily derived from `package.json` or the code itself; store insights, decisions, and context that would otherwise be lost.
+
+#### AI Agent Workflow
+
+When an AI agent connects via MCP, the recommended workflow is:
+
+1. Call `codex_context` to load all stored project knowledge
+2. Check relevant namespaces (`arch`, `conventions`, `context`) before exploring the codebase
+3. Record non-obvious discoveries with `codex_set` as you work
+4. Update stale entries when you find they no longer match the code
 
 ### Data Management
 
@@ -648,17 +673,19 @@ CodexCLI includes a built-in [Model Context Protocol](https://modelcontextprotoc
 
 #### Claude Code
 
-**Homebrew / binary install:**
+**Homebrew / binary install (global):**
 
 ```bash
 claude mcp add codexcli -- ccli mcp-server
 ```
 
-**With project-scoped data** (pass `--cwd` so the server detects `.codexcli.json`):
+**Per-project** (recommended — enables project-scoped data):
 
 ```bash
-claude mcp add codexcli -- ccli mcp-server --cwd /path/to/project
+claude mcp add codexcli --scope project -- ccli mcp-server --cwd .
 ```
+
+The `--scope project` makes the registration per-project in Claude Code, and `--cwd .` tells the MCP server to use the project root for `.codexcli.json` detection. You can also use the `CODEX_PROJECT_DIR` environment variable instead of `--cwd`.
 
 **npm global install** (`npm install -g .`) — dev mode:
 
@@ -733,6 +760,7 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | `codex_export` | Export data and/or aliases as JSON text |
 | `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
+| `codex_context` | Compact summary of all stored project knowledge (use at session start) |
 
 All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli.json` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.
 

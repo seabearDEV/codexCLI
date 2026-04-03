@@ -149,5 +149,3 @@ vite.config.ts.timestamp-*
 # Dev data directory
 data/
 
-# Project-scoped CodexCLI data
-.codexcli.json

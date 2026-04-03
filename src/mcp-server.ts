@@ -40,7 +40,35 @@ function errorResponse(text: string) {
 
 ensureDataDirectoryExists();
 
-const DEFAULT_LLM_INSTRUCTIONS = `You are connected to the CodexCLI data store via MCP. Default behavior: when a user provides a dot-notation key without explicit intent, use codex_get to retrieve it. Only use codex_set when explicitly asked to store or update a value. Use codex_run only when asked to execute a command. Use codex_get with no key to browse all entries (keys only by default). Use the depth parameter to limit how deep the key listing goes (e.g. depth: 1 for top-level namespaces). Use the values parameter to include values in the output. CodexCLI supports project-scoped data via .codexcli.json files. If the server was started with --cwd pointing to a project, scope defaults to project when a .codexcli.json exists. Use scope: "global" to target the user's global store, or scope: "project" to explicitly target the project store.`;
+const DEFAULT_LLM_INSTRUCTIONS = `You are connected to a CodexCLI data store via MCP. This store is a persistent, structured knowledge base for the project you are working on. Use it to learn, record, and share context across sessions and AI agents.
+
+HOW TO USE:
+- At session start, call codex_context to load all stored project knowledge in one call.
+- Before exploring the codebase (reading files, searching code), check if the answer is already stored — e.g. codex_get with key "arch" or "conventions" or "commands".
+- When you discover something non-obvious about the project (architecture decisions, gotchas, patterns, key file roles), store it with codex_set.
+- When you find stored information that is outdated or wrong, update it immediately.
+- Do NOT store things easily derived from package.json, README, or the code itself. Store insights, decisions, and context that would otherwise be lost between sessions.
+
+SCHEMA (recommended namespaces):
+- project.*      — name, description, stack, repo URL
+- commands.*     — build, test, lint, deploy commands
+- arch.*         — architecture notes, patterns, key decisions
+- conventions.*  — coding patterns, naming rules, style notes
+- context.*      — non-obvious gotchas, edge cases, historical decisions
+- files.*        — key file paths and their roles
+- deps.*         — notable dependencies and why they are used
+
+SCOPE:
+- If a .codexcli.json project file exists, reads/writes default to the project scope.
+- Use scope: "global" to target the user's personal global store (~/.codexcli/data.json).
+- codex_get with no key shows project entries by default. Pass all: true to see both scopes.
+
+TOOL TIPS:
+- codex_context — compact summary of all entries (best for session start)
+- codex_get — retrieve specific keys or browse namespaces (use depth: 1 to scan top-level)
+- codex_set — store a key-value pair (use dot notation, keep values concise)
+- codex_search — find entries by keyword
+- codex_run — execute a stored shell command (respects confirm metadata)`;
 
 const llmInstructions = (() => {
   try {
@@ -764,6 +792,48 @@ server.tool(
   }
 );
 
+// --- codex_context ---
+server.tool(
+  "codex_context",
+  "Get a compact summary of all stored project knowledge in one call (use at session start to bootstrap context)",
+  {
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
+  },
+  async ({ scope: scopeParam }) => {
+    try {
+      const hasProject = !!findProjectFile();
+      const effectiveScope: Scope = scopeParam ? scopeParam as Scope : hasProject ? 'project' : 'auto';
+
+      const flat = getEntriesFlat(effectiveScope);
+      const aliases = loadAliases(effectiveScope);
+
+      if (Object.keys(flat).length === 0 && Object.keys(aliases).length === 0) {
+        return textResponse("No entries stored. Use codex_set to add project knowledge.");
+      }
+
+      const lines: string[] = [];
+
+      if (Object.keys(flat).length > 0) {
+        for (const [k, v] of Object.entries(flat)) {
+          lines.push(`${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
+        }
+      }
+
+      if (Object.keys(aliases).length > 0) {
+        lines.push('');
+        lines.push('Aliases:');
+        for (const [a, t] of Object.entries(aliases)) {
+          lines.push(`  ${a} -> ${t}`);
+        }
+      }
+
+      return textResponse(lines.join("\n"));
+    } catch (err) {
+      return errorResponse(`Error loading context: ${String(err)}`);
+    }
+  }
+);
+
 // --- Start server ---
 export async function startMcpServer(): Promise<void> {
   const transport = new StdioServerTransport();
@@ -773,10 +843,11 @@ export async function startMcpServer(): Promise<void> {
 // Auto-start when run directly (e.g. `node dist/mcp-server.js` or `cclid-mcp`)
 // When imported by index.ts for the `mcp-server` subcommand, the caller invokes startMcpServer() explicitly.
 if (process.argv[1] && (process.argv[1].endsWith('mcp-server.js') || process.argv[1].endsWith('cclid-mcp'))) {
-  // Support --cwd <dir> to set working directory for project-scoped data detection
-  const cwdIdx = process.argv.indexOf('--cwd');
-  if (cwdIdx !== -1 && process.argv[cwdIdx + 1]) {
-    process.chdir(process.argv[cwdIdx + 1]);
+  // Support CODEX_PROJECT_DIR env var or --cwd flag for project-scoped data detection
+  const projectDir = process.env.CODEX_PROJECT_DIR
+    ?? (process.argv.indexOf('--cwd') !== -1 ? process.argv[process.argv.indexOf('--cwd') + 1] : undefined);
+  if (projectDir) {
+    process.chdir(projectDir);
   }
   startMcpServer().catch((err) => {
     process.stderr.write(`MCP server error: ${err}\n`);

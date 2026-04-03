@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] - 2026-04-02
+
+### Added
+
+- **`codex_context` MCP tool** — returns a compact flat summary of all stored project knowledge in one call. Designed for AI agents to bootstrap context at session start.
+- **`CODEX_PROJECT_DIR` environment variable** — alternative to `--cwd` for telling the MCP server where the project root is.
+- **Recommended schema** — documented namespace conventions (`project.*`, `commands.*`, `arch.*`, `conventions.*`, `context.*`, `files.*`, `deps.*`) for organizing project knowledge.
+- **AI agent workflow** — LLM instructions rewritten to guide agents on bootstrapping from stored context, recording discoveries, and maintaining the knowledge base.
+- CodexCLI's own `.codexcli.json` populated with real project data as a living example.
+
 ## [0.7.0] - 2026-04-02
 
 ### Added
