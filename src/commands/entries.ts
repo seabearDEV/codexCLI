@@ -2,8 +2,9 @@ import crypto from 'crypto';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { loadData, handleError, getValue, setValue, removeValue, Scope } from '../storage';
+import { loadData, handleError, getValue, setValue, removeValue, Scope, getEntriesFlat } from '../storage';
 import { flattenObject } from '../utils/objectPath';
+import { findProjectFile } from '../store';
 import { CodexValue } from '../types';
 import { displayTree } from '../formatting';
 import { color } from '../formatting';
@@ -234,7 +235,7 @@ export async function setEntry(key: string, value: string | undefined, force = f
   }
 }
 
-function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<string, string>, options: GetOptions): void {
+function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<string, string>, options: GetOptions, projectKeys?: Set<string>): void {
   // Keys-only mode: no key specified and --values not set
   if (!options.values) {
     if (options.raw) {
@@ -243,7 +244,7 @@ function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<strin
       }
       return;
     }
-    displayKeys(Object.keys(flat), aliasMap);
+    displayKeys(Object.keys(flat), aliasMap, projectKeys);
     return;
   }
 
@@ -259,10 +260,10 @@ function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<strin
     return;
   }
 
-  displayEntries(entries as Record<string, string>, aliasMap);
+  displayEntries(entries as Record<string, string>, aliasMap, projectKeys);
 }
 
-function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
+function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions, projectKeys?: Set<string>): void {
   if (Object.keys(data).length === 0) {
     if (options.raw) return;
     console.log(color.gray(`No entries found. Add one with "${getBinaryName()} set <key> <value>"`));
@@ -275,10 +276,10 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
     return;
   }
 
-  displayFlatEntries(flattenObject(data, '', options.depth), aliasMap, options);
+  displayFlatEntries(flattenObject(data, '', options.depth), aliasMap, options, projectKeys);
 }
 
-function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
+function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions, projectKeys?: Set<string>): void {
   if (options.tree) {
     displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
     return;
@@ -291,7 +292,7 @@ function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap
     return;
   }
 
-  displayFlatEntries(flat, aliasMap, options);
+  displayFlatEntries(flat, aliasMap, options, projectKeys);
 }
 
 export async function getEntry(key?: string, options: GetOptions = {}): Promise<void> {
@@ -360,7 +361,12 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     }
 
     const data = loadData(scope);
-    displayAllEntries(data, aliasMap, options);
+    // Compute project keys for [P] marker when showing merged results
+    let projectKeys: Set<string> | undefined;
+    if (!scope && findProjectFile()) {
+      projectKeys = new Set(Object.keys(getEntriesFlat('project')));
+    }
+    displayAllEntries(data, aliasMap, options, projectKeys);
     return;
   }
 
@@ -375,7 +381,11 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     if (options.copy) {
       printWarning('--copy only works with a single value, not a subtree.');
     }
-    displaySubtree(key, value, aliasMap, options);
+    let projectKeys: Set<string> | undefined;
+    if (!scope && findProjectFile()) {
+      projectKeys = new Set(Object.keys(getEntriesFlat('project')));
+    }
+    displaySubtree(key, value, aliasMap, options, projectKeys);
     return;
   }
 
