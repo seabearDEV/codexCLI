@@ -45,7 +45,11 @@ describe('Config', () => {
     });
 
     it('creates default config when file does not exist', () => {
-      (fs.existsSync as Mock).mockReturnValue(false);
+      (fs.statSync as Mock).mockImplementation(() => {
+        const err = new Error('ENOENT') as Error & { code: string };
+        err.code = 'ENOENT';
+        throw err;
+      });
 
       const config = loadConfig();
 

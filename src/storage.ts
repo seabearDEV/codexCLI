@@ -2,25 +2,9 @@ import { color } from './formatting';
 import { getNestedValue, setNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
 import { CodexData, CodexValue } from './types';
 import { debug } from './utils/debug';
-import { Scope, loadEntries, saveEntries, loadEntriesMerged, clearStoreCaches, findProjectFile } from './store';
+import { Scope, loadEntries, saveEntries, loadEntriesMerged, findProjectFile } from './store';
 
 export { Scope } from './store';
-
-export function clearDataCache(): void {
-  clearStoreCaches();
-}
-
-/**
- * Handle operation with consistent error handling
- */
-export function handleOperation<T>(operation: () => T, errorMessage: string): T | null {
-  try {
-    return operation();
-  } catch (error) {
-    handleError(errorMessage, error);
-    return null;
-  }
-}
 
 /**
  * Extract a human-readable message from an unknown error value

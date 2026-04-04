@@ -29,7 +29,7 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
   }
 
   // If only setting provided, show that setting's value
-  if (setting && !value) {
+  if (!value) {
     const currentValue = getConfigSetting(setting);
     if (currentValue !== null) {
       console.log(`${color.green(setting)}: ${currentValue}`);

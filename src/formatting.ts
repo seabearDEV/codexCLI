@@ -5,8 +5,16 @@ import { interpolate } from './utils/interpolate';
 import { interpretEscapes, visibleLength, wordWrap } from './utils/wordWrap';
 import { getBinaryName } from './utils/binaryName';
 
+let _colorEnabled: boolean | null = null;
+
 export function isColorEnabled(): boolean {
-  return loadConfig().colors !== false;
+  if (_colorEnabled === null) _colorEnabled = loadConfig().colors;
+  return _colorEnabled;
+}
+
+/** Reset cached color flag (for tests or after config changes). */
+export function resetColorCache(): void {
+  _colorEnabled = null;
 }
 
 /**

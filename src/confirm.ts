@@ -1,11 +1,7 @@
 import { debug } from './utils/debug';
-import { Scope, loadConfirmMap, saveConfirmMap, loadConfirmMapMerged, clearStoreCaches, findProjectFile } from './store';
+import { Scope, loadConfirmMap, saveConfirmMap, loadConfirmMapMerged, findProjectFile } from './store';
 
-export { Scope } from './store';
 
-export function clearConfirmCache(): void {
-  clearStoreCaches();
-}
 
 export function loadConfirmKeys(scope?: Scope | undefined): Record<string, true> {
   if (!scope || scope === 'auto') {

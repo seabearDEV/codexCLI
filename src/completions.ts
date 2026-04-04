@@ -87,142 +87,87 @@ const GLOBAL_FLAGS: Record<string, string> = {
   '-A': 'Show all scopes (project + global)',
 };
 
+// Define each command once, then reference for shortcuts
+const setDef: CommandDef = {
+  flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'], '--confirm': FLAG_DESCRIPTIONS['--confirm'], '--no-confirm': FLAG_DESCRIPTIONS['--no-confirm'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
+  argType: 'dataKeyPrefix',
+  description: 'Set an entry',
+};
+const getDef: CommandDef = {
+  flags: {
+    '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
+    '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
+    '--source': FLAG_DESCRIPTIONS['--source'], '-s': FLAG_DESCRIPTIONS['-s'],
+    '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+    '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
+    '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
+    '--values': FLAG_DESCRIPTIONS['--values'], '-v': FLAG_DESCRIPTIONS['-v'],
+    '--depth': FLAG_DESCRIPTIONS['--depth'], '-k': FLAG_DESCRIPTIONS['-k'],
+    '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
+    '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
+    '--all': FLAG_DESCRIPTIONS['--all'], '-A': FLAG_DESCRIPTIONS['-A'],
+  },
+  argType: 'dataKeyWithNamespaces',
+  description: 'List keys or retrieve entries',
+};
+const runDef: CommandDef = {
+  flags: {
+    '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
+    '--dry': FLAG_DESCRIPTIONS['--dry'],
+    '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
+    '--capture': FLAG_DESCRIPTIONS['--capture'], '-c': FLAG_DESCRIPTIONS['--capture'],
+    '--source': FLAG_DESCRIPTIONS['--source'],
+    '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
+  },
+  argType: 'dataKey',
+  description: 'Execute a stored command',
+};
+const findDef: CommandDef = {
+  flags: {
+    '--entries': FLAG_DESCRIPTIONS['--entries'], '-e': FLAG_DESCRIPTIONS['--entries'],
+    '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
+    '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
+    '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
+    '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
+  },
+  argType: null,
+  description: 'Find entries by key or value',
+};
+const copyDef: CommandDef = {
+  flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
+  argType: 'dataKey',
+  description: 'Copy an entry to a new key',
+};
+const editDef: CommandDef = {
+  flags: { '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
+  argType: 'dataKey',
+  description: 'Edit entry in $EDITOR',
+};
+const renameDef: CommandDef = {
+  flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Rename alias', '--set-alias': 'Set alias on renamed key', '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
+  argType: 'dataKey',
+  description: 'Rename an entry key or alias',
+};
+const removeDef: CommandDef = {
+  flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only', '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
+  argType: 'dataKey',
+  description: 'Remove an entry',
+};
+
 const CLI_TREE: Record<string, CommandDef> = {
-  set: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'], '--confirm': FLAG_DESCRIPTIONS['--confirm'], '--no-confirm': FLAG_DESCRIPTIONS['--no-confirm'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKeyPrefix',
-    description: 'Set an entry',
-  },
-  s: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--encrypt': FLAG_DESCRIPTIONS['--encrypt'], '-e': FLAG_DESCRIPTIONS['-e'], '--alias': FLAG_DESCRIPTIONS['--alias'], '--clear': FLAG_DESCRIPTIONS['--clear'], '-c': FLAG_DESCRIPTIONS['--clear'], '--confirm': FLAG_DESCRIPTIONS['--confirm'], '--no-confirm': FLAG_DESCRIPTIONS['--no-confirm'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKeyPrefix',
-    description: 'Set an entry',
-  },
-  get: {
-    flags: {
-      '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-      '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
-      '--source': FLAG_DESCRIPTIONS['--source'], '-s': FLAG_DESCRIPTIONS['-s'],
-      '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
-      '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
-      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
-      '--values': FLAG_DESCRIPTIONS['--values'], '-v': FLAG_DESCRIPTIONS['-v'],
-      '--depth': FLAG_DESCRIPTIONS['--depth'], '-k': FLAG_DESCRIPTIONS['-k'],
-      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
-      '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
-      '--all': FLAG_DESCRIPTIONS['--all'], '-A': FLAG_DESCRIPTIONS['-A'],
-    },
-    argType: 'dataKeyWithNamespaces',
-    description: 'List keys or retrieve entries',
-  },
-  g: {
-    flags: {
-      '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-      '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
-      '--source': FLAG_DESCRIPTIONS['--source'], '-s': FLAG_DESCRIPTIONS['-s'],
-      '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
-      '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
-      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
-      '--values': FLAG_DESCRIPTIONS['--values'], '-v': FLAG_DESCRIPTIONS['-v'],
-      '--depth': FLAG_DESCRIPTIONS['--depth'], '-k': FLAG_DESCRIPTIONS['-k'],
-      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
-      '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
-      '--all': FLAG_DESCRIPTIONS['--all'], '-A': FLAG_DESCRIPTIONS['-A'],
-    },
-    argType: 'dataKeyWithNamespaces',
-    description: 'List keys or retrieve entries',
-  },
-  run: {
-    flags: {
-      '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
-      '--dry': FLAG_DESCRIPTIONS['--dry'],
-      '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
-      '--capture': FLAG_DESCRIPTIONS['--capture'], '-c': FLAG_DESCRIPTIONS['--capture'],
-      '--source': FLAG_DESCRIPTIONS['--source'],
-      '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
-    },
-    argType: 'dataKey',
-    description: 'Execute a stored command',
-  },
-  r: {
-    flags: {
-      '--yes': FLAG_DESCRIPTIONS['--yes'], '-y': FLAG_DESCRIPTIONS['-y'],
-      '--dry': FLAG_DESCRIPTIONS['--dry'],
-      '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
-      '--capture': FLAG_DESCRIPTIONS['--capture'], '-c': FLAG_DESCRIPTIONS['--capture'],
-      '--source': FLAG_DESCRIPTIONS['--source'],
-      '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
-    },
-    argType: 'dataKey',
-    description: 'Execute a stored command',
-  },
+  set: setDef, s: setDef,
+  get: getDef, g: getDef,
+  run: runDef, r: runDef,
   init: {
     flags: { '--remove': 'Remove the project file' },
     argType: null,
     description: 'Create project-scoped data file',
   },
-  find: {
-    flags: {
-      '--entries': FLAG_DESCRIPTIONS['--entries'], '-e': FLAG_DESCRIPTIONS['--entries'],
-      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
-      '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
-      '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
-    },
-    argType: null,
-    description: 'Find entries by key or value',
-  },
-  f: {
-    flags: {
-      '--entries': FLAG_DESCRIPTIONS['--entries'], '-e': FLAG_DESCRIPTIONS['--entries'],
-      '--aliases': FLAG_DESCRIPTIONS['--aliases'], '-a': FLAG_DESCRIPTIONS['--aliases'],
-      '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-      '--json': FLAG_DESCRIPTIONS['--json'], '-j': FLAG_DESCRIPTIONS['-j'],
-      '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
-    },
-    argType: null,
-    description: 'Find entries by key or value',
-  },
-  copy: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Copy an entry to a new key',
-  },
-  cp: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Copy an entry to a new key',
-  },
-  edit: {
-    flags: { '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Edit entry in $EDITOR',
-  },
-  e: {
-    flags: { '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'], '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Edit entry in $EDITOR',
-  },
-  rename: {
-    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Rename alias', '--set-alias': 'Set alias on renamed key', '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Rename an entry key or alias',
-  },
-  rn: {
-    flags: { '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Rename alias', '--set-alias': 'Set alias on renamed key', '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Rename an entry key or alias',
-  },
-  remove: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only', '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Remove an entry',
-  },
-  rm: {
-    flags: { '--force': FLAG_DESCRIPTIONS['--force'], '-f': FLAG_DESCRIPTIONS['-f'], '--alias': FLAG_DESCRIPTIONS['--alias'], '-a': 'Remove alias only', '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
-    argType: 'dataKey',
-    description: 'Remove an entry',
-  },
+  find: findDef, f: findDef,
+  copy: copyDef, cp: copyDef,
+  edit: editDef, e: editDef,
+  rename: renameDef, rn: renameDef,
+  remove: removeDef, rm: removeDef,
   config: {
     flags: {},
     argType: null,

@@ -15,7 +15,6 @@ function isDev(): boolean {
 
 // Add caching for path resolution
 let dataDirectoryCache: string | null = null;
-let dataFilePathCache: string | null = null;
 
 /**
  * Get the directory where data files should be stored
@@ -34,35 +33,20 @@ export function getDataDirectory(): string {
  * 
  * @returns {string} Path to the data directory
  */
+let dataDirEnsured = false;
+
 export function ensureDataDirectoryExists(): string {
   const dataDir = getDataDirectory();
 
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  if (!dataDirEnsured) {
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+    }
+    dataDirEnsured = true;
   }
 
   return dataDir;
 }
-
-/**
- * Returns the path to the entries file
- *
- * @returns {string} Path to the entries.json file
- */
-export function getDataFilePath(): string {
-  if (dataFilePathCache === null) {
-    const dir = getDataDirectory();
-    const newPath = path.join(dir, 'entries.json');
-    const oldPath = path.join(dir, 'data.json');
-    // Auto-migrate: rename data.json -> entries.json if the old file exists
-    if (!fs.existsSync(newPath) && fs.existsSync(oldPath)) {
-      fs.renameSync(oldPath, newPath);
-    }
-    dataFilePathCache = newPath;
-  }
-  return dataFilePathCache;
-}
-
 
 /**
  * Get the path to the aliases file

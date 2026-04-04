@@ -3,14 +3,14 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { loadData, handleError, getValue, setValue, removeValue, Scope } from '../storage';
-import { flattenObject } from '../utils/objectPath';
-import { findProjectFile } from '../store';
+import { flattenObject, setNestedValue } from '../utils/objectPath';
+import { findProjectFile, loadEntries, saveEntries } from '../store';
 import { CodexValue } from '../types';
 import { displayTree } from '../formatting';
 import { color } from '../formatting';
 import { execSync, spawnSync } from 'child_process';
 import { ensureDataDirectoryExists } from '../utils/paths';
-import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, resolveKey, renameAlias, removeAlias } from '../alias';
+import { buildKeyToAliasMap, setAlias, removeAliasesForKey, loadAliases, saveAliases, resolveKey, renameAlias } from '../alias';
 import { hasConfirm, setConfirm, removeConfirm, removeConfirmForKey } from '../confirm';
 import { debug } from '../utils/debug';
 import { GetOptions } from '../types';
@@ -342,9 +342,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   // For single-key lookups, use auto fallthrough (project → global)
   const lookupScope = toScope(options.global);
 
-  const aliasMap = buildKeyToAliasMap();
-
-  // --json output mode
+  // --json output mode (no alias map needed)
   if (options.json) {
     if (!key) {
       if (options.all && hasProject) {
@@ -380,6 +378,8 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     }
     return;
   }
+
+  const aliasMap = buildKeyToAliasMap();
 
   if (!key) {
     // -a → aliases only
@@ -621,11 +621,13 @@ export async function copyEntry(sourceKey: string, destKey: string, force = fals
     if (typeof value === 'string') {
       setValue(destKey, value, scope);
     } else {
-      const flat = flattenObject({ [sourceKey]: value });
-      for (const [flatKey, flatVal] of Object.entries(flat)) {
-        const suffix = flatKey.slice(sourceKey.length);
-        setValue(destKey + suffix, String(flatVal), scope);
+      // Batch: load once, set all leaves, save once (instead of O(L) file writes)
+      const effectiveScope = scope ?? 'auto';
+      const data = loadEntries(effectiveScope);
+      for (const [flatKey, flatVal] of Object.entries(flattenObject({ [sourceKey]: value }))) {
+        setNestedValue(data, destKey + flatKey.slice(sourceKey.length), String(flatVal));
       }
+      saveEntries(data, effectiveScope);
     }
 
     printSuccess(`Entry '${sourceKey}' copied to '${destKey}'.`);
@@ -673,28 +675,32 @@ export function renameEntry(oldKey: string, newKey: string, aliasMode = false, n
   if (typeof value === 'string') {
     setValue(newKey, value, scope);
   } else {
-    // For subtrees, flatten and re-set each leaf under the new prefix
-    const flat = flattenObject({ [oldKey]: value });
-    for (const [flatKey, flatVal] of Object.entries(flat)) {
-      const suffix = flatKey.slice(oldKey.length);
-      setValue(newKey + suffix, String(flatVal), scope);
+    // Batch: load once, set all leaves, save once (instead of O(L) file writes)
+    const effectiveScope = scope ?? 'auto';
+    const data = loadEntries(effectiveScope);
+    for (const [flatKey, flatVal] of Object.entries(flattenObject({ [oldKey]: value }))) {
+      setNestedValue(data, newKey + flatKey.slice(oldKey.length), String(flatVal));
     }
+    saveEntries(data, effectiveScope);
   }
   removeValue(oldKey, scope);
 
   // Update aliases: re-point any alias targeting oldKey (or children) to newKey
+  // Batch: mutate in-place and save once (instead of O(A*4) file I/O)
   const aliases = loadAliases(scope);
   const oldPrefix = oldKey + '.';
+  let aliasesChanged = false;
   for (const [alias, target] of Object.entries(aliases)) {
-    if (typeof target !== 'string') continue;
     if (target === oldKey) {
-      removeAlias(alias, scope);
-      setAlias(alias, newKey, scope);
+      aliases[alias] = newKey;
+      aliasesChanged = true;
     } else if (target.startsWith(oldPrefix)) {
-      const newTarget = newKey + target.slice(oldKey.length);
-      removeAlias(alias, scope);
-      setAlias(alias, newTarget, scope);
+      aliases[alias] = newKey + target.slice(oldKey.length);
+      aliasesChanged = true;
     }
+  }
+  if (aliasesChanged) {
+    saveAliases(aliases, scope);
   }
 
   // Move confirm metadata

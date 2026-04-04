@@ -1,11 +1,7 @@
 import { debug } from './utils/debug';
-import { Scope, loadAliasMap, saveAliasMap, loadAliasMapMerged, clearStoreCaches, findProjectFile } from './store';
+import { Scope, loadAliasMap, saveAliasMap, loadAliasMapMerged, findProjectFile } from './store';
 
-export { Scope } from './store';
 
-export function clearAliasCache(): void {
-  clearStoreCaches();
-}
 
 export function loadAliases(scope?: Scope | undefined): Record<string, string> {
   if (!scope || scope === 'auto') {
@@ -97,16 +93,18 @@ export function renameAlias(oldName: string, newName: string, scope?: Scope | un
 // Resolve a key that might be an alias
 // With 'auto' scope: checks project aliases first, then global
 export function resolveKey(key: string, scope?: Scope | undefined): string {
+  // Strip trailing colon (CLI tab-completion artifact)
+  const cleanKey = key.replace(/:$/, '');
   if (!scope || scope === 'auto') {
     const merged = loadAliasMapMerged();
-    const resolved = merged[key] ?? key;
+    const resolved = merged[cleanKey] ?? cleanKey;
     if (resolved !== key) {
       debug(`Alias resolved: "${key}" -> "${resolved}"`);
     }
     return resolved;
   }
   const aliases = loadAliasMap(scope);
-  const resolved = aliases[key] ?? key;
+  const resolved = aliases[cleanKey] ?? cleanKey;
   if (resolved !== key) {
     debug(`Alias resolved: "${key}" -> "${resolved}"`);
   }
@@ -131,7 +129,7 @@ function removeAliasesFromScope(key: string, scope: 'project' | 'global'): void 
   const prefix = key + '.';
   let changed = false;
   for (const [alias, target] of Object.entries(aliases)) {
-    if (typeof target === 'string' && (target === key || target.startsWith(prefix))) {
+    if (target === key || target.startsWith(prefix)) {
       delete aliases[alias];
       changed = true;
     }

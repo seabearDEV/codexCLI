@@ -5,7 +5,6 @@ import {
   removeConfirm,
   hasConfirm,
   removeConfirmForKey,
-  clearConfirmCache
 } from '../confirm';
 
 vi.mock('../store', () => {
@@ -136,10 +135,4 @@ describe('Confirm Metadata', () => {
     });
   });
 
-  describe('clearConfirmCache', () => {
-    it('delegates to clearStoreCaches', () => {
-      clearConfirmCache();
-      expect(clearStoreCaches).toHaveBeenCalled();
-    });
-  });
 });
