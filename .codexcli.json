@@ -32,6 +32,7 @@
       "interpolation": "src/utils/interpolate.ts — ${key} value refs, $(key) exec refs, ${key:-default} fallbacks, ${key:?error} required checks. Brace-aware parser for nested defaults. Recursive with circular ref detection, max depth 10.",
       "staleness": "_meta section in data.json tracks last-modified timestamp per key. touchMeta/removeMeta in store.ts, auto-called by setValue/removeValue. ccli stale [days], codex_stale MCP tool, codex_context shows [Nd] age tags for entries >30d old.",
       "lint": "src/commands/lint.ts — ccli lint checks entries against recommended namespace schema (project/commands/arch/conventions/context/files/deps/system). Custom namespaces via _schema.namespaces in .codexcli.json."
+      "llmInstructions": "src/llm-instructions.ts — DEFAULT_LLM_INSTRUCTIONS (immutable built-in), getCustomInstructions() reads system.llm.instructions from store, getEffectiveInstructions() assembles defaults + custom as PROJECT CONTEXT appendix. CLI: ccli config llm-instructions [--default]"
     },
     "conventions": {
       "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",

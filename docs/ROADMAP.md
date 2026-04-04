@@ -17,7 +17,7 @@ CodexCLI is a structured, persistent knowledge base for software projects — ac
 - [x] Shell tab-completion (Bash, Zsh) with dynamic key completion
 - [x] Shell wrapper for `cd`/`export` in current shell
 - [x] Per-entry confirmation (`--confirm` / `--no-confirm`)
-- [x] MCP server with 16 tools for AI agent integration
+- [x] MCP server with 17 tools for AI agent integration
 - [x] LLM instructions (built-in defaults, user-overridable via `system.llm.instructions`)
 - [x] Depth-limited browsing (`--depth` / `-k`)
 - [x] Keys-only default output with `--values` flag
@@ -47,17 +47,48 @@ CodexCLI is a structured, persistent knowledge base for software projects — ac
 - [x] Fixed DEBUG check inconsistency across modules
 - [x] Removed dead code (~100 lines), deduplicated CLI_TREE shortcuts
 
+### v0.9.x (in review)
+- [x] Conditional interpolation: `${key:-default}` and `${key:?error}` ([#14](https://github.com/seabearDEV/codexCLI/issues/14), [PR #31](https://github.com/seabearDEV/codexCLI/pull/31))
+- [x] MCP telemetry: usage tracking, `codex_stats` tool, `ccli stats` command ([PR #32](https://github.com/seabearDEV/codexCLI/pull/32))
+- [x] Configurable backup rotation: `max_backups` config setting ([#10](https://github.com/seabearDEV/codexCLI/issues/10), [PR #33](https://github.com/seabearDEV/codexCLI/pull/33))
+- [x] Init scaffolding: `ccli init --scaffold` for Node.js, Go, Python, Rust ([PR #33](https://github.com/seabearDEV/codexCLI/pull/33))
+- [x] LLM instructions refactor: append model, `ccli config llm-instructions` ([PR #34](https://github.com/seabearDEV/codexCLI/pull/34))
+
 ---
 
-## In Progress / Next Up
+## v1.0.0
+
+The 1.0 milestone represents a stable, feature-complete core — reliable for daily use by both humans and AI agents.
+
+### Stored Command Chains / Macros
+Store reusable sequences of key references that `run` resolves and executes as a chain.
+
+- [ ] Syntax for key references in stored values (e.g., space-separated keys or a dedicated marker) ([#16](https://github.com/seabearDEV/codexCLI/issues/16))
+- [ ] Recursion depth limits and interaction with `--dry`, `--confirm`, interpolation
+
+### Advanced Search
+Make `find` more powerful for large knowledge bases.
+
+- [ ] Regex search patterns (`ccli find --regex "prod.*ip"`) ([#9](https://github.com/seabearDEV/codexCLI/issues/9))
+- [ ] Field-specific search: key-only or value-only filtering
 
 ### Staleness Detection
-Entries go stale as code evolves. The knowledge base needs signals to help agents (and humans) know when to trust stored data.
+Entries go stale as code evolves. Help agents and humans know when to trust stored data.
 
 - [ ] Add optional `_meta` section to data.json tracking last-modified timestamps per key
 - [ ] `codex_context` includes age indicator for old entries (e.g., `[30d]` prefix)
 - [ ] `ccli get --stale <days>` shows entries not updated in N days
 - [ ] MCP tool: `codex_stale` returns entries older than a threshold
+
+### Schema Validation
+Help users and agents follow the recommended schema.
+
+- [ ] `ccli lint` warns about entries outside recognized namespaces
+- [ ] Configurable schema rules in `.codexcli.json` (optional `_schema` section)
+
+---
+
+## Post-1.0
 
 ### Git-Aware Freshness
 Connect stored knowledge to the files it describes. When code changes, flag related entries.
@@ -66,31 +97,9 @@ Connect stored knowledge to the files it describes. When code changes, flag rela
 - [ ] `ccli check` compares entry source files against git diff to flag potentially stale entries
 - [ ] MCP tool: `codex_check` returns entries whose source files have changed since last update
 
-### Schema Validation
-Help users and agents follow the recommended schema.
-
-- [ ] `ccli lint` warns about entries outside recognized namespaces
-- [ ] Configurable schema rules in `.codexcli.json` (optional `_schema` section)
-- [ ] MCP tool descriptions include namespace hints
-
-### Init Scaffolding
-Make project setup faster by auto-populating from existing project files.
-
-- [ ] `ccli init --scaffold` reads `package.json`, `README.md`, `Makefile`, etc. and populates `project.*`, `commands.*`, `deps.*`
-- [ ] Interactive mode: presents discovered info and asks which to keep
-- [ ] Works with non-Node projects (detect Go, Python, Rust, etc.)
-
-### Interpolation Enhancements
-Expand the `${key}` interpolation system with fallbacks and stored command chains.
-
-- [ ] Conditional interpolation: `${ref:-default}` and `${ref:?error}` syntax for fallback values ([#14](https://github.com/seabearDEV/codexCLI/issues/14))
-- [ ] Stored command chains / macros: store a list of key references that `run` resolves and executes as a chain ([#16](https://github.com/seabearDEV/codexCLI/issues/16))
-
-### Search & Navigation
-Make finding and selecting entries faster and more powerful.
-
-- [ ] Advanced search: regex patterns, field-specific search (key-only, value-only), boolean operators ([#9](https://github.com/seabearDEV/codexCLI/issues/9))
-- [ ] Fuzzy finder integration: `ccli get --interactive` or `ccli find --fzf` for interactive key selection ([#13](https://github.com/seabearDEV/codexCLI/issues/13))
+### Search & Navigation Enhancements
+- [ ] Fuzzy finder integration: `ccli get --interactive` or `ccli find --fzf` ([#13](https://github.com/seabearDEV/codexCLI/issues/13))
+- [ ] Boolean search operators (AND, OR, NOT)
 
 ### Richer Data Types
 Currently all values are strings. Some knowledge is better expressed as lists or structured data.
@@ -99,16 +108,11 @@ Currently all values are strings. Some knowledge is better expressed as lists or
 - [ ] Support multi-line values with better display formatting
 - [ ] `codex_get` returns typed JSON when values are structured
 
-### Data Management
-Tools for maintaining the knowledge base over time.
-
-- [ ] Backup rotation: automatic pruning with configurable retention (keep last N backups) ([#10](https://github.com/seabearDEV/codexCLI/issues/10))
-
 ### Team Workflows
 Make the knowledge base useful for teams, not just solo developers.
 
 - [ ] Entry attribution: track who (human or AI) last modified each entry
-- [ ] `ccli log` shows history of changes / audit trail (like `git log` for the knowledge base) ([#12](https://github.com/seabearDEV/codexCLI/issues/12))
+- [ ] `ccli log` shows history of changes / audit trail ([#12](https://github.com/seabearDEV/codexCLI/issues/12))
 - [ ] Merge conflict handling for `.codexcli.json` (custom merge driver or guidance)
 - [ ] `ccli diff` compares local vs committed entries
 
