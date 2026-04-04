@@ -3,12 +3,12 @@ import { getConfigFilePath, ensureDataDirectoryExists } from './utils/paths';
 import { atomicWriteFileSync } from './utils/atomicWrite';
 
 // Define the type for configuration
-export interface Config {
+interface Config {
   colors: boolean;
   theme: string;
 }
 
-export const VALID_THEMES = ['default', 'dark', 'light'] as const;
+const VALID_THEMES = ['default', 'dark', 'light'] as const;
 export const VALID_CONFIG_KEYS = ['colors', 'theme'] as const;
 
 // Default configuration
@@ -44,12 +44,6 @@ export function loadConfig(): Config {
       }
     }
 
-    if (!fs.existsSync(configPath)) {
-      // Create with default values if it doesn't exist
-      saveConfig(defaultConfig);
-      return defaultConfig;
-    }
-
     const currentMtime = fs.statSync(configPath).mtimeMs;
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
 
@@ -64,6 +58,11 @@ export function loadConfig(): Config {
 
     return result;
   } catch (error) {
+    // File doesn't exist — create with defaults
+    if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'ENOENT') {
+      saveConfig(defaultConfig);
+      return defaultConfig;
+    }
     console.error('Error loading configuration:', error);
     return defaultConfig;
   }

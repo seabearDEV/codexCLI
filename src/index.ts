@@ -71,7 +71,7 @@ codexCLI
           process.exitCode = 1;
           return;
         }
-        await commands.setEntry(resolveKey(k.replace(/:$/, '')), v, options.force);
+        await commands.setEntry(resolveKey(k), v, options.force);
       }
       return;
     }
@@ -119,7 +119,7 @@ codexCLI
     } else {
       value = valueArray.join(' ');
     }
-    await commands.setEntry(resolveKey(key.replace(/:$/, '')), value, options.force, options.encrypt, options.alias, options.confirm, options.global);
+    await commands.setEntry(resolveKey(key), value, options.force, options.encrypt, options.alias, options.confirm, options.global);
     if (options.clear) {
       process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
     }
@@ -143,7 +143,7 @@ codexCLI
   .option('-A, --all', 'Show entries from all scopes (project + global)')
   .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
     if (key) {
-      key = resolveKey(key.replace(/:$/, ''));
+      key = resolveKey(key);
     }
     await withPager(() => commands.getEntry(key, options));
   });
@@ -171,7 +171,7 @@ codexCLI
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-G, --global', 'Target global data store')
   .action(async (source: string, dest: string, options: { force?: boolean, global?: boolean }) => {
-    await commands.copyEntry(resolveKey(source.replace(/:$/, '')), dest, options.force, options.global);
+    await commands.copyEntry(resolveKey(source), dest, options.force, options.global);
   });
 
 // Find command
@@ -202,7 +202,7 @@ codexCLI
   .option('-d, --decrypt', 'Decrypt an encrypted value before editing')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, options: { decrypt?: boolean, global?: boolean }) => {
-    await commands.editEntry(resolveKey(key.replace(/:$/, '')), options);
+    await commands.editEntry(resolveKey(key), options);
   });
 
 // Rename command
@@ -217,7 +217,7 @@ codexCLI
     if (options.alias) {
       commands.renameEntry(oldName, newName, true, undefined, options.global);
     } else {
-      commands.renameEntry(resolveKey(oldName.replace(/:$/, '')), newName, false, options.setAlias, options.global);
+      commands.renameEntry(resolveKey(oldName), newName, false, options.setAlias, options.global);
     }
   });
 
@@ -240,7 +240,7 @@ codexCLI
         process.exitCode = 1;
       }
     } else {
-      await commands.removeEntry(resolveKey(key.replace(/:$/, '')), options.force, options.global);
+      await commands.removeEntry(resolveKey(key), options.force, options.global);
     }
   });
 

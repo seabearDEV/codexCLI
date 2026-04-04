@@ -1,4 +1,4 @@
-import { handleError, handleOperation, loadData, saveData, getErrorMessage, clearDataCache, getValue, setValue, removeValue, getEntriesFlat } from '../storage';
+import { handleError, loadData, saveData, getErrorMessage, getValue, setValue, removeValue, getEntriesFlat } from '../storage';
 
 vi.mock('../store', () => ({
   loadEntries: vi.fn(() => ({})),
@@ -82,23 +82,7 @@ describe('Storage', () => {
     });
   });
 
-  describe('handleOperation', () => {
-    it('returns result of successful operation', () => {
-      const result = handleOperation(() => 42, 'test error');
-      expect(result).toBe(42);
-    });
 
-    it('returns null and calls handleError when operation throws', () => {
-      const result = handleOperation(() => {
-        throw new Error('boom');
-      }, 'operation failed');
-
-      expect(result).toBeNull();
-      expect(console.error).toHaveBeenCalledWith(
-        expect.stringContaining('operation failed')
-      );
-    });
-  });
 
   describe('getErrorMessage', () => {
     it('extracts message from an Error instance', () => {
@@ -163,10 +147,4 @@ describe('Storage', () => {
     });
   });
 
-  describe('clearDataCache', () => {
-    it('delegates to clearStoreCaches', () => {
-      clearDataCache();
-      expect(clearStoreCaches).toHaveBeenCalled();
-    });
-  });
 });

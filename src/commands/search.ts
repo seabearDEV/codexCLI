@@ -10,7 +10,7 @@ import { interpolate } from '../utils/interpolate';
 
 function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: string): Record<string, string> {
   const matches: Record<string, string> = {};
-  Object.entries(flattenedData).forEach(([key, value]) => {
+  for (const [key, value] of Object.entries(flattenedData)) {
     const encrypted = isEncrypted(value);
     let resolved = value;
     if (!encrypted) {
@@ -22,20 +22,20 @@ function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: 
     if (keyMatches || valueMatches) {
       matches[key] = encrypted ? '[encrypted]' : resolved;
     }
-  });
+  }
   return matches;
 }
 
 function searchAliasEntries(aliases: Record<string, string>, lcSearchTerm: string): Record<string, string> {
   const matches: Record<string, string> = {};
-  Object.entries(aliases).forEach(([aliasName, targetPath]) => {
+  for (const [aliasName, targetPath] of Object.entries(aliases)) {
     const nameMatches = aliasName.toLowerCase().includes(lcSearchTerm);
-    const pathMatches = String(targetPath).toLowerCase().includes(lcSearchTerm);
+    const pathMatches = targetPath.toLowerCase().includes(lcSearchTerm);
 
     if (nameMatches || pathMatches) {
-      matches[aliasName] = String(targetPath);
+      matches[aliasName] = targetPath;
     }
-  });
+  }
   return matches;
 }
 

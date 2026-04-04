@@ -9,7 +9,7 @@ import { debug } from './utils/debug';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-export interface UnifiedData {
+interface UnifiedData {
   entries: CodexData;
   aliases: Record<string, string>;
   confirm: Record<string, true>;
@@ -17,7 +17,6 @@ export interface UnifiedData {
 
 export type Scope = 'project' | 'global' | 'auto';
 
-const EMPTY_DATA: UnifiedData = { entries: {}, aliases: {}, confirm: {} };
 
 // ── ScopedStore ────────────────────────────────────────────────────────
 
@@ -25,6 +24,7 @@ interface ScopedStore {
   load(): UnifiedData;
   save(data: UnifiedData): void;
   clear(): void;
+  prime(data: UnifiedData, mtime: number): void;
 }
 
 function createScopedStore(getFilePath: () => string, ensureDir: () => void): ScopedStore {
@@ -50,8 +50,6 @@ function createScopedStore(getFilePath: () => string, ensureDir: () => void): Sc
       }
     }
 
-    if (!fs.existsSync(filePath)) return { ...EMPTY_DATA, entries: {}, aliases: {}, confirm: {} };
-
     try {
       const currentMtime = fs.statSync(filePath).mtimeMs;
       const raw = fs.readFileSync(filePath, 'utf8');
@@ -67,10 +65,14 @@ function createScopedStore(getFilePath: () => string, ensureDir: () => void): Sc
       cacheMtime = currentMtime;
       return result;
     } catch (error) {
+      // File doesn't exist — return empty data
+      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'ENOENT') {
+        return { entries: {}, aliases: {}, confirm: {} };
+      }
       if (!(error instanceof SyntaxError && error.message.includes('Unexpected end'))) {
         console.error('Error loading data:', error);
       }
-      return { ...EMPTY_DATA, entries: {}, aliases: {}, confirm: {} };
+      return { entries: {}, aliases: {}, confirm: {} };
     }
   }
 
@@ -93,7 +95,12 @@ function createScopedStore(getFilePath: () => string, ensureDir: () => void): Sc
     }
   }
 
-  return { load, save, clear };
+  function prime(data: UnifiedData, mtime: number): void {
+    cache = data;
+    cacheMtime = mtime;
+  }
+
+  return { load, save, clear, prime };
 }
 
 // ── Global store singleton ─────────────────────────────────────────────
@@ -105,7 +112,10 @@ function getGlobalStore(): ScopedStore {
   if (!globalStore) {
     globalStore = createScopedStore(getUnifiedDataFilePath, ensureDataDirectoryExists);
     if (!migrationDone) {
-      migrateToUnifiedFile();
+      const primed = migrateToUnifiedFile();
+      if (primed) {
+        globalStore.prime(primed.data, primed.mtime);
+      }
       migrationDone = true;
     }
   }
@@ -127,12 +137,16 @@ function getProjectStore(): ScopedStore | null {
 
   // If the path changed (shouldn't normally happen within one process), recreate
   if (projectStorePath !== projectFile) {
+    let dirEnsured = false;
     projectStore = createScopedStore(
       () => projectFile,
       () => {
-        const dir = path.dirname(projectFile);
-        if (!fs.existsSync(dir)) {
-          fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+        if (!dirEnsured) {
+          const dir = path.dirname(projectFile);
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+          }
+          dirEnsured = true;
         }
       }
     );
@@ -144,7 +158,7 @@ function getProjectStore(): ScopedStore | null {
 
 // ── Scope resolution ───────────────────────────────────────────────────
 
-export function getEffectiveScope(scope?: Scope | undefined): 'project' | 'global' {
+function getEffectiveScope(scope?: Scope | undefined): 'project' | 'global' {
   if (scope === 'project') return 'project';
   if (scope === 'global') return 'global';
   // auto: use project if available
@@ -237,34 +251,43 @@ export function clearStoreCaches(): void {
 
 // ── Migration ──────────────────────────────────────────────────────────
 
-function migrateToUnifiedFile(): void {
+function migrateToUnifiedFile(): { data: UnifiedData; mtime: number } | null {
   const unifiedPath = getUnifiedDataFilePath();
 
   // If unified file already exists, check if it's the new format
-  if (fs.existsSync(unifiedPath)) {
-    try {
-      const raw = fs.readFileSync(unifiedPath, 'utf8');
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if ('entries' in parsed && typeof parsed.entries === 'object') {
-        // Already in new format
-        return;
-      }
-      // Legacy data.json (entries-only from pre-rename era)
-      // Treat entire content as entries
-      debug('Migrating legacy data.json (entries-only) to unified format');
-      const legacyEntries = parsed as CodexData;
-      const unified: UnifiedData = {
-        entries: legacyEntries,
-        aliases: readJsonFileOr<Record<string, string>>(getAliasFilePath()),
-        confirm: readJsonFileOr<Record<string, true>>(getConfirmFilePath()),
+  try {
+    const stat = fs.statSync(unifiedPath);
+    const raw = fs.readFileSync(unifiedPath, 'utf8');
+    const parsed = (raw?.trim() ? JSON.parse(raw) : {}) as Record<string, unknown>;
+    if ('entries' in parsed && typeof parsed.entries === 'object') {
+      // Already in new format — return parsed data to prime the store cache
+      return {
+        data: {
+          entries: (parsed.entries ?? {}) as CodexData,
+          aliases: (parsed.aliases ?? {}) as Record<string, string>,
+          confirm: (parsed.confirm ?? {}) as Record<string, true>,
+        },
+        mtime: stat.mtimeMs,
       };
-      ensureDataDirectoryExists();
-      saveJsonSorted(unifiedPath, unified as unknown as Record<string, unknown>);
-      backupOldFile(getAliasFilePath());
-      backupOldFile(getConfirmFilePath());
-      return;
-    } catch {
-      // Can't parse — will be overwritten by migration
+    }
+    // Legacy data.json (entries-only from pre-rename era)
+    // Treat entire content as entries
+    debug('Migrating legacy data.json (entries-only) to unified format');
+    const legacyEntries = parsed as CodexData;
+    const unified: UnifiedData = {
+      entries: legacyEntries,
+      aliases: readJsonFileOr<Record<string, string>>(getAliasFilePath()),
+      confirm: readJsonFileOr<Record<string, true>>(getConfirmFilePath()),
+    };
+    ensureDataDirectoryExists();
+    saveJsonSorted(unifiedPath, unified as unknown as Record<string, unknown>);
+    backupOldFile(getAliasFilePath());
+    backupOldFile(getConfirmFilePath());
+    return null;
+  } catch (error) {
+    // File doesn't exist — fall through to check old separate files
+    if (!(error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'ENOENT')) {
+      // Non-ENOENT error (parse failure, etc.) — fall through to migration
     }
   }
 
@@ -282,7 +305,7 @@ function migrateToUnifiedFile(): void {
 
   if (!hasEntries && !hasOldData && !hasAliases && !hasConfirm) {
     // Fresh install, nothing to migrate
-    return;
+    return null;
   }
 
   debug('Migrating separate files to unified data.json');
@@ -308,6 +331,7 @@ function migrateToUnifiedFile(): void {
   if (hasOldData && !hasEntries) backupOldFile(oldDataPath);
   if (hasAliases) backupOldFile(aliasPath);
   if (hasConfirm) backupOldFile(confirmPath);
+  return null;
 }
 
 function readJsonFileOr<T>(filePath: string): T {

@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import { getCompletions, generateBashScript, generateZshScript, installCompletions, CompletionItem } from '../completions';
-import { clearDataCache } from '../storage';
-import { clearAliasCache } from '../alias';
+import { clearStoreCaches } from '../store';
 import { clearConfigCache } from '../config';
 
 vi.mock('fs', () => {
@@ -25,7 +24,6 @@ vi.mock('fs', () => {
 vi.mock('../utils/paths', () => ({
   getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
   getDataDirectory: vi.fn(() => '/mock'),
-  getDataFilePath: vi.fn(() => '/mock/entries.json'),
   getAliasFilePath: vi.fn(() => '/mock/aliases.json'),
   getConfirmFilePath: vi.fn(() => '/mock/confirm.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
@@ -50,8 +48,7 @@ describe('Completions', () => {
   beforeEach(() => {
     originalArgv1 = process.argv[1];
     process.argv[1] = '/usr/local/bin/ccli';
-    clearDataCache();
-    clearAliasCache();
+    clearStoreCaches();
     clearConfigCache();
   });
 

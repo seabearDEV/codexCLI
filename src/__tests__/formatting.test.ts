@@ -1,11 +1,15 @@
 import chalk from 'chalk';
-import { formatTree, showHelp, displayTree, formatKeyValue, colorizePathByLevels, color, isColorEnabled, highlightMatch } from '../formatting';
+import { formatTree, showHelp, displayTree, formatKeyValue, colorizePathByLevels, color, isColorEnabled, highlightMatch, resetColorCache } from '../formatting';
 import { loadConfig } from '../config';
 
 // Mock config to avoid file-system dependency
 vi.mock('../config', () => ({
   loadConfig: vi.fn(() => ({ colors: false, theme: 'default' })),
 }));
+
+afterEach(() => {
+  resetColorCache();
+});
 
 // Mock fs so path utilities don't touch the real filesystem
 vi.mock('fs', () => {

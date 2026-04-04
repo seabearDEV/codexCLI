@@ -4,4 +4,3 @@ export { isEncrypted, encryptValue, decryptValue, maskEncryptedValues } from './
 export { interpretEscapes, stripAnsi, visibleLength, wordWrap } from './wordWrap';
 export { interpolate, interpolateObject } from './interpolate';
 export { saveJsonSorted } from './saveJsonSorted';
-export { createCachedStore } from './cachedStore';

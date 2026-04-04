@@ -18,9 +18,7 @@ import { displayAliases } from '../commands/helpers';
 import { encryptValue, isEncrypted } from '../utils/crypto';
 import { copyToClipboard } from '../utils/clipboard';
 import { stripAnsi } from '../utils/wordWrap';
-import { clearDataCache } from '../storage';
-import { clearAliasCache } from '../alias';
-import { clearConfirmCache } from '../confirm';
+import { clearStoreCaches } from '../store';
 import { clearConfigCache } from '../config';
 import type { CodexData } from '../types';
 
@@ -114,9 +112,7 @@ describe('Commands', () => {
   beforeEach(() => {
     // Reset mocks before each test
     vi.resetAllMocks();
-    clearDataCache();
-    clearAliasCache();
-    clearConfirmCache();
+    clearStoreCaches();
     clearConfigCache();
     console.log = vi.fn();
     console.error = vi.fn();

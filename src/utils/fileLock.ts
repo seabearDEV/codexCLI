@@ -10,7 +10,7 @@ const _sleepBuf = new Int32Array(new SharedArrayBuffer(4));
  * Retries with backoff if the lock is held by another process.
  * Automatically breaks stale locks (older than LOCK_STALE_MS).
  */
-export function acquireLock(filePath: string, maxRetries = 5): void {
+function acquireLock(filePath: string, maxRetries = 5): void {
   const lockPath = filePath + '.lock';
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -55,7 +55,7 @@ export function acquireLock(filePath: string, maxRetries = 5): void {
 /**
  * Release an advisory file lock.
  */
-export function releaseLock(filePath: string): void {
+function releaseLock(filePath: string): void {
   const lockPath = filePath + '.lock';
   try {
     fs.unlinkSync(lockPath);

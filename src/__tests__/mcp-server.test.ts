@@ -50,6 +50,9 @@ vi.mock('fs', () => {
         delete mockWrittenFiles[src];
       }
     }),
+    statSync: vi.fn(() => ({ mtimeMs: Date.now() })),
+    readFileSync: vi.fn(() => JSON.stringify({ entries: {}, aliases: {}, confirm: {} })),
+    mkdirSync: vi.fn(),
     openSync: vi.fn(() => 3),
     writeSync: vi.fn(),
     closeSync: vi.fn(),
@@ -121,6 +124,13 @@ vi.mock('../alias', () => ({
     Object.keys(mockAliases).forEach(k => delete mockAliases[k]);
     Object.assign(mockAliases, a);
   }),
+  setAlias: vi.fn((alias: string, path: string) => {
+    // Enforce one alias per entry
+    for (const [existing, target] of Object.entries(mockAliases)) {
+      if (target === path && existing !== alias) delete mockAliases[existing];
+    }
+    mockAliases[alias] = path;
+  }),
   resolveKey: vi.fn((k: string) => {
     const aliases = { ...mockAliases };
     return aliases[k] ?? k;
@@ -137,11 +147,11 @@ vi.mock('../confirm', () => ({
     Object.keys(mockConfirmKeys).forEach(k => delete mockConfirmKeys[k]);
     Object.assign(mockConfirmKeys, c);
   }),
+  removeConfirmForKey: vi.fn(),
 }));
 
 vi.mock('../utils/paths', () => ({
   ensureDataDirectoryExists: vi.fn(),
-  getDataFilePath: vi.fn(() => '/mock/entries.json'),
   getAliasFilePath: vi.fn(() => '/mock/aliases.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
   getConfirmFilePath: vi.fn(() => '/mock/confirm.json'),
@@ -155,10 +165,16 @@ vi.mock('../store', () => ({
   findProjectFile: vi.fn(() => null),
   clearProjectFileCache: vi.fn(),
   clearStoreCaches: vi.fn(),
+  loadEntries: vi.fn(() => ({ ...mockData })),
+  saveEntries: vi.fn((d: any) => {
+    Object.keys(mockData).forEach(k => delete mockData[k]);
+    Object.assign(mockData, d);
+  }),
 }));
 
 vi.mock('../formatting', () => ({
   formatTree: vi.fn(() => 'tree-output'),
+  resetColorCache: vi.fn(),
 }));
 
 // Mock config

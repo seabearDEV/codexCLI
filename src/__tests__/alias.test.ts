@@ -6,7 +6,6 @@ import {
   saveAliases,
   buildKeyToAliasMap,
   resolveKey,
-  clearAliasCache
 } from '../alias';
 
 vi.mock('../store', () => {
@@ -159,10 +158,4 @@ describe('Alias Management', () => {
     });
   });
 
-  describe('clearAliasCache', () => {
-    it('delegates to clearStoreCaches', () => {
-      clearAliasCache();
-      expect(clearStoreCaches).toHaveBeenCalled();
-    });
-  });
 });

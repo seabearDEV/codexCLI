@@ -11,10 +11,12 @@ import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Sc
 import { CodexData } from "./types";
 import {
   flattenObject,
+  setNestedValue,
 } from "./utils/objectPath";
 import {
   loadAliases,
   saveAliases,
+  setAlias,
   resolveKey,
   buildKeyToAliasMap,
   removeAliasesForKey,
@@ -22,14 +24,18 @@ import {
 import {
   ensureDataDirectoryExists,
 } from "./utils/paths";
-import { findProjectFile } from "./store";
-import { hasConfirm, loadConfirmKeys, saveConfirmKeys } from "./confirm";
+import { findProjectFile, loadEntries, saveEntries } from "./store";
+import { hasConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
 import { version } from "../package.json";
-import { formatTree } from "./formatting";
+import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
+
+function toScope(scopeParam?: string): Scope {
+  return (scopeParam ?? 'auto') as Scope;
+}
 
 function textResponse(text: string) {
   return { content: [{ type: "text" as const, text }] };
@@ -90,7 +96,7 @@ server.tool(
   { key: z.string().describe("Dot-notation key (e.g. server.prod.ip)"), value: z.string().describe("Value to store"), alias: z.string().optional().describe("Create an alias for this key"), encrypt: z.boolean().optional().describe("Encrypt the value with the provided password"), password: z.string().optional().describe("Password for encryption (required when encrypt is true)"), scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
   async ({ key, value, alias, encrypt, password, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       ensureDataDirectoryExists();
       const resolved = resolveKey(key, scope);
       let storedValue = value;
@@ -102,15 +108,7 @@ server.tool(
       }
       setValue(resolved, storedValue, scope);
       if (alias) {
-        const aliases = loadAliases(scope);
-        // Enforce one alias per entry: remove any existing alias for the same target
-        for (const [existingAlias, target] of Object.entries(aliases)) {
-          if (target === resolved && existingAlias !== alias) {
-            delete aliases[existingAlias];
-          }
-        }
-        aliases[alias] = resolved;
-        saveAliases(aliases, scope);
+        setAlias(alias, resolved, scope);
         return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}\nAlias set: ${alias} -> ${resolved}`);
       }
       return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}`);
@@ -141,7 +139,7 @@ server.tool(
       // For listings: default to project-only when project exists (unless --all or explicit scope)
       const listingScope: Scope = scopeParam ? scopeParam as Scope : (hasProject && !showAll) ? 'project' : 'auto';
       // For single-key lookups: auto fallthrough
-      const lookupScope = (scopeParam ?? 'auto') as Scope;
+      const lookupScope = toScope(scopeParam);
       const data = loadData(listingScope);
       const keyToAliasMap = buildKeyToAliasMap();
 
@@ -270,7 +268,7 @@ server.tool(
   },
   async ({ key, is_alias, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       if (is_alias) {
         const aliases = loadAliases(scope);
         if (!(key in aliases)) {
@@ -286,8 +284,9 @@ server.tool(
       if (!removed) {
         return errorResponse(`Key '${key}' not found.`);
       }
-      // Cascade delete: remove any aliases pointing to this key or its children
+      // Cascade delete: remove any aliases and confirm metadata for this key or its children
       removeAliasesForKey(resolvedKey, scope);
+      removeConfirmForKey(resolvedKey, scope);
       return textResponse(`Removed: ${resolvedKey}`);
     } catch (err) {
       return errorResponse(`Error removing entry: ${String(err)}`);
@@ -307,7 +306,7 @@ server.tool(
   },
   async ({ source, dest, force, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       ensureDataDirectoryExists();
       const resolvedSource = resolveKey(source, scope);
       const value = getValue(resolvedSource, scope);
@@ -324,11 +323,12 @@ server.tool(
       if (typeof value === "string") {
         setValue(dest, value, scope);
       } else {
-        const flat = flattenObject({ [resolvedSource]: value });
-        for (const [flatKey, flatVal] of Object.entries(flat)) {
-          const suffix = flatKey.slice(resolvedSource.length);
-          setValue(dest + suffix, String(flatVal), scope);
+        // Batch: load once, set all leaves, save once
+        const data = loadEntries(scope);
+        for (const [flatKey, flatVal] of Object.entries(flattenObject({ [resolvedSource]: value }))) {
+          setNestedValue(data, dest + flatKey.slice(resolvedSource.length), String(flatVal));
         }
+        saveEntries(data, scope);
       }
 
       return textResponse(`Copied: ${resolvedSource} -> ${dest}`);
@@ -350,7 +350,7 @@ server.tool(
   },
   async ({ searchTerm, aliasesOnly, entriesOnly, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       const term = searchTerm.toLowerCase();
       const results: string[] = [];
 
@@ -401,16 +401,8 @@ server.tool(
   },
   async ({ alias, path, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
-      const aliases = loadAliases(scope);
-      // Enforce one alias per entry: remove any existing alias for the same target
-      for (const [existingAlias, target] of Object.entries(aliases)) {
-        if (target === path && existingAlias !== alias) {
-          delete aliases[existingAlias];
-        }
-      }
-      aliases[alias] = path;
-      saveAliases(aliases, scope);
+      const scope = toScope(scopeParam);
+      setAlias(alias, path, scope);
       return textResponse(`Alias set: ${alias} -> ${path}`);
     } catch (err) {
       return errorResponse(`Error setting alias: ${String(err)}`);
@@ -425,7 +417,7 @@ server.tool(
   { alias: z.string().describe("Alias name to remove"), scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
   async ({ alias, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       const aliases = loadAliases(scope);
       if (!(alias in aliases)) {
         return errorResponse(`Alias '${alias}' not found.`);
@@ -446,7 +438,7 @@ server.tool(
   { scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
   async ({ scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       const aliases = loadAliases(scope);
       const entries = Object.entries(aliases);
       if (entries.length === 0) {
@@ -472,7 +464,7 @@ server.tool(
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
   async ({ key, dry, force, scope: scopeParam }) => {
-    const scope = (scopeParam ?? 'auto') as Scope;
+    const scope = toScope(scopeParam);
     const resolvedKey = resolveKey(key, scope);
     const value = getValue(resolvedKey, scope);
 
@@ -567,6 +559,7 @@ server.tool(
       }
 
       setConfigSetting(key, value);
+      resetColorCache();
       return textResponse(`Config set: ${key} = ${value}`);
     } catch (err) {
       return errorResponse(`Error setting config: ${String(err)}`);
@@ -585,7 +578,7 @@ server.tool(
   },
   async ({ type, pretty, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       const indent = pretty ? 2 : 0;
 
       if (type === "all") {
@@ -630,7 +623,7 @@ server.tool(
       }
 
       const obj = parsed as Record<string, unknown>;
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
 
       // Preview mode: compute diff and return without modifying data
       if (preview) {
@@ -772,7 +765,7 @@ server.tool(
   },
   async ({ type, scope: scopeParam }) => {
     try {
-      const scope = (scopeParam ?? 'auto') as Scope;
+      const scope = toScope(scopeParam);
       if (type === "entries" || type === "all") {
         saveData({}, scope);
       }
