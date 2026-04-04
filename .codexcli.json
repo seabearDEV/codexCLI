@@ -1,56 +1,12 @@
 {
+  "_meta": {
+    "search.test.1": 1775344229508,
+    "search.test.2": 1775344229604,
+    "test.key": 1775344229327
+  },
   "aliases": {},
   "confirm": {},
   "entries": {
-    "project": {
-      "name": "CodexCLI",
-      "description": "CLI tool and MCP server for storing, organizing, and retrieving structured data with dot notation",
-      "stack": "TypeScript, Node.js, Commander.js, Vitest, MCP SDK (@modelcontextprotocol/sdk)"
-    },
-    "commands": {
-      "build": "npm run build",
-      "test": "npm test",
-      "lint": "npm run lint",
-      "dev": "npm run dev:watch",
-      "test.watch": "npm run test:watch",
-      "release": "git tag v<version> && git push origin v<version> — triggers .github/workflows/release.yml which builds SEA binaries and updates Homebrew tap"
-    },
-    "arch": {
-      "storage": "Unified data.json with { entries, aliases, confirm } sections. Global at ~/.codexcli/data.json, project at .codexcli.json",
-      "store": "src/store.ts is the core — ScopedStore with mtime caching, auto-migration from old 3-file format, project file detection via directory walk-up",
-      "scope": "Scope type: 'project' | 'global' | 'auto'. Auto uses project if .codexcli.json exists, else global. Single-key lookups fall through project -> global. Listings show one scope at a time.",
-      "scaffold": "ccli init --scaffold reads package.json, go.mod, pyproject.toml, Cargo.toml to auto-populate project.*, commands.* namespaces. Idempotent — skips existing entries. Logic in src/commands/data-management.ts scaffoldProject().",
-      "mcp": "src/mcp-server.ts exposes 17 tools via MCP SDK (codex_stats added in this PR). All data tools accept optional scope parameter. codex_context is the session bootstrap tool.",
-      "cli": "src/index.ts uses Commander.js. Commands: set/get/run/find/edit/copy/rename/remove/init/config/data/stats. Aliases: s/g/r/f/e/cp/rn/rm.",
-      "binary": "Production ccli is a Node.js SEA binary. Dev cclid is npm-linked. getBinaryName() detects which via argv.",
-      "telemetry": "src/utils/telemetry.ts — JSONL append log at getDataDirectory()/telemetry.jsonl (defaults to ~/.codexcli/telemetry.jsonl in production; overridable via CODEX_DATA_DIR). Logs tool name, session ID, op type (read/write/exec), namespace. computeStats() computes trending metrics. MCP wrapper auto-logs all tool calls.",
-      "interpolation": "src/utils/interpolate.ts — ${key} value refs, $(key) exec refs, ${key:-default} fallbacks, ${key:?error} required checks. Brace-aware parser for nested defaults. Recursive with circular ref detection, max depth 10.",
-      "llmInstructions": "src/llm-instructions.ts — DEFAULT_LLM_INSTRUCTIONS (immutable built-in), getCustomInstructions() reads system.llm.instructions from store, getEffectiveInstructions() assembles defaults + custom as PROJECT CONTEXT appendix. CLI: ccli config llm-instructions [--default]"
-    },
-    "conventions": {
-      "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",
-      "output": "All user-facing text uses getBinaryName() from src/utils/binaryName.ts — never hardcode ccli",
-      "tests": "Vitest with globals. Unit tests mock fs and store module. Integration tests use real temp dirs via CODEX_DATA_DIR env var.",
-      "atomicWrites": "All file writes use saveJsonSorted -> withFileLock -> atomicWriteFileSync (tmp file + rename)",
-      "debug": "Always use process.env.DEBUG === 'true' (strict equality). CLI --debug flag sets it to 'true'. Never use truthy check."
-    },
-    "context": {
-      "migration": "On first access, auto-migrates old separate files (entries.json + aliases.json + confirm.json) to unified data.json. Old files renamed to .backup.",
-      "configSeparate": "config.json stays separate from data.json — it is user preference not project data",
-      "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to detect project files since its process.cwd() may not be the project root",
-      "testDataLeaks": "CODEX_DATA_DIR only redirects the global store path. If a .codexcli.json exists in cwd, writes still hit the project store. Use a temp working directory or git checkout to clean up after live CLI testing."
-    },
-    "files": {
-      "entry": "src/index.ts (CLI entry), src/mcp-server.ts (MCP entry)",
-      "store": "src/store.ts (unified store, caching, migration, scope resolution)",
-      "storage": "src/storage.ts (thin wrapper — loadData, getValue, setValue delegate to store)",
-      "alias": "src/alias.ts (alias CRUD — resolveKey, setAlias, removeAliasesForKey)",
-      "confirm": "src/confirm.ts (confirm flag CRUD — hasConfirm, setConfirm)",
-      "commands": "src/commands/entries.ts (set/get/run/remove/copy/edit/rename handlers)",
-      "completions": "src/completions.ts (CLI_TREE defines all commands, getDynamicValues for tab completion)",
-      "formatting": "src/formatting.ts (showHelp, showExamples, displayTree, color utilities)",
-      "interpolate": "src/utils/interpolate.ts (${key} value interpolation, $(key) exec interpolation, conditional modifiers)"
-    },
     "test": {
       "key": "test value"
     },

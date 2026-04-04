@@ -24,10 +24,42 @@ function toScope(global?: boolean | undefined): Scope | undefined {
   return global ? 'global' : undefined;
 }
 
-export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean, capture?: boolean, global?: boolean }): Promise<void> {
+export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean, capture?: boolean, chain?: boolean, global?: boolean }): Promise<void> {
   debug('runCommand called', { keys, options });
   const scope = toScope(options.global);
   try {
+    // --chain: resolve the first key's value as a space-separated list of key references
+    if (options.chain) {
+      if (keys.length !== 1) {
+        printError('--chain requires exactly one key argument.');
+        process.exitCode = 1;
+        return;
+      }
+      const chainKey = keys[0];
+      const resolvedChainKey = resolveKey(chainKey, scope);
+      const chainValue = getValue(resolvedChainKey, scope);
+      if (chainValue === undefined) {
+        printError(`Entry '${chainKey}' not found.`);
+        process.exitCode = 1;
+        return;
+      }
+      if (typeof chainValue !== 'string') {
+        printError(`Entry '${chainKey}' is not a string value.`);
+        process.exitCode = 1;
+        return;
+      }
+      // Split on whitespace to get key references, then run them as if passed as CLI args
+      const chainKeys = chainValue.trim().split(/\s+/);
+      if (chainKeys.length === 0 || (chainKeys.length === 1 && chainKeys[0] === '')) {
+        printError(`Entry '${chainKey}' is empty.`);
+        process.exitCode = 1;
+        return;
+      }
+      debug('chain resolved', { chainKey, chainKeys });
+      // Recurse without --chain to run the resolved keys normally
+      return runCommand(chainKeys, { ...options, chain: false });
+    }
+
     const commands: string[] = [];
     const resolvedKeys: string[] = [];
 

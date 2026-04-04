@@ -159,8 +159,9 @@ codexCLI
   .option('-d, --decrypt', 'Decrypt an encrypted command before running')
   .option('-c, --capture', 'Capture output for piping (instead of inheriting stdio)')
   .option('--source', 'Output command to stdout for shell eval (used by shell wrapper)')
+  .option('--chain', 'Treat stored value as space-separated key references to resolve and chain')
   .option('-G, --global', 'Target global data store')
-  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, global?: boolean }) => {
+  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, chain?: boolean, global?: boolean }) => {
     await commands.runCommand(keys, options);
   });
 
@@ -184,15 +185,12 @@ codexCLI
   .option('-a, --aliases', 'Search only in aliases')
   .option('-t, --tree', 'Display results in a hierarchical tree structure')
   .option('-j, --json', 'Output as JSON (for scripting)')
+  .option('-x, --regex', 'Treat search term as a regular expression')
+  .option('-k, --keys', 'Search keys only (skip value matching)')
+  .option('-v, --values', 'Search values only (skip key matching)')
   .option('-G, --global', 'Target global data store')
-  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, global?: boolean }) => {
-    await withPager(() => commands.searchEntries(term, {
-      entries: options.entries,
-      aliases: options.aliases,
-      tree: options.tree,
-      json: options.json,
-      global: options.global,
-    }));
+  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, regex?: boolean, keys?: boolean, values?: boolean, global?: boolean }) => {
+    await withPager(() => commands.searchEntries(term, options));
   });
 
 // Edit command
@@ -243,6 +241,60 @@ codexCLI
     } else {
       await commands.removeEntry(resolveKey(key), options.force, options.global);
     }
+  });
+
+// Stale entries command
+codexCLI
+  .command('stale [days]')
+  .description('Show entries not updated in N days (default: 30)')
+  .option('-j, --json', 'Output as JSON')
+  .option('-G, --global', 'Target global data store')
+  .action(async (days: string | undefined, options: { json?: boolean, global?: boolean }) => {
+    const { loadMeta, loadMetaMerged } = await import('./store');
+    const { getEntriesFlat } = await import('./storage');
+    const { color } = await import('./formatting');
+    const threshold = parseInt(days ?? '30', 10);
+    if (isNaN(threshold) || threshold < 0) {
+      console.error(color.red('Error: days must be a non-negative integer.'));
+      process.exitCode = 1;
+      return;
+    }
+    const scope = options.global ? 'global' as const : undefined;
+    const meta = scope ? loadMeta(scope) : loadMetaMerged();
+    const flat = getEntriesFlat(scope);
+    const cutoff = Date.now() - threshold * 86400000;
+    const stale: Array<{ key: string; age: number; lastUpdated: number | undefined }> = [];
+    for (const key of Object.keys(flat)) {
+      const ts = meta[key];
+      if (ts === undefined || ts < cutoff) {
+        stale.push({ key, age: ts ? Math.floor((Date.now() - ts) / 86400000) : -1, lastUpdated: ts });
+      }
+    }
+    if (options.json) {
+      console.log(JSON.stringify(stale, null, 2));
+      return;
+    }
+    if (stale.length === 0) {
+      console.log(color.green(`No entries older than ${threshold} days.`));
+      return;
+    }
+    console.log(color.bold(`\n${stale.length} entries not updated in ${threshold}+ days:\n`));
+    for (const { key, age } of stale) {
+      const ageStr = age < 0 ? 'never tracked' : `${age}d ago`;
+      const ageColor = age < 0 ? color.gray : age > 90 ? color.red : color.yellow;
+      console.log(`  ${color.white(key.padEnd(40))} ${ageColor(ageStr)}`);
+    }
+    console.log('');
+  });
+
+// Lint command
+codexCLI
+  .command('lint')
+  .description('Check entries against the recommended namespace schema')
+  .option('-j, --json', 'Output as JSON')
+  .option('-G, --global', 'Target global data store')
+  .action((options: { json?: boolean, global?: boolean }) => {
+    commands.lintEntries(options);
   });
 
 // Configuration commands

@@ -64,9 +64,12 @@ vi.mock('fs', () => {
 vi.mock('../store', () => {
   // Deep clone helper to prevent tests from mutating shared state
   const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+  const saveEntries = vi.fn((d: CodexData) => { storeState.entries = clone(d); });
   return {
     loadEntries:        vi.fn(()  => clone(storeState.entries)),
-    saveEntries:        vi.fn((d: CodexData) => { storeState.entries = clone(d); }),
+    saveEntries,
+    saveEntriesAndTouchMeta: vi.fn((d: CodexData) => { saveEntries(d); }),
+    saveEntriesAndRemoveMeta: vi.fn((d: CodexData) => { saveEntries(d); }),
     loadEntriesMerged:  vi.fn(()  => clone(storeState.entries)),
     loadAliasMap:       vi.fn(()  => clone(storeState.aliases)),
     saveAliasMap:       vi.fn((d: Record<string, string>) => { storeState.aliases = clone(d); }),
@@ -78,6 +81,10 @@ vi.mock('../store', () => {
     findProjectFile:    vi.fn(() => null),
     clearProjectFileCache: vi.fn(),
     getEffectiveScope:  vi.fn(() => 'global'),
+    touchMeta:          vi.fn(),
+    removeMeta:         vi.fn(),
+    loadMeta:           vi.fn(() => ({})),
+    loadMetaMerged:     vi.fn(() => ({})),
   };
 });
 
@@ -641,6 +648,51 @@ describe('Commands', () => {
       await runCommand(['commands.cd:paths.project', 'commands.list'], { yes: true });
 
       expect(execSync).toHaveBeenCalledWith('cd /Users/me/project && ls -l', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+    });
+  });
+
+  describe('runCommand --chain', () => {
+    it('resolves space-separated keys and chains with &&', async () => {
+      storeState.entries = {
+        cmd: { a: 'echo step-a', b: 'echo step-b' },
+        macros: { both: 'cmd.a cmd.b' },
+      };
+
+      await runCommand(['macros.both'], { yes: true, chain: true });
+
+      expect(execSync).toHaveBeenCalledWith('echo step-a && echo step-b', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+    });
+
+    it('supports dry run with --chain', async () => {
+      storeState.entries = {
+        cmd: { a: 'echo step-a', b: 'echo step-b' },
+        macros: { both: 'cmd.a cmd.b' },
+      };
+
+      await runCommand(['macros.both'], { dry: true, chain: true });
+
+      expect(execSync).not.toHaveBeenCalled();
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('echo step-a && echo step-b'));
+    });
+
+    it('errors when a chain key is not found', async () => {
+      storeState.entries = {
+        macros: { bad: 'cmd.exists cmd.missing' },
+        cmd: { exists: 'echo ok' },
+      };
+
+      await runCommand(['macros.bad'], { yes: true, chain: true });
+
+      expect(process.exitCode).toBe(1);
+      expect(execSync).not.toHaveBeenCalled();
+    });
+
+    it('errors when chain entry itself is not found', async () => {
+      storeState.entries = {};
+
+      await runCommand(['macros.nope'], { yes: true, chain: true });
+
+      expect(process.exitCode).toBe(1);
     });
   });
 
@@ -1239,6 +1291,55 @@ describe('Commands', () => {
         call.some((arg: unknown) => typeof arg === 'string' && arg.includes('No entries to search'))
       );
       expect(showedEmpty).toBe(true);
+    });
+  });
+
+  describe('searchEntries regex and field filters', () => {
+    it('matches entries by regex pattern', () => {
+      storeState.entries = {
+        server: { prod: { ip: '10.0.0.1' }, dev: { ip: '127.0.0.1' } },
+      };
+
+      searchEntries('prod.*ip', { regex: true });
+
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('server.prod.ip');
+      expect(output).not.toContain('server.dev.ip');
+    });
+
+    it('shows error for invalid regex', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      searchEntries('[invalid', { regex: true });
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('filters by keys only', () => {
+      storeState.entries = { server: { ip: '10.0.0.1' } };
+
+      searchEntries('10.0', { keys: true });
+
+      // "10.0" is only in the value, not the key
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('No matches');
+    });
+
+    it('filters by values only', () => {
+      storeState.entries = { server: { ip: '10.0.0.1' } };
+
+      searchEntries('server', { values: true });
+
+      // "server" is only in the key, not the value
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('No matches');
+    });
+
+    it('finds value match with values filter', () => {
+      storeState.entries = { server: { ip: '10.0.0.1' } };
+
+      searchEntries('10.0', { values: true });
+
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('server.ip');
     });
   });
 

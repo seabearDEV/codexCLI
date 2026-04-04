@@ -8,7 +8,23 @@ import { isEncrypted } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { interpolate } from '../utils/interpolate';
 
-function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: string): Record<string, string> {
+type MatchFn = (text: string) => boolean;
+
+const MAX_REGEX_LENGTH = 500;
+
+function buildMatcher(searchTerm: string, useRegex: boolean): MatchFn {
+  if (useRegex) {
+    if (searchTerm.length > MAX_REGEX_LENGTH) {
+      throw new Error(`Regex pattern too long (max ${MAX_REGEX_LENGTH} characters)`);
+    }
+    const re = new RegExp(searchTerm, 'i');
+    return (text: string) => re.test(text);
+  }
+  const lc = searchTerm.toLowerCase();
+  return (text: string) => text.toLowerCase().includes(lc);
+}
+
+function searchDataEntries(flattenedData: Record<string, string>, match: MatchFn, keysOnly?: boolean, valuesOnly?: boolean): Record<string, string> {
   const matches: Record<string, string> = {};
   for (const [key, value] of Object.entries(flattenedData)) {
     const encrypted = isEncrypted(value);
@@ -16,8 +32,8 @@ function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: 
     if (!encrypted) {
       try { resolved = interpolate(value); } catch { /* use raw */ }
     }
-    const keyMatches = key.toLowerCase().includes(lcSearchTerm);
-    const valueMatches = !encrypted && resolved.toLowerCase().includes(lcSearchTerm);
+    const keyMatches = !valuesOnly && match(key);
+    const valueMatches = !keysOnly && !encrypted && match(resolved);
 
     if (keyMatches || valueMatches) {
       matches[key] = encrypted ? '[encrypted]' : resolved;
@@ -26,13 +42,10 @@ function searchDataEntries(flattenedData: Record<string, string>, lcSearchTerm: 
   return matches;
 }
 
-function searchAliasEntries(aliases: Record<string, string>, lcSearchTerm: string): Record<string, string> {
+function searchAliasEntries(aliases: Record<string, string>, match: MatchFn): Record<string, string> {
   const matches: Record<string, string> = {};
   for (const [aliasName, targetPath] of Object.entries(aliases)) {
-    const nameMatches = aliasName.toLowerCase().includes(lcSearchTerm);
-    const pathMatches = targetPath.toLowerCase().includes(lcSearchTerm);
-
-    if (nameMatches || pathMatches) {
+    if (match(aliasName) || match(targetPath)) {
       matches[aliasName] = targetPath;
     }
   }
@@ -80,6 +93,13 @@ function displaySearchResults(
 
 export function searchEntries(searchTerm: string, options: SearchOptions = {}): void {
   debug('searchEntries called', { searchTerm, options });
+
+  if (options.keys && options.values) {
+    console.error('Error: --keys and --values are mutually exclusive.');
+    process.exitCode = 1;
+    return;
+  }
+
   const scope = options.global ? 'global' as const : undefined;
   const flattenedData = options.aliases ? {} : getEntriesFlat(scope);
 
@@ -88,11 +108,18 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
     return;
   }
 
-  const lcSearchTerm = searchTerm.toLowerCase();
+  let match: MatchFn;
+  try {
+    match = buildMatcher(searchTerm, !!options.regex);
+  } catch (err) {
+    console.error(`Invalid regex: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    return;
+  }
 
   const aliases = loadAliases(scope);
-  const dataMatches = options.aliases ? {} : searchDataEntries(flattenedData, lcSearchTerm);
-  const aliasMatches = options.entries ? {} : searchAliasEntries(aliases, lcSearchTerm);
+  const dataMatches = options.aliases ? {} : searchDataEntries(flattenedData, match, options.keys, options.values);
+  const aliasMatches = options.entries ? {} : searchAliasEntries(aliases, match);
 
   const totalMatches = Object.keys(dataMatches).length + Object.keys(aliasMatches).length;
 

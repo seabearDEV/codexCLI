@@ -3,3 +3,4 @@ export { searchEntries } from './search';
 export { exportData, importData, resetData, handleProjectFile } from './data-management';
 export { handleConfig, configSet } from './config-commands';
 export { showInfo } from './info';
+export { lintEntries } from './lint';

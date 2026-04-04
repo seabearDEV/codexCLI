@@ -4,7 +4,7 @@
 type ToolHandler = (params: any) => Promise<any>;
 const {
   toolHandlers, mockExecSync, mockFiles, mockWrittenFiles,
-  mockData, mockAliases, mockConfig, mockConfirmKeys,
+  mockData, mockAliases, mockConfig, mockConfirmKeys, mockMetaData,
 } = vi.hoisted(() => ({
   toolHandlers: {} as Record<string, ToolHandler>,
   mockExecSync: vi.fn(),
@@ -14,6 +14,7 @@ const {
   mockAliases: {} as Record<string, string>,
   mockConfig: { colors: true, theme: 'default' } as Record<string, any>,
   mockConfirmKeys: {} as Record<string, true>,
+  mockMetaData: {} as Record<string, number>,
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => {
@@ -181,6 +182,23 @@ vi.mock('../store', () => ({
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
   }),
+  saveEntriesAndTouchMeta: vi.fn((d: any, key: string) => {
+    Object.keys(mockData).forEach(k => delete mockData[k]);
+    Object.assign(mockData, d);
+    mockMetaData[key] = Date.now();
+  }),
+  saveEntriesAndRemoveMeta: vi.fn((d: any, key: string) => {
+    Object.keys(mockData).forEach(k => delete mockData[k]);
+    Object.assign(mockData, d);
+    const prefix = key + '.';
+    for (const k of Object.keys(mockMetaData)) {
+      if (k === key || k.startsWith(prefix)) delete mockMetaData[k];
+    }
+  }),
+  touchMeta: vi.fn(),
+  removeMeta: vi.fn(),
+  loadMeta: vi.fn(() => ({ ...mockMetaData })),
+  loadMetaMerged: vi.fn(() => ({ ...mockMetaData })),
 }));
 
 vi.mock('../formatting', () => ({
@@ -218,6 +236,7 @@ function resetMocks() {
   Object.assign(mockConfig, { colors: true, theme: 'default' });
   Object.keys(mockFiles).forEach(k => delete mockFiles[k]);
   Object.keys(mockWrittenFiles).forEach(k => delete mockWrittenFiles[k]);
+  Object.keys(mockMetaData).forEach(k => delete mockMetaData[k]);
   mockExecSync.mockReset();
 }
 
@@ -817,6 +836,141 @@ describe('MCP Server Tools', () => {
       const text = result.content[0].text;
       expect(text).toContain('key: value');
       expect(text).not.toContain('Aliases:');
+    });
+  });
+
+  describe('codex_run with chain', () => {
+    it('resolves chain keys and joins with &&', async () => {
+      Object.assign(mockData, {
+        cmd: { a: 'echo step-a', b: 'echo step-b' },
+        macros: { both: 'cmd.a cmd.b' },
+      });
+      mockExecSync.mockReturnValue('step-a\nstep-b\n');
+
+      const result = await toolHandlers['codex_run']({ key: 'macros.both', chain: true });
+      expect(result.content[0].text).toContain('echo step-a && echo step-b');
+    });
+
+    it('supports dry run with chain', async () => {
+      Object.assign(mockData, {
+        cmd: { a: 'echo hi', b: 'echo bye' },
+        macros: { both: 'cmd.a cmd.b' },
+      });
+
+      const result = await toolHandlers['codex_run']({ key: 'macros.both', chain: true, dry: true });
+      expect(result.content[0].text).toBe('$ echo hi && echo bye');
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('returns error when a chain key is not found', async () => {
+      Object.assign(mockData, {
+        macros: { bad: 'cmd.exists cmd.missing' },
+        cmd: { exists: 'echo ok' },
+      });
+
+      const result = await toolHandlers['codex_run']({ key: 'macros.bad', chain: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("'cmd.missing' not found");
+    });
+  });
+
+  describe('codex_search with regex', () => {
+    it('matches entries by regex pattern', async () => {
+      Object.assign(mockData, {
+        server: { prod: { ip: '10.0.0.1' }, dev: { ip: '127.0.0.1' } },
+      });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: 'prod.*ip', regex: true });
+      expect(result.content[0].text).toContain('server.prod.ip');
+      expect(result.content[0].text).not.toContain('server.dev.ip');
+    });
+
+    it('returns error for invalid regex', async () => {
+      const result = await toolHandlers['codex_search']({ searchTerm: '[invalid', regex: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid regex');
+    });
+
+    it('supports keysOnly', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: '10.0', keysOnly: true });
+      // 10.0 is only in the value, not the key — so no match with keysOnly
+      expect(result.content[0].text).toContain('No results');
+    });
+
+    it('supports valuesOnly', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: 'server', valuesOnly: true });
+      // "server" is only in the key, not the value — so no match with valuesOnly
+      expect(result.content[0].text).toContain('No results');
+    });
+
+    it('returns error when keysOnly and valuesOnly are both true', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: 'server', keysOnly: true, valuesOnly: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('mutually exclusive');
+    });
+  });
+
+  describe('codex_stale', () => {
+    it('returns message when no stale entries (default threshold)', async () => {
+      Object.assign(mockData, { project: { name: 'test' } });
+      // All entries have recent timestamps (within last 30 days)
+      const recentTs = Date.now() - 1 * 86400000; // 1 day ago
+      Object.assign(mockMetaData, { 'project.name': recentTs });
+
+      const result = await toolHandlers['codex_stale']({});
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('No entries older than 30 days');
+    });
+
+    it('returns stale entries older than threshold', async () => {
+      Object.assign(mockData, { project: { name: 'test', oldkey: 'oldval' } });
+      const oldTs = Date.now() - 60 * 86400000; // 60 days ago
+      const recentTs = Date.now() - 1 * 86400000; // 1 day ago
+      Object.assign(mockMetaData, {
+        'project.name': recentTs,
+        'project.oldkey': oldTs,
+      });
+
+      const result = await toolHandlers['codex_stale']({ days: 30 });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('project.oldkey');
+      expect(result.content[0].text).not.toContain('project.name');
+    });
+
+    it('uses custom days threshold', async () => {
+      Object.assign(mockData, { project: { a: '1', b: '2' } });
+      const ts7dAgo = Date.now() - 7 * 86400000;
+      Object.assign(mockMetaData, {
+        'project.a': ts7dAgo,
+        'project.b': ts7dAgo,
+      });
+
+      const result = await toolHandlers['codex_stale']({ days: 3 });
+      expect(result.content[0].text).toContain('project.a');
+      expect(result.content[0].text).toContain('project.b');
+    });
+
+    it('marks entries with no timestamp as never tracked', async () => {
+      Object.assign(mockData, { untracked: 'value' });
+      // mockMetaData is empty (no timestamps)
+
+      const result = await toolHandlers['codex_stale']({ days: 0 });
+      expect(result.content[0].text).toContain('never tracked');
+    });
+
+    it('handles scoped (global) request', async () => {
+      Object.assign(mockData, { g: 'val' });
+      const oldTs = Date.now() - 90 * 86400000;
+      Object.assign(mockMetaData, { g: oldTs });
+
+      const result = await toolHandlers['codex_stale']({ days: 30, scope: 'global' });
+      expect(result.content[0].text).toContain('g');
     });
   });
 
