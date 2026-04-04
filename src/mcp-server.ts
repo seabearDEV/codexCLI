@@ -589,9 +589,6 @@ server.tool(
         return errorResponse(`Value at '${key}' is empty and cannot be used with chain mode.`);
       }
       const chainKeys = trimmedValue.split(/\s+/).filter(Boolean);
-      if (chainKeys.length === 0) {
-        return errorResponse(`Value at '${key}' is empty and cannot be used with chain mode.`);
-      }
       const commands: string[] = [];
       for (const ck of chainKeys) {
         const rk = resolveKey(ck, scope);

@@ -182,13 +182,18 @@ vi.mock('../store', () => ({
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
   }),
-  saveEntriesAndTouchMeta: vi.fn((d: any) => {
+  saveEntriesAndTouchMeta: vi.fn((d: any, key: string) => {
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
+    mockMetaData[key] = Date.now();
   }),
-  saveEntriesAndRemoveMeta: vi.fn((d: any) => {
+  saveEntriesAndRemoveMeta: vi.fn((d: any, key: string) => {
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
+    const prefix = key + '.';
+    for (const k of Object.keys(mockMetaData)) {
+      if (k === key || k.startsWith(prefix)) delete mockMetaData[k];
+    }
   }),
   touchMeta: vi.fn(),
   removeMeta: vi.fn(),
