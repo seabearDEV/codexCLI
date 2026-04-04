@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { getDataDirectory } from './paths';
 import { debug } from './debug';
+import { getConfigSetting } from '../config';
 
 /**
  * Create automatic backups of data files before destructive operations.
@@ -41,17 +42,27 @@ export function createAutoBackup(label: string): string | null {
 
     debug(`Auto-backup created: ${backupSubDir} (${backedUp} files)`);
 
-    // Rotate: keep only the 10 most recent backups
+    // Rotate: keep only the N most recent backups (0 = no rotation)
     try {
-      const allBackups = fs.readdirSync(backupDir)
-        .filter(name => fs.statSync(path.join(backupDir, name)).isDirectory())
-        .sort();
-      if (allBackups.length > 10) {
-        const toRemove = allBackups.slice(0, allBackups.length - 10);
-        for (const old of toRemove) {
-          fs.rmSync(path.join(backupDir, old), { recursive: true, force: true });
+      const configuredMaxBackups = Number(getConfigSetting('max_backups'));
+      const maxBackups = Number.isNaN(configuredMaxBackups) ? 10 : configuredMaxBackups;
+      if (maxBackups > 0) {
+        const allBackups = fs.readdirSync(backupDir)
+          .map(name => {
+            const fullPath = path.join(backupDir, name);
+            const stats = fs.statSync(fullPath);
+            return { name, stats };
+          })
+          .filter(entry => entry.stats.isDirectory())
+          .sort((a, b) => a.stats.mtimeMs - b.stats.mtimeMs)
+          .map(entry => entry.name);
+        if (allBackups.length > maxBackups) {
+          const toRemove = allBackups.slice(0, allBackups.length - maxBackups);
+          for (const old of toRemove) {
+            fs.rmSync(path.join(backupDir, old), { recursive: true, force: true });
+          }
+          debug(`Removed ${toRemove.length} old backup(s), keeping ${maxBackups}`);
         }
-        debug(`Removed ${toRemove.length} old backup(s)`);
       }
     } catch (cleanupErr) {
       debug(`Backup cleanup failed: ${String(cleanupErr)}`);

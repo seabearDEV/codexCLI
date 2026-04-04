@@ -87,11 +87,11 @@ describe('Config', () => {
 
   describe('saveConfig', () => {
     it('writes formatted JSON to config path via atomic write', () => {
-      saveConfig({ colors: true, theme: 'dark' });
+      saveConfig({ colors: true, theme: 'dark', max_backups: 10 });
 
       expect(fs.writeFileSync).toHaveBeenCalledWith(
         '/mock/config.json.tmp',
-        JSON.stringify({ colors: true, theme: 'dark' }, null, 2),
+        JSON.stringify({ colors: true, theme: 'dark', max_backups: 10 }, null, 2),
         { encoding: 'utf8', mode: 0o600 }
       );
       expect(fs.renameSync).toHaveBeenCalledWith(
@@ -105,7 +105,7 @@ describe('Config', () => {
         throw new Error('write failed');
       });
 
-      saveConfig({ colors: true, theme: 'default' });
+      saveConfig({ colors: true, theme: 'default', max_backups: 10 });
 
       expect(console.error).toHaveBeenCalledWith(
         'Error saving configuration:',
@@ -230,8 +230,8 @@ describe('Config', () => {
       const first = loadConfig();
       const second = loadConfig();
 
-      expect(first).toEqual({ colors: false, theme: 'dark' });
-      expect(second).toEqual({ colors: false, theme: 'dark' });
+      expect(first).toEqual({ colors: false, theme: 'dark', max_backups: 10 });
+      expect(second).toEqual({ colors: false, theme: 'dark', max_backups: 10 });
       expect(fs.readFileSync).toHaveBeenCalledTimes(1);
     });
 
@@ -256,10 +256,10 @@ describe('Config', () => {
       (fs.existsSync as Mock).mockReturnValue(true);
       (fs.statSync as Mock).mockReturnValue({ mtimeMs: 2000 });
 
-      saveConfig({ colors: false, theme: 'dark' });
+      saveConfig({ colors: false, theme: 'dark', max_backups: 10 });
       const loaded = loadConfig();
 
-      expect(loaded).toEqual({ colors: false, theme: 'dark' });
+      expect(loaded).toEqual({ colors: false, theme: 'dark', max_backups: 10 });
       expect(fs.readFileSync).not.toHaveBeenCalled();
     });
   });

@@ -6,15 +6,17 @@ import { atomicWriteFileSync } from './utils/atomicWrite';
 interface Config {
   colors: boolean;
   theme: string;
+  max_backups: number;
 }
 
 const VALID_THEMES = ['default', 'dark', 'light'] as const;
-export const VALID_CONFIG_KEYS = ['colors', 'theme'] as const;
+export const VALID_CONFIG_KEYS = ['colors', 'theme', 'max_backups'] as const;
 
 // Default configuration
 const defaultConfig: Config = {
   colors: true,
-  theme: 'default'
+  theme: 'default',
+  max_backups: 10,
 };
 
 // Mtime-based cache for config
@@ -51,6 +53,7 @@ export function loadConfig(): Config {
     const result: Config = {
       colors: typeof config.colors === 'boolean' ? config.colors : defaultConfig.colors,
       theme: typeof config.theme === 'string' ? config.theme : defaultConfig.theme,
+      max_backups: typeof config.max_backups === 'number' ? config.max_backups : defaultConfig.max_backups,
     };
 
     configCache = result;
@@ -83,7 +86,7 @@ export function saveConfig(config: Config): void {
 }
 
 // Get a specific configuration setting
-export function getConfigSetting(key: string): string | boolean | null {
+export function getConfigSetting(key: string): string | boolean | number | null {
   const config = loadConfig();
   if ((VALID_CONFIG_KEYS as readonly string[]).includes(key)) {
     return config[key as keyof Config];
@@ -105,6 +108,14 @@ export function setConfigSetting(key: string, value: string | boolean): void {
       return;
     }
     config.theme = val;
+    saveConfig(config);
+  } else if (key === 'max_backups') {
+    const num = Number(value);
+    if (!Number.isInteger(num) || num < 0) {
+      console.error(`Invalid max_backups: '${value}'. Must be a non-negative integer (0 to disable rotation).`);
+      return;
+    }
+    config.max_backups = num;
     saveConfig(config);
   } else {
     console.error(`Unknown configuration key: ${key}`);

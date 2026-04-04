@@ -1,4 +1,4 @@
-import { loadData, saveData, handleError, Scope } from '../storage';
+import { loadData, saveData, getValue, setValue, handleError, Scope } from '../storage';
 import { color } from '../formatting';
 import fs from 'fs';
 import { loadAliases, saveAliases } from '../alias';
@@ -286,7 +286,7 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
   console.log(color.gray('\nThis is a preview. No data was modified.'));
 }
 
-export function handleProjectFile(options: { remove?: boolean }): void {
+export function handleProjectFile(options: { remove?: boolean; scaffold?: boolean }): void {
   if (options.remove) {
     const projectFile = findProjectFile();
     if (!projectFile) {
@@ -300,11 +300,117 @@ export function handleProjectFile(options: { remove?: boolean }): void {
   }
 
   const target = path.join(process.cwd(), '.codexcli.json');
-  if (fs.existsSync(target)) {
-    printWarning('.codexcli.json already exists in current directory.');
+  const existed = fs.existsSync(target);
+
+  if (!existed) {
+    saveJsonSorted(target, { entries: {}, aliases: {}, confirm: {} });
+    clearProjectFileCache();
+    printSuccess(`Created: ${target}`);
+  }
+
+  if (options.scaffold) {
+    scaffoldProject();
+  } else if (existed) {
+    printWarning('.codexcli.json already exists in current directory. Use --scaffold to auto-populate from project files.');
+  }
+}
+
+interface ScaffoldEntry {
+  key: string;
+  value: string;
+}
+
+function scaffoldProject(): void {
+  const cwd = process.cwd();
+  const discovered: ScaffoldEntry[] = [];
+
+  // --- Node.js (package.json) ---
+  const pkgPath = path.join(cwd, 'package.json');
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as Record<string, unknown>;
+      if (typeof pkg.name === 'string') discovered.push({ key: 'project.name', value: pkg.name });
+      if (typeof pkg.description === 'string') discovered.push({ key: 'project.description', value: pkg.description });
+
+      // Stack detection
+      const deps = { ...(pkg.dependencies as Record<string, string> | undefined), ...(pkg.devDependencies as Record<string, string> | undefined) };
+      const stack = ['Node.js'];
+      if ('typescript' in deps) stack.push('TypeScript');
+      if ('react' in deps) stack.push('React');
+      if ('vue' in deps) stack.push('Vue');
+      if ('next' in deps) stack.push('Next.js');
+      if ('express' in deps) stack.push('Express');
+      discovered.push({ key: 'project.stack', value: stack.join(', ') });
+
+      // Scripts → commands
+      const scripts = pkg.scripts as Record<string, string> | undefined;
+      if (scripts) {
+        const scriptMap: Record<string, string> = {
+          build: 'commands.build', test: 'commands.test', lint: 'commands.lint',
+          dev: 'commands.dev', start: 'commands.start', deploy: 'commands.deploy',
+        };
+        for (const [script, cmdKey] of Object.entries(scriptMap)) {
+          if (scripts[script]) discovered.push({ key: cmdKey, value: `npm run ${script}` });
+        }
+      }
+    } catch { /* ignore parse errors */ }
+  }
+
+  // --- Python (pyproject.toml) ---
+  if (fs.existsSync(path.join(cwd, 'pyproject.toml'))) {
+    discovered.push({ key: 'project.stack', value: 'Python' });
+    if (fs.existsSync(path.join(cwd, 'Makefile'))) {
+      discovered.push({ key: 'commands.build', value: 'make build' });
+      discovered.push({ key: 'commands.test', value: 'make test' });
+    }
+  }
+
+  // --- Go (go.mod) ---
+  const goModPath = path.join(cwd, 'go.mod');
+  if (fs.existsSync(goModPath)) {
+    try {
+      const goMod = fs.readFileSync(goModPath, 'utf8');
+      const moduleLine = goMod.match(/^module\s+(.+)$/m);
+      if (moduleLine) discovered.push({ key: 'project.name', value: moduleLine[1] });
+    } catch { /* ignore */ }
+    discovered.push({ key: 'project.stack', value: 'Go' });
+    discovered.push({ key: 'commands.build', value: 'go build ./...' });
+    discovered.push({ key: 'commands.test', value: 'go test ./...' });
+  }
+
+  // --- Rust (Cargo.toml) ---
+  if (fs.existsSync(path.join(cwd, 'Cargo.toml'))) {
+    discovered.push({ key: 'project.stack', value: 'Rust' });
+    discovered.push({ key: 'commands.build', value: 'cargo build' });
+    discovered.push({ key: 'commands.test', value: 'cargo test' });
+  }
+
+  if (discovered.length === 0) {
+    printWarning('No recognized project files found (package.json, pyproject.toml, go.mod, Cargo.toml).');
     return;
   }
-  saveJsonSorted(target, { entries: {}, aliases: {}, confirm: {} });
-  clearProjectFileCache();
-  printSuccess(`Created: ${target}`);
+
+  // Deduplicate by key (first wins — e.g., package.json name over go.mod module)
+  const seen = new Set<string>();
+  const unique = discovered.filter(e => {
+    if (seen.has(e.key)) return false;
+    seen.add(e.key);
+    return true;
+  });
+
+  // Merge into existing project data (skip keys that already exist)
+  let count = 0;
+  for (const { key, value } of unique) {
+    const existing = getValue(key, 'project');
+    if (existing !== undefined) continue;
+    setValue(key, value, 'project');
+    console.log(`  ${color.green('+')} ${key}: ${color.white(value)}`);
+    count++;
+  }
+
+  if (count === 0) {
+    console.log(color.gray('  All discovered entries already exist. Nothing to add.'));
+  } else {
+    printSuccess(`Scaffolded ${count} entries from project files.`);
+  }
 }
