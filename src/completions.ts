@@ -189,6 +189,14 @@ const CLI_TREE: Record<string, CommandDef> = {
       },
     },
   },
+  stats: {
+    flags: {
+      '--period': 'Time period (7d, 30d, 90d, all)', '-p': 'Time period (7d, 30d, 90d, all)',
+      '--json': 'Output raw JSON',
+    },
+    argType: null,
+    description: 'View MCP usage telemetry',
+  },
   data: {
     flags: {},
     argType: null,

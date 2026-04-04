@@ -76,7 +76,13 @@ TOOL TIPS:
 - codex_get — retrieve specific keys or browse namespaces (use depth: 1 to scan top-level)
 - codex_set — store a key-value pair (use dot notation, keep values concise)
 - codex_search — find entries by keyword
-- codex_run — execute a stored shell command (respects confirm metadata)`;
+- codex_run — execute a stored shell command (respects confirm metadata)
+- codex_stats — view your usage metrics (bootstrap rate, write-back rate, trends)
+
+EFFECTIVE USAGE:
+- Always call codex_context as your FIRST tool call to bootstrap session knowledge.
+- Write back: when you learn something non-obvious, store it before the session ends.
+- Usage is tracked — codex_stats shows how effectively the knowledge base is being used.`;
 
 const llmInstructions = (() => {
   try {
@@ -99,8 +105,10 @@ server.tool = ((...args: any[]) => {
   // The handler is always the last argument
   const origHandler = args[args.length - 1] as (params: Record<string, unknown>, extra: unknown) => Promise<unknown>;
   args[args.length - 1] = async (params: Record<string, unknown>, extra: unknown) => {
-    const key = (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
-    logToolCall(name, key);
+    if (name !== 'codex_stats') {
+      const key = (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
+      logToolCall(name, key);
+    }
     return origHandler(params, extra);
   };
   return (_origTool as (...a: any[]) => unknown)(...args);
