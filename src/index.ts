@@ -279,6 +279,16 @@ configCommand
   .description('Show usage examples')
   .action(() => { void withPager(() => showExamples()); });
 
+configCommand
+  .command('llm-instructions')
+  .description('Show the LLM instructions sent to AI agents via MCP')
+  .option('--default', 'Show only the built-in defaults (exclude custom additions)')
+  .action(async (options: { default?: boolean }) => {
+    const { DEFAULT_LLM_INSTRUCTIONS, getEffectiveInstructions } = await import('./llm-instructions');
+    const text = options.default ? DEFAULT_LLM_INSTRUCTIONS : getEffectiveInstructions();
+    console.log(text);
+  });
+
 const completionsCommand = configCommand
   .command('completions')
   .description('Generate shell completion scripts')

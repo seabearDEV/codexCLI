@@ -801,17 +801,21 @@ All data-touching tools accept an optional `scope` parameter (`"project"` or `"g
 
 ### LLM Instructions
 
-When an AI agent connects via MCP, CodexCLI automatically sends instructions that guide how the agent interacts with your data store (e.g., defaulting to reads over writes, using depth-limited browsing).
+When an AI agent connects via MCP, CodexCLI sends built-in instructions that guide how the agent interacts with the data store (schema, scope, tool tips, effective usage patterns). These defaults are immutable and stay up to date as features are added.
 
-The default instructions are built into the server. To customize them, set the `system.llm.instructions` key — your version takes priority:
-
-```bash
-ccli set system.llm.instructions "Your custom instructions here"
-```
-
-To revert to the defaults, simply remove the key:
+To add project-specific guidance, set `system.llm.instructions` — your text is **appended** to the defaults as a `PROJECT CONTEXT` section, not a replacement:
 
 ```bash
+# Add project-specific instructions for AI agents
+ccli set system.llm.instructions "This is a monorepo. Always check arch.modules before modifying shared code. Never store secrets, even encrypted."
+
+# View the effective instructions (defaults + your additions)
+ccli config llm-instructions
+
+# View just the built-in defaults
+ccli config llm-instructions --default
+
+# Remove your custom additions (reverts to defaults only)
 ccli rm system.llm.instructions
 ```
 
