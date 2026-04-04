@@ -11,6 +11,7 @@ import { withPager } from './utils/pager';
 import { getDataDirectory } from './utils/paths';
 import { getBinaryName } from './utils/binaryName';
 import fs from 'fs';
+import { DEFAULT_LLM_INSTRUCTIONS, getEffectiveInstructions } from './llm-instructions';
 
 // Early-exit handler for shell tab-completion (must run before Commander parses args)
 const completionFlagIndex = process.argv.indexOf('--get-completions');
@@ -284,9 +285,8 @@ configCommand
   .description('Show the LLM instructions sent to AI agents via MCP')
   .option('--default', 'Show only the built-in defaults (exclude custom additions)')
   .action(async (options: { default?: boolean }) => {
-    const { DEFAULT_LLM_INSTRUCTIONS, getEffectiveInstructions } = await import('./llm-instructions');
     const text = options.default ? DEFAULT_LLM_INSTRUCTIONS : getEffectiveInstructions();
-    console.log(text);
+    await withPager(() => { process.stdout.write(text + '\n'); });
   });
 
 const completionsCommand = configCommand

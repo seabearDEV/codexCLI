@@ -49,12 +49,7 @@ function errorResponse(text: string) {
 
 ensureDataDirectoryExists();
 
-const llmInstructions = (() => {
-  try {
-    loadData();
-    return getEffectiveInstructions();
-  } catch { return getEffectiveInstructions(); }
-})();
+const llmInstructions = getEffectiveInstructions();
 
 const server = new McpServer(
   { name: "codexcli", version },
