@@ -33,6 +33,7 @@ import { version } from "../package.json";
 import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
+import { logToolCall, computeStats } from "./utils/telemetry";
 
 function toScope(scopeParam?: string): Scope {
   return (scopeParam ?? 'auto') as Scope;
@@ -89,6 +90,21 @@ const server = new McpServer(
   { name: "codexcli", version },
   { ...(llmInstructions && { instructions: llmInstructions }) },
 );
+
+// Wrap server.tool to auto-log telemetry for every tool call
+const _origTool = server.tool.bind(server);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+server.tool = ((...args: any[]) => {
+  const name = args[0] as string;
+  // The handler is always the last argument
+  const origHandler = args[args.length - 1] as (params: Record<string, unknown>, extra: unknown) => Promise<unknown>;
+  args[args.length - 1] = async (params: Record<string, unknown>, extra: unknown) => {
+    const key = (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
+    logToolCall(name, key);
+    return origHandler(params, extra);
+  };
+  return (_origTool as (...a: any[]) => unknown)(...args);
+}) as typeof server.tool;
 
 // --- codex_set ---
 server.tool(
@@ -921,6 +937,57 @@ server.tool(
       return textResponse(lines.join("\n"));
     } catch (err) {
       return errorResponse(`Error loading context: ${String(err)}`);
+    }
+  }
+);
+
+// --- codex_stats ---
+server.tool(
+  "codex_stats",
+  "View MCP usage telemetry and trending metrics for AI agent effectiveness",
+  {
+    period: z.enum(["7d", "30d", "90d", "all"]).optional().describe("Time period to analyze (default: 30d)"),
+  },
+  async ({ period }) => {
+    try {
+      const days = period === '7d' ? 7 : period === '90d' ? 90 : period === 'all' ? 0 : 30;
+      const stats = computeStats(days);
+
+      if (stats.totalCalls === 0) {
+        return textResponse("No telemetry data yet. Usage will be tracked automatically as MCP tools are called.");
+      }
+
+      const lines: string[] = [];
+      lines.push(`MCP Usage Stats (${stats.period === 'all' ? 'all time' : `last ${stats.period}`})`);
+      lines.push('');
+      lines.push(`Sessions:        ${stats.totalSessions}`);
+      lines.push(`Total calls:     ${stats.totalCalls}`);
+      lines.push(`Bootstrap rate:  ${(stats.bootstrapRate * 100).toFixed(0)}% of sessions call codex_context first`);
+      lines.push(`Write-back rate: ${(stats.writeBackRate * 100).toFixed(0)}% of sessions store at least 1 entry`);
+      lines.push(`Read:write:      ${stats.readWriteRatio} (${stats.reads} reads, ${stats.writes} writes, ${stats.execs} execs)`);
+
+      if (Object.keys(stats.namespaceCoverage).length > 0) {
+        lines.push('');
+        lines.push('Namespace activity:');
+        const sorted = Object.entries(stats.namespaceCoverage)
+          .sort(([, a], [, b]) => (b.reads + b.writes) - (a.reads + a.writes));
+        for (const [ns, data] of sorted) {
+          const age = data.lastWrite ? `${Math.floor((Date.now() - data.lastWrite) / 86400000)}d ago` : 'never';
+          lines.push(`  ${ns.padEnd(20)} ${String(data.reads).padStart(3)} reads  ${String(data.writes).padStart(3)} writes  last write: ${age}`);
+        }
+      }
+
+      if (stats.topTools.length > 0) {
+        lines.push('');
+        lines.push('Top tools:');
+        for (const { tool, count } of stats.topTools) {
+          lines.push(`  ${tool.padEnd(24)} ${count} calls`);
+        }
+      }
+
+      return textResponse(lines.join('\n'));
+    } catch (err) {
+      return errorResponse(`Error computing stats: ${String(err)}`);
     }
   }
 );
