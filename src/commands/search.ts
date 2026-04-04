@@ -10,8 +10,13 @@ import { interpolate } from '../utils/interpolate';
 
 type MatchFn = (text: string) => boolean;
 
+const MAX_REGEX_LENGTH = 500;
+
 function buildMatcher(searchTerm: string, useRegex: boolean): MatchFn {
   if (useRegex) {
+    if (searchTerm.length > MAX_REGEX_LENGTH) {
+      throw new Error(`Regex pattern too long (max ${MAX_REGEX_LENGTH} characters)`);
+    }
     const re = new RegExp(searchTerm, 'i');
     return (text: string) => re.test(text);
   }
@@ -88,6 +93,13 @@ function displaySearchResults(
 
 export function searchEntries(searchTerm: string, options: SearchOptions = {}): void {
   debug('searchEntries called', { searchTerm, options });
+
+  if (options.keys && options.values) {
+    console.error('Error: --keys and --values are mutually exclusive.');
+    process.exitCode = 1;
+    return;
+  }
+
   const scope = options.global ? 'global' as const : undefined;
   const flattenedData = options.aliases ? {} : getEntriesFlat(scope);
 

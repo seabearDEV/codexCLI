@@ -254,6 +254,11 @@ codexCLI
     const { getEntriesFlat } = await import('./storage');
     const { color } = await import('./formatting');
     const threshold = parseInt(days ?? '30', 10);
+    if (isNaN(threshold) || threshold < 0) {
+      console.error(color.red('Error: days must be a non-negative integer.'));
+      process.exitCode = 1;
+      return;
+    }
     const scope = options.global ? 'global' as const : undefined;
     const meta = scope ? loadMeta(scope) : loadMetaMerged();
     const flat = getEntriesFlat(scope);

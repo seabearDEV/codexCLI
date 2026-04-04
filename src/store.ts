@@ -280,6 +280,30 @@ export function removeMeta(key: string, scope?: Scope | undefined): void {
   store.save({ ...current, _meta: meta });
 }
 
+/** Save entries and touch _meta[key] in a single write. */
+export function saveEntriesAndTouchMeta(data: CodexData, key: string, scope?: Scope | undefined): void {
+  const store = resolveStore(scope);
+  const current = store.load();
+  const meta = { ...(current._meta ?? {}), [key]: Date.now() };
+  store.save({ ...current, entries: data, _meta: meta });
+}
+
+/** Save entries and remove _meta keys (and children) in a single write. */
+export function saveEntriesAndRemoveMeta(data: CodexData, key: string, scope?: Scope | undefined): void {
+  const store = resolveStore(scope);
+  const current = store.load();
+  if (!current._meta) {
+    store.save({ ...current, entries: data });
+    return;
+  }
+  const meta = { ...current._meta };
+  const prefix = key + '.';
+  for (const k of Object.keys(meta)) {
+    if (k === key || k.startsWith(prefix)) delete meta[k];
+  }
+  store.save({ ...current, entries: data, _meta: meta });
+}
+
 export function loadMetaMerged(): Record<string, number> {
   const project = getProjectStore();
   const global = getGlobalStore();

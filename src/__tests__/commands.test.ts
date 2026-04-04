@@ -64,9 +64,12 @@ vi.mock('fs', () => {
 vi.mock('../store', () => {
   // Deep clone helper to prevent tests from mutating shared state
   const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+  const saveEntries = vi.fn((d: CodexData) => { storeState.entries = clone(d); });
   return {
     loadEntries:        vi.fn(()  => clone(storeState.entries)),
-    saveEntries:        vi.fn((d: CodexData) => { storeState.entries = clone(d); }),
+    saveEntries,
+    saveEntriesAndTouchMeta: vi.fn((d: CodexData) => { saveEntries(d); }),
+    saveEntriesAndRemoveMeta: vi.fn((d: CodexData) => { saveEntries(d); }),
     loadEntriesMerged:  vi.fn(()  => clone(storeState.entries)),
     loadAliasMap:       vi.fn(()  => clone(storeState.aliases)),
     saveAliasMap:       vi.fn((d: Record<string, string>) => { storeState.aliases = clone(d); }),

@@ -443,10 +443,16 @@ server.tool(
   },
   async ({ searchTerm, regex, keysOnly, valuesOnly, aliasesOnly, entriesOnly, scope: scopeParam }) => {
     try {
+      if (keysOnly && valuesOnly) {
+        return errorResponse("'keysOnly' and 'valuesOnly' are mutually exclusive.");
+      }
       const scope = toScope(scopeParam);
       let match: (text: string) => boolean;
       try {
         if (regex) {
+          if (searchTerm.length > 500) {
+            return errorResponse("Regex pattern too long (max 500 characters).");
+          }
           const re = new RegExp(searchTerm, 'i');
           match = (text: string) => re.test(text);
         } else {
@@ -578,7 +584,14 @@ server.tool(
 
     // --chain: split value into key references, resolve each, and &&-chain
     if (chain) {
-      const chainKeys = value.trim().split(/\s+/);
+      const trimmedValue = value.trim();
+      if (!trimmedValue) {
+        return errorResponse(`Value at '${key}' is empty and cannot be used with chain mode.`);
+      }
+      const chainKeys = trimmedValue.split(/\s+/).filter(Boolean);
+      if (chainKeys.length === 0) {
+        return errorResponse(`Value at '${key}' is empty and cannot be used with chain mode.`);
+      }
       const commands: string[] = [];
       for (const ck of chainKeys) {
         const rk = resolveKey(ck, scope);
@@ -975,7 +988,7 @@ server.tool(
   "codex_stale",
   "Find entries that haven't been updated recently (helps identify stale knowledge)",
   {
-    days: z.number().optional().describe("Threshold in days (default: 30). Entries not updated in this many days are returned."),
+    days: z.number().int().min(0).optional().describe("Threshold in days (default: 30). Entries not updated in this many days are returned."),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
   async ({ days, scope: scopeParam }) => {

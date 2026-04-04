@@ -30,6 +30,11 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
   try {
     // --chain: resolve the first key's value as a space-separated list of key references
     if (options.chain) {
+      if (keys.length !== 1) {
+        printError('--chain requires exactly one key argument.');
+        process.exitCode = 1;
+        return;
+      }
       const chainKey = keys[0];
       const resolvedChainKey = resolveKey(chainKey, scope);
       const chainValue = getValue(resolvedChainKey, scope);

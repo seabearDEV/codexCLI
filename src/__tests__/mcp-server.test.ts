@@ -4,7 +4,7 @@
 type ToolHandler = (params: any) => Promise<any>;
 const {
   toolHandlers, mockExecSync, mockFiles, mockWrittenFiles,
-  mockData, mockAliases, mockConfig, mockConfirmKeys,
+  mockData, mockAliases, mockConfig, mockConfirmKeys, mockMetaData,
 } = vi.hoisted(() => ({
   toolHandlers: {} as Record<string, ToolHandler>,
   mockExecSync: vi.fn(),
@@ -14,6 +14,7 @@ const {
   mockAliases: {} as Record<string, string>,
   mockConfig: { colors: true, theme: 'default' } as Record<string, any>,
   mockConfirmKeys: {} as Record<string, true>,
+  mockMetaData: {} as Record<string, number>,
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/mcp.js', () => {
@@ -181,10 +182,18 @@ vi.mock('../store', () => ({
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
   }),
+  saveEntriesAndTouchMeta: vi.fn((d: any) => {
+    Object.keys(mockData).forEach(k => delete mockData[k]);
+    Object.assign(mockData, d);
+  }),
+  saveEntriesAndRemoveMeta: vi.fn((d: any) => {
+    Object.keys(mockData).forEach(k => delete mockData[k]);
+    Object.assign(mockData, d);
+  }),
   touchMeta: vi.fn(),
   removeMeta: vi.fn(),
-  loadMeta: vi.fn(() => ({})),
-  loadMetaMerged: vi.fn(() => ({})),
+  loadMeta: vi.fn(() => ({ ...mockMetaData })),
+  loadMetaMerged: vi.fn(() => ({ ...mockMetaData })),
 }));
 
 vi.mock('../formatting', () => ({
@@ -222,6 +231,7 @@ function resetMocks() {
   Object.assign(mockConfig, { colors: true, theme: 'default' });
   Object.keys(mockFiles).forEach(k => delete mockFiles[k]);
   Object.keys(mockWrittenFiles).forEach(k => delete mockWrittenFiles[k]);
+  Object.keys(mockMetaData).forEach(k => delete mockMetaData[k]);
   mockExecSync.mockReset();
 }
 
@@ -890,6 +900,72 @@ describe('MCP Server Tools', () => {
       const result = await toolHandlers['codex_search']({ searchTerm: 'server', valuesOnly: true });
       // "server" is only in the key, not the value — so no match with valuesOnly
       expect(result.content[0].text).toContain('No results');
+    });
+
+    it('returns error when keysOnly and valuesOnly are both true', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: 'server', keysOnly: true, valuesOnly: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('mutually exclusive');
+    });
+  });
+
+  describe('codex_stale', () => {
+    it('returns message when no stale entries (default threshold)', async () => {
+      Object.assign(mockData, { project: { name: 'test' } });
+      // All entries have recent timestamps (within last 30 days)
+      const recentTs = Date.now() - 1 * 86400000; // 1 day ago
+      Object.assign(mockMetaData, { 'project.name': recentTs });
+
+      const result = await toolHandlers['codex_stale']({});
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('No entries older than 30 days');
+    });
+
+    it('returns stale entries older than threshold', async () => {
+      Object.assign(mockData, { project: { name: 'test', oldkey: 'oldval' } });
+      const oldTs = Date.now() - 60 * 86400000; // 60 days ago
+      const recentTs = Date.now() - 1 * 86400000; // 1 day ago
+      Object.assign(mockMetaData, {
+        'project.name': recentTs,
+        'project.oldkey': oldTs,
+      });
+
+      const result = await toolHandlers['codex_stale']({ days: 30 });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain('project.oldkey');
+      expect(result.content[0].text).not.toContain('project.name');
+    });
+
+    it('uses custom days threshold', async () => {
+      Object.assign(mockData, { project: { a: '1', b: '2' } });
+      const ts7dAgo = Date.now() - 7 * 86400000;
+      Object.assign(mockMetaData, {
+        'project.a': ts7dAgo,
+        'project.b': ts7dAgo,
+      });
+
+      const result = await toolHandlers['codex_stale']({ days: 3 });
+      expect(result.content[0].text).toContain('project.a');
+      expect(result.content[0].text).toContain('project.b');
+    });
+
+    it('marks entries with no timestamp as never tracked', async () => {
+      Object.assign(mockData, { untracked: 'value' });
+      // mockMetaData is empty (no timestamps)
+
+      const result = await toolHandlers['codex_stale']({ days: 0 });
+      expect(result.content[0].text).toContain('never tracked');
+    });
+
+    it('handles scoped (global) request', async () => {
+      Object.assign(mockData, { g: 'val' });
+      const oldTs = Date.now() - 90 * 86400000;
+      Object.assign(mockMetaData, { g: oldTs });
+
+      const result = await toolHandlers['codex_stale']({ days: 30, scope: 'global' });
+      expect(result.content[0].text).toContain('g');
     });
   });
 
