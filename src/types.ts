@@ -21,6 +21,9 @@ export interface SearchOptions {
   aliases?: boolean | undefined;
   tree?: boolean | undefined;
   json?: boolean | undefined;
+  regex?: boolean | undefined;
+  keys?: boolean | undefined;
+  values?: boolean | undefined;
   global?: boolean | undefined;
 }
 

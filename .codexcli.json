@@ -24,7 +24,9 @@
       "cli": "src/index.ts uses Commander.js. Commands: set/get/run/find/edit/copy/rename/remove/init/config/data/stats. Aliases: s/g/r/f/e/cp/rn/rm.",
       "binary": "Production ccli is a Node.js SEA binary. Dev cclid is npm-linked. getBinaryName() detects which via argv.",
       "telemetry": "src/utils/telemetry.ts — JSONL append log at getDataDirectory()/telemetry.jsonl (defaults to ~/.codexcli/telemetry.jsonl in production; overridable via CODEX_DATA_DIR). Logs tool name, session ID, op type (read/write/exec), namespace. computeStats() computes trending metrics. MCP wrapper auto-logs all tool calls.",
-      "interpolation": "src/utils/interpolate.ts — ${key} value refs, $(key) exec refs, ${key:-default} fallbacks, ${key:?error} required checks. Brace-aware parser for nested defaults. Recursive with circular ref detection, max depth 10."
+      "interpolation": "src/utils/interpolate.ts — ${key} value refs, $(key) exec refs, ${key:-default} fallbacks, ${key:?error} required checks. Brace-aware parser for nested defaults. Recursive with circular ref detection, max depth 10.",
+      "staleness": "_meta section in data.json tracks last-modified timestamp per key. touchMeta/removeMeta in store.ts, auto-called by setValue/removeValue. ccli stale [days], codex_stale MCP tool, codex_context shows [Nd] age tags for entries >30d old.",
+      "lint": "src/commands/lint.ts — ccli lint checks entries against recommended namespace schema (project/commands/arch/conventions/context/files/deps/system). Custom namespaces via _schema.namespaces in .codexcli.json."
     },
     "conventions": {
       "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",
@@ -57,6 +59,23 @@
       "test": {
         "1": "searchable value one",
         "2": "searchable value two"
+      }
+    },
+    "cmd": {
+      "a": "echo step-a",
+      "b": "echo step-b",
+      "c": "echo step-c"
+    },
+    "macros": {
+      "all": "cmd.a cmd.b cmd.c"
+    },
+    "server": {
+      "prod": {
+        "ip": "10.0.0.1",
+        "port": "8080"
+      },
+      "dev": {
+        "ip": "127.0.0.1"
       }
     }
   }

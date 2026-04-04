@@ -13,6 +13,7 @@ interface UnifiedData {
   entries: CodexData;
   aliases: Record<string, string>;
   confirm: Record<string, true>;
+  _meta?: Record<string, number> | undefined;
 }
 
 export type Scope = 'project' | 'global' | 'auto';
@@ -59,6 +60,7 @@ function createScopedStore(getFilePath: () => string, ensureDir: () => void): Sc
         entries: (parsed.entries ?? {}) as CodexData,
         aliases: (parsed.aliases ?? {}) as Record<string, string>,
         confirm: (parsed.confirm ?? {}) as Record<string, true>,
+        _meta: (parsed._meta ?? undefined) as Record<string, number> | undefined,
       };
 
       cache = result;
@@ -86,6 +88,9 @@ function createScopedStore(getFilePath: () => string, ensureDir: () => void): Sc
         confirm: Object.fromEntries(Object.entries(data.confirm).sort(([a], [b]) => a.localeCompare(b))),
         entries: data.entries, // entries are nested — saveJsonSorted handles top-level sort
       };
+      if (data._meta && Object.keys(data._meta).length > 0) {
+        sorted._meta = Object.fromEntries(Object.entries(data._meta).sort(([a], [b]) => a.localeCompare(b)));
+      }
       saveJsonSorted(filePath, sorted);
       const mtime = fs.statSync(filePath).mtimeMs;
       cache = data;
@@ -247,6 +252,39 @@ export function clearStoreCaches(): void {
   projectStorePath = null;
   migrationDone = false;
   clearProjectFileCache();
+}
+
+// ── Meta (staleness tracking) ─────────────────────────────────────────
+
+export function loadMeta(scope?: Scope | undefined): Record<string, number> {
+  return resolveStore(scope).load()._meta ?? {};
+}
+
+export function touchMeta(key: string, scope?: Scope | undefined): void {
+  const store = resolveStore(scope);
+  const current = store.load();
+  const meta = { ...(current._meta ?? {}), [key]: Date.now() };
+  store.save({ ...current, _meta: meta });
+}
+
+export function removeMeta(key: string, scope?: Scope | undefined): void {
+  const store = resolveStore(scope);
+  const current = store.load();
+  if (!current._meta) return;
+  const meta = { ...current._meta };
+  // Remove exact key and any children (e.g., removing "server" also removes "server.ip")
+  const prefix = key + '.';
+  for (const k of Object.keys(meta)) {
+    if (k === key || k.startsWith(prefix)) delete meta[k];
+  }
+  store.save({ ...current, _meta: meta });
+}
+
+export function loadMetaMerged(): Record<string, number> {
+  const project = getProjectStore();
+  const global = getGlobalStore();
+  if (!project) return global.load()._meta ?? {};
+  return { ...(global.load()._meta ?? {}), ...(project.load()._meta ?? {}) };
 }
 
 // ── Migration ──────────────────────────────────────────────────────────

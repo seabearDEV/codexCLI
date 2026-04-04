@@ -474,24 +474,37 @@ server.tool(
   "codex_search",
   "Search entries in the CodexCLI data store",
   {
-    searchTerm: z.string().describe("Term to search for (case-insensitive)"),
+    searchTerm: z.string().describe("Term to search for (case-insensitive substring, or regex if regex=true)"),
+    regex: z.boolean().optional().describe("Treat searchTerm as a regular expression"),
+    keysOnly: z.boolean().optional().describe("Match against keys only (skip values)"),
+    valuesOnly: z.boolean().optional().describe("Match against values only (skip keys)"),
     aliasesOnly: z.boolean().optional().describe("Search only in aliases"),
     entriesOnly: z.boolean().optional().describe("Search only in data entries"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ searchTerm, aliasesOnly, entriesOnly, scope: scopeParam }) => {
+  async ({ searchTerm, regex, keysOnly, valuesOnly, aliasesOnly, entriesOnly, scope: scopeParam }) => {
     try {
       const scope = toScope(scopeParam);
-      const term = searchTerm.toLowerCase();
+      let match: (text: string) => boolean;
+      try {
+        if (regex) {
+          const re = new RegExp(searchTerm, 'i');
+          match = (text: string) => re.test(text);
+        } else {
+          const lc = searchTerm.toLowerCase();
+          match = (text: string) => text.toLowerCase().includes(lc);
+        }
+      } catch (err) {
+        return errorResponse(`Invalid regex: ${err instanceof Error ? err.message : String(err)}`);
+      }
       const results: string[] = [];
 
       if (!aliasesOnly) {
-
         const flat = getEntriesFlat(scope);
         for (const [k, v] of Object.entries(flat)) {
           const encrypted = isEncrypted(v);
-          const keyMatch = k.toLowerCase().includes(term);
-          const valueMatch = !encrypted && String(v).toLowerCase().includes(term);
+          const keyMatch = !valuesOnly && match(k);
+          const valueMatch = !keysOnly && !encrypted && match(String(v));
 
           if (keyMatch || valueMatch) {
             results.push(`${k}: ${encrypted ? '[encrypted]' : v}`);
@@ -502,10 +515,7 @@ server.tool(
       if (!entriesOnly) {
         const aliases = loadAliases(scope);
         for (const [alias, target] of Object.entries(aliases)) {
-          if (
-            alias.toLowerCase().includes(term) ||
-            target.toLowerCase().includes(term)
-          ) {
+          if (match(alias) || match(target)) {
             results.push(`[alias] ${alias} -> ${target}`);
           }
         }
@@ -591,10 +601,11 @@ server.tool(
     key: z.string().describe("Dot-notation key (or alias) whose value is a shell command"),
     dry: z.boolean().optional().describe("If true, return the command without executing it"),
     force: z.boolean().optional().describe("If true, skip the confirm check for entries marked --confirm"),
+    chain: z.boolean().optional().describe("If true, treat stored value as space-separated key references to resolve and &&-chain"),
     capture: z.boolean().optional().describe("Capture output (MCP always captures; included for API consistency)"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ key, dry, force, scope: scopeParam }) => {
+  async ({ key, dry, force, chain, scope: scopeParam }) => {
     const scope = toScope(scopeParam);
     const resolvedKey = resolveKey(key, scope);
     const value = getValue(resolvedKey, scope);
@@ -604,6 +615,37 @@ server.tool(
     }
     if (typeof value !== "string") {
       return errorResponse(`Value at '${key}' is not a string command.`);
+    }
+
+    // --chain: split value into key references, resolve each, and &&-chain
+    if (chain) {
+      const chainKeys = value.trim().split(/\s+/);
+      const commands: string[] = [];
+      for (const ck of chainKeys) {
+        const rk = resolveKey(ck, scope);
+        const cv = getValue(rk, scope);
+        if (cv === undefined) return errorResponse(`Chain key '${ck}' not found.`);
+        if (typeof cv !== 'string') return errorResponse(`Chain key '${ck}' is not a string command.`);
+        if (isEncrypted(cv)) return errorResponse(`Chain key '${ck}' is encrypted.`);
+        if (hasConfirm(rk) && !force && !dry) {
+          return errorResponse(`Chain key '${ck}' requires confirmation. Pass force: true.`);
+        }
+        try { commands.push(interpolate(cv)); } catch (err) {
+          return errorResponse(`Interpolation error in '${ck}': ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      const command = commands.join(' && ');
+      if (dry) return textResponse(`$ ${command}`);
+      try {
+        const stdout = execSync(command, { encoding: "utf-8", shell: process.env.SHELL ?? "/bin/sh", timeout: 30000 });
+        return textResponse(`$ ${command}\n${stdout}`);
+      } catch (err: unknown) {
+        if (err && typeof err === "object" && "status" in err) {
+          const execErr = err as { status: number; stderr?: string };
+          return errorResponse(`$ ${command}\nCommand failed (exit ${execErr.status}): ${execErr.stderr ?? ""}`);
+        }
+        return errorResponse(`Error running command: ${String(err)}`);
+      }
     }
 
     if (isEncrypted(value)) {
@@ -935,11 +977,22 @@ server.tool(
         return textResponse("No entries stored. Use codex_set to add project knowledge.");
       }
 
+      // Load meta for age indicators
+      const { loadMeta, loadMetaMerged } = await import("./store");
+      const meta = effectiveScope === 'auto' ? loadMetaMerged() : loadMeta(effectiveScope);
+      const STALE_DAYS = 30;
+      const staleCutoff = Date.now() - STALE_DAYS * 86400000;
+
       const lines: string[] = [];
 
       if (Object.keys(flat).length > 0) {
         for (const [k, v] of Object.entries(flat)) {
-          lines.push(`${k}: ${isEncrypted(v) ? '[encrypted]' : v}`);
+          const ts = meta[k];
+          let ageTag = '';
+          if (ts !== undefined && ts < staleCutoff) {
+            ageTag = ` [${Math.floor((Date.now() - ts) / 86400000)}d]`;
+          }
+          lines.push(`${k}: ${isEncrypted(v) ? '[encrypted]' : v}${ageTag}`);
         }
       }
 
@@ -954,6 +1007,42 @@ server.tool(
       return textResponse(lines.join("\n"));
     } catch (err) {
       return errorResponse(`Error loading context: ${String(err)}`);
+    }
+  }
+);
+
+// --- codex_stale ---
+server.tool(
+  "codex_stale",
+  "Find entries that haven't been updated recently (helps identify stale knowledge)",
+  {
+    days: z.number().optional().describe("Threshold in days (default: 30). Entries not updated in this many days are returned."),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
+  },
+  async ({ days, scope: scopeParam }) => {
+    try {
+      const threshold = days ?? 30;
+      const scope = toScope(scopeParam);
+      const { loadMeta, loadMetaMerged } = await import("./store");
+      const meta = scope === 'auto' ? loadMetaMerged() : loadMeta(scope);
+      const flat = getEntriesFlat(scope);
+      const cutoff = Date.now() - threshold * 86400000;
+
+      const stale: string[] = [];
+      for (const key of Object.keys(flat)) {
+        const ts = meta[key];
+        if (ts === undefined || ts < cutoff) {
+          const age = ts ? `${Math.floor((Date.now() - ts) / 86400000)}d ago` : 'never tracked';
+          stale.push(`${key}  (${age})`);
+        }
+      }
+
+      if (stale.length === 0) {
+        return textResponse(`No entries older than ${threshold} days.`);
+      }
+      return textResponse(`${stale.length} entries not updated in ${threshold}+ days:\n${stale.join('\n')}`);
+    } catch (err) {
+      return errorResponse(`Error checking staleness: ${String(err)}`);
     }
   }
 );

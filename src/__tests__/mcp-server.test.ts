@@ -181,6 +181,10 @@ vi.mock('../store', () => ({
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
   }),
+  touchMeta: vi.fn(),
+  removeMeta: vi.fn(),
+  loadMeta: vi.fn(() => ({})),
+  loadMetaMerged: vi.fn(() => ({})),
 }));
 
 vi.mock('../formatting', () => ({

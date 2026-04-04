@@ -2,7 +2,7 @@ import { color } from './formatting';
 import { getNestedValue, setNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
 import { CodexData, CodexValue } from './types';
 import { debug } from './utils/debug';
-import { Scope, loadEntries, saveEntries, loadEntriesMerged, findProjectFile } from './store';
+import { Scope, loadEntries, saveEntries, loadEntriesMerged, findProjectFile, touchMeta, removeMeta } from './store';
 
 export { Scope } from './store';
 
@@ -74,6 +74,7 @@ export function setValue(key: string, value: string, scope?: Scope | undefined):
   const data = loadEntries(effectiveScope);
   setNestedValue(data, key, value);
   saveEntries(data, effectiveScope);
+  touchMeta(key, effectiveScope);
 }
 
 /**
@@ -86,20 +87,29 @@ export function removeValue(key: string, scope?: Scope | undefined): boolean {
       const projectData = loadEntries('project');
       if (getNestedValue(projectData, key) !== undefined) {
         const removed = removeNestedValue(projectData, key);
-        if (removed) saveEntries(projectData, 'project');
+        if (removed) {
+          saveEntries(projectData, 'project');
+          removeMeta(key, 'project');
+        }
         return removed;
       }
     }
     // Fall through to global
     const globalData = loadEntries('global');
     const removed = removeNestedValue(globalData, key);
-    if (removed) saveEntries(globalData, 'global');
+    if (removed) {
+      saveEntries(globalData, 'global');
+      removeMeta(key, 'global');
+    }
     return removed;
   }
 
   const data = loadEntries(scope);
   const removed = removeNestedValue(data, key);
-  if (removed) saveEntries(data, scope);
+  if (removed) {
+    saveEntries(data, scope);
+    removeMeta(key, scope);
+  }
   return removed;
 }
 

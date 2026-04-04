@@ -78,6 +78,10 @@ vi.mock('../store', () => {
     findProjectFile:    vi.fn(() => null),
     clearProjectFileCache: vi.fn(),
     getEffectiveScope:  vi.fn(() => 'global'),
+    touchMeta:          vi.fn(),
+    removeMeta:         vi.fn(),
+    loadMeta:           vi.fn(() => ({})),
+    loadMetaMerged:     vi.fn(() => ({})),
   };
 });
 
@@ -641,6 +645,51 @@ describe('Commands', () => {
       await runCommand(['commands.cd:paths.project', 'commands.list'], { yes: true });
 
       expect(execSync).toHaveBeenCalledWith('cd /Users/me/project && ls -l', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+    });
+  });
+
+  describe('runCommand --chain', () => {
+    it('resolves space-separated keys and chains with &&', async () => {
+      storeState.entries = {
+        cmd: { a: 'echo step-a', b: 'echo step-b' },
+        macros: { both: 'cmd.a cmd.b' },
+      };
+
+      await runCommand(['macros.both'], { yes: true, chain: true });
+
+      expect(execSync).toHaveBeenCalledWith('echo step-a && echo step-b', { stdio: 'inherit', shell: process.env.SHELL || '/bin/sh' });
+    });
+
+    it('supports dry run with --chain', async () => {
+      storeState.entries = {
+        cmd: { a: 'echo step-a', b: 'echo step-b' },
+        macros: { both: 'cmd.a cmd.b' },
+      };
+
+      await runCommand(['macros.both'], { dry: true, chain: true });
+
+      expect(execSync).not.toHaveBeenCalled();
+      expect(console.log).toHaveBeenCalledWith(expect.stringContaining('echo step-a && echo step-b'));
+    });
+
+    it('errors when a chain key is not found', async () => {
+      storeState.entries = {
+        macros: { bad: 'cmd.exists cmd.missing' },
+        cmd: { exists: 'echo ok' },
+      };
+
+      await runCommand(['macros.bad'], { yes: true, chain: true });
+
+      expect(process.exitCode).toBe(1);
+      expect(execSync).not.toHaveBeenCalled();
+    });
+
+    it('errors when chain entry itself is not found', async () => {
+      storeState.entries = {};
+
+      await runCommand(['macros.nope'], { yes: true, chain: true });
+
+      expect(process.exitCode).toBe(1);
     });
   });
 
