@@ -24,6 +24,8 @@ A command-line knowledge base with built-in AI agent integration via MCP.
   - [Configuration](#configuration)
   - [Project-Scoped Data](#project-scoped-data)
   - [Data Management](#data-management)
+  - [Staleness Detection](#staleness-detection)
+  - [Schema Validation](#schema-validation)
   - [Shell Wrapper](#shell-wrapper)
   - [Shell Tab-Completion](#shell-tab-completion)
   - [Scripting Tips](#scripting-tips)
@@ -55,7 +57,9 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **Auto-Backup**: Automatic timestamped backups with configurable rotation (`max_backups` setting)
 - **File Locking**: Advisory locking prevents data corruption from concurrent access
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
-- **MCP Server**: 17 tools for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
+- **Staleness Detection**: Track when entries were last updated, find stale knowledge (`ccli stale`)
+- **Schema Validation**: Check entries against recommended namespaces (`ccli lint`), customizable via `_schema.namespaces`
+- **MCP Server**: 19 tools for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
 - **MCP Telemetry**: Track AI agent usage patterns — bootstrap rate, write-back rate, namespace coverage (`ccli stats`)
 
 ## Installation
@@ -252,6 +256,11 @@ ccli run secret.script -d -y
 
 # Capture output for piping (instead of inheriting stdio)
 ccli run cmd.echo --capture | tr a-z A-Z
+
+# Stored command chain (macro) — value is space-separated key refs
+ccli set macros.deploy "commands.build commands.test commands.deploy"
+ccli run macros.deploy --chain -y
+# → npm run build && npm test && ./deploy.sh
 ```
 
 ### Searching
@@ -271,6 +280,15 @@ ccli find server -t
 
 # Output as JSON (for scripting)
 ccli find prod --json
+
+# Search with regex
+ccli find "prod.*ip" --regex
+
+# Search keys only (skip value matching)
+ccli find "server" --keys
+
+# Search values only (skip key matching)
+ccli find "10.0" --values
 ```
 
 ### Aliases
@@ -592,6 +610,46 @@ ccli data reset all -f
 
 > **Auto-backup:** Before destructive operations (`data reset`, non-merge `data import`), CodexCLI automatically creates a timestamped backup in `~/.codexcli/.backups/`. The last 10 backups are kept by default — configure with `ccli config set max_backups <n>` (set to `0` to disable rotation).
 
+### Staleness Detection
+
+Track when entries were last updated and find stale knowledge that may need refreshing.
+
+```bash
+# Show entries not updated in 30 days (default)
+ccli stale
+
+# Show entries not updated in 7 days
+ccli stale 7
+
+# Output as JSON
+ccli stale --json
+```
+
+Timestamps are tracked automatically when entries are set, copied, or renamed.
+
+### Schema Validation
+
+Check entries against the recommended namespace schema to keep your knowledge base organized.
+
+```bash
+# Check for entries outside recommended namespaces
+ccli lint
+
+# Output as JSON
+ccli lint --json
+
+# Check global store only
+ccli lint -G
+```
+
+Default namespaces: `project`, `commands`, `arch`, `conventions`, `context`, `files`, `deps`, `system`. Add custom namespaces in `.codexcli.json`:
+
+```json
+{
+  "_schema": { "namespaces": ["myapp", "infra"] }
+}
+```
+
 ### Shell Wrapper
 
 By default, `ccli run` executes commands in a child process. This means shell builtins like `cd`, `export`, and `alias` have no effect on your current shell.
@@ -690,6 +748,8 @@ ccli --debug get server.production
 | `config` | | `<subcommand>` | View or change configuration settings |
 | `init` | | | Create project-scoped `.codexcli.json` (`--scaffold` to auto-populate) |
 | `stats` | | | View MCP usage telemetry and trends (`--period`, `--json`) |
+| `stale` | | `[days]` | Show entries not updated in N days (default 30) |
+| `lint` | | | Check entries against namespace schema (`--json`) |
 | `data` | | `<subcommand>` | Manage stored data (export, import, reset) |
 
 **Config subcommands:** `set <key> <value>`, `get [key]`, `info`, `examples`, `completions <bash\|zsh\|install>`
@@ -794,7 +854,8 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | `codex_export` | Export data and/or aliases as JSON text |
 | `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
-| `codex_context` | Compact summary of all stored project knowledge (use at session start) |
+| `codex_context` | Compact summary of all stored project knowledge (use at session start; includes age tags for stale entries) |
+| `codex_stale` | Find entries not updated recently (threshold in days, default 30) |
 | `codex_stats` | View MCP usage telemetry and AI agent effectiveness metrics |
 
 All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli.json` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.

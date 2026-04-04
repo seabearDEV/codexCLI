@@ -58,15 +58,24 @@ describe('Completions', () => {
 
   describe('getCompletions', () => {
     it('returns top-level commands when no command typed', () => {
-      const results = getCompletions('ccli ', 5);
-      const v = values(results);
-      expect(v).toContain('set');
-      expect(v).toContain('get');
-      expect(v).toContain('run');
-      expect(v).toContain('find');
-      expect(v).toContain('remove');
-      expect(v).toContain('config');
-      expect(v).toContain('config');
+      // Ensure enough terminal rows for all commands to appear
+      const origRows = process.stderr.rows;
+      Object.defineProperty(process.stderr, 'rows', { value: 80, configurable: true });
+      try {
+        const results = getCompletions('ccli ', 5);
+        const v = values(results);
+        expect(v).toContain('set');
+        expect(v).toContain('get');
+        expect(v).toContain('run');
+        expect(v).toContain('find');
+        expect(v).toContain('remove');
+        expect(v).toContain('config');
+        expect(v).toContain('stale');
+        expect(v).toContain('lint');
+        expect(v).toContain('stats');
+      } finally {
+        Object.defineProperty(process.stderr, 'rows', { value: origRows, configurable: true });
+      }
     });
 
     it('returns CompletionItem objects with descriptions and groups', () => {

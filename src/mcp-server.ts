@@ -25,7 +25,7 @@ import {
 import {
   ensureDataDirectoryExists,
 } from "./utils/paths";
-import { findProjectFile, loadEntries, saveEntries } from "./store";
+import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from "./store";
 import { hasConfirm, setConfirm, removeConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
@@ -321,7 +321,7 @@ server.tool(
         for (const [flatKey, flatVal] of Object.entries(flattenObject({ [resolvedSource]: value }))) {
           setNestedValue(data, dest + flatKey.slice(resolvedSource.length), String(flatVal));
         }
-        saveEntries(data, scope);
+        saveEntriesAndTouchMeta(data, dest, scope);
       }
 
       return textResponse(`Copied: ${resolvedSource} -> ${dest}`);
@@ -380,7 +380,7 @@ server.tool(
         for (const [flatKey, flatVal] of Object.entries(flattenObject({ [resolvedOld]: value }))) {
           setNestedValue(data, newKey + flatKey.slice(resolvedOld.length), String(flatVal));
         }
-        saveEntries(data, scope);
+        saveEntriesAndTouchMeta(data, newKey, scope);
       }
       removeValue(resolvedOld, scope);
 

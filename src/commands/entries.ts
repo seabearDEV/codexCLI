@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { loadData, handleError, getValue, setValue, removeValue, Scope } from '../storage';
 import { flattenObject, setNestedValue } from '../utils/objectPath';
-import { findProjectFile, loadEntries, saveEntries } from '../store';
+import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from '../store';
 import { CodexValue } from '../types';
 import { displayTree } from '../formatting';
 import { color } from '../formatting';
@@ -659,7 +659,7 @@ export async function copyEntry(sourceKey: string, destKey: string, force = fals
       for (const [flatKey, flatVal] of Object.entries(flattenObject({ [sourceKey]: value }))) {
         setNestedValue(data, destKey + flatKey.slice(sourceKey.length), String(flatVal));
       }
-      saveEntries(data, effectiveScope);
+      saveEntriesAndTouchMeta(data, destKey, effectiveScope);
     }
 
     printSuccess(`Entry '${sourceKey}' copied to '${destKey}'.`);
@@ -713,7 +713,7 @@ export function renameEntry(oldKey: string, newKey: string, aliasMode = false, n
     for (const [flatKey, flatVal] of Object.entries(flattenObject({ [oldKey]: value }))) {
       setNestedValue(data, newKey + flatKey.slice(oldKey.length), String(flatVal));
     }
-    saveEntries(data, effectiveScope);
+    saveEntriesAndTouchMeta(data, newKey, effectiveScope);
   }
   removeValue(oldKey, scope);
 
