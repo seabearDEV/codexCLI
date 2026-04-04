@@ -25,9 +25,9 @@ jobs:
     name: Build ${{ matrix.binary }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
 
@@ -46,7 +46,7 @@ jobs:
             ./dist/${{ matrix.binary }} --version
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.binary }}
           path: dist/${{ matrix.binary }}
@@ -56,9 +56,9 @@ jobs:
     name: Build ccli-macos-universal
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         id: setup-node
         with:
           node-version: 24
@@ -111,7 +111,7 @@ jobs:
       - name: Smoke test universal (x86_64)
         run: arch -x86_64 ./dist/ccli-macos-universal --version
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ccli-macos-universal
           path: dist/ccli-macos-universal
@@ -122,7 +122,7 @@ jobs:
     name: Create Release
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -161,7 +161,7 @@ jobs:
           echo "linux_arm64=$(sha256sum ccli-linux-arm64 | awk '{print $1}')" >> "$GITHUB_OUTPUT"
 
       - name: Checkout tap repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: seabearDEV/homebrew-ccli
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
