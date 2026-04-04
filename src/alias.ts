@@ -98,15 +98,15 @@ export function resolveKey(key: string, scope?: Scope | undefined): string {
   if (!scope || scope === 'auto') {
     const merged = loadAliasMapMerged();
     const resolved = merged[cleanKey] ?? cleanKey;
-    if (resolved !== key) {
-      debug(`Alias resolved: "${key}" -> "${resolved}"`);
+    if (resolved !== cleanKey) {
+      debug(`Alias resolved: "${cleanKey}" -> "${resolved}"`);
     }
     return resolved;
   }
   const aliases = loadAliasMap(scope);
   const resolved = aliases[cleanKey] ?? cleanKey;
-  if (resolved !== key) {
-    debug(`Alias resolved: "${key}" -> "${resolved}"`);
+  if (resolved !== cleanKey) {
+    debug(`Alias resolved: "${cleanKey}" -> "${resolved}"`);
   }
   return resolved;
 }

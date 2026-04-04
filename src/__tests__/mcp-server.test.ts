@@ -174,6 +174,7 @@ vi.mock('../store', () => ({
 
 vi.mock('../formatting', () => ({
   formatTree: vi.fn(() => 'tree-output'),
+  resetColorCache: vi.fn(),
 }));
 
 // Mock config

@@ -1,4 +1,4 @@
-import { color } from '../formatting';
+import { color, resetColorCache } from '../formatting';
 import { loadConfig, getConfigSetting, setConfigSetting } from '../config';
 import { printError } from './helpers';
 import { debug } from '../utils/debug';
@@ -41,6 +41,7 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
 
   // If both setting and value provided, update the setting
   setConfigSetting(setting, value!);
+  resetColorCache();
   console.log(`Updated ${color.green(setting)} to: ${value}`);
 }
 
@@ -51,6 +52,7 @@ export function configSet(setting: string, value: string): void {
 
     console.log(`Changing ${setting} from ${currentValue} to ${value}`);
     setConfigSetting(setting, value);
+    resetColorCache();
     console.log(`${setting} set to ${value}`);
   } catch (error) {
     printError(`Error setting config ${setting}: ${String(error)}`);

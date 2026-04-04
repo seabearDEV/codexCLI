@@ -691,11 +691,20 @@ export function renameEntry(oldKey: string, newKey: string, aliasMode = false, n
   const oldPrefix = oldKey + '.';
   let aliasesChanged = false;
   for (const [alias, target] of Object.entries(aliases)) {
+    let newTarget: string | null = null;
     if (target === oldKey) {
-      aliases[alias] = newKey;
-      aliasesChanged = true;
+      newTarget = newKey;
     } else if (target.startsWith(oldPrefix)) {
-      aliases[alias] = newKey + target.slice(oldKey.length);
+      newTarget = newKey + target.slice(oldKey.length);
+    }
+    if (newTarget !== null) {
+      // Enforce one-alias-per-entry: remove any existing alias already targeting newTarget
+      for (const [existingAlias, existingTarget] of Object.entries(aliases)) {
+        if (existingTarget === newTarget && existingAlias !== alias) {
+          delete aliases[existingAlias];
+        }
+      }
+      aliases[alias] = newTarget;
       aliasesChanged = true;
     }
   }

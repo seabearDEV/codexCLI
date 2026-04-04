@@ -29,7 +29,7 @@ import { hasConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } fro
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
 import { version } from "../package.json";
-import { formatTree } from "./formatting";
+import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
 
@@ -559,6 +559,7 @@ server.tool(
       }
 
       setConfigSetting(key, value);
+      resetColorCache();
       return textResponse(`Config set: ${key} = ${value}`);
     } catch (err) {
       return errorResponse(`Error setting config: ${String(err)}`);
