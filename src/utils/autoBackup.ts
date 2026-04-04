@@ -44,11 +44,18 @@ export function createAutoBackup(label: string): string | null {
 
     // Rotate: keep only the N most recent backups (0 = no rotation)
     try {
-      const maxBackups = Number(getConfigSetting('max_backups')) || 10;
+      const configuredMaxBackups = Number(getConfigSetting('max_backups'));
+      const maxBackups = Number.isNaN(configuredMaxBackups) ? 10 : configuredMaxBackups;
       if (maxBackups > 0) {
         const allBackups = fs.readdirSync(backupDir)
-          .filter(name => fs.statSync(path.join(backupDir, name)).isDirectory())
-          .sort();
+          .map(name => {
+            const fullPath = path.join(backupDir, name);
+            const stats = fs.statSync(fullPath);
+            return { name, stats };
+          })
+          .filter(entry => entry.stats.isDirectory())
+          .sort((a, b) => a.stats.mtimeMs - b.stats.mtimeMs)
+          .map(entry => entry.name);
         if (allBackups.length > maxBackups) {
           const toRemove = allBackups.slice(0, allBackups.length - maxBackups);
           for (const old of toRemove) {

@@ -356,7 +356,7 @@ function scaffoldProject(): void {
     } catch { /* ignore parse errors */ }
   }
 
-  // --- Python (pyproject.toml / setup.py) ---
+  // --- Python (pyproject.toml) ---
   if (fs.existsSync(path.join(cwd, 'pyproject.toml'))) {
     discovered.push({ key: 'project.stack', value: 'Python' });
     if (fs.existsSync(path.join(cwd, 'Makefile'))) {
