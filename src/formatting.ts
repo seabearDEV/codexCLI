@@ -151,7 +151,7 @@ export function showHelp(): void {
 }
 
 /**
- * Display comprehensive usage examples (standalone via `ccli examples`)
+ * Display comprehensive usage examples
  */
 export function showExamples(): void {
   const bin = getBinaryName();

@@ -19,7 +19,7 @@ export function getErrorMessage(error: unknown): string {
 export function handleError(message: string, error: unknown, context?: string): void {
   const contextPrefix = context ? `[${context}] ` : '';
 
-  if (process.env.DEBUG) {
+  if (process.env.DEBUG === 'true') {
     console.error(`${color.red(contextPrefix + message)}: `, error);
     if (error instanceof Error && error.stack) {
       console.error(color.gray(error.stack));

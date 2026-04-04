@@ -20,12 +20,13 @@ import {
   resolveKey,
   buildKeyToAliasMap,
   removeAliasesForKey,
+  renameAlias,
 } from "./alias";
 import {
   ensureDataDirectoryExists,
 } from "./utils/paths";
 import { findProjectFile, loadEntries, saveEntries } from "./store";
-import { hasConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
+import { hasConfirm, setConfirm, removeConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
 import { version } from "../package.json";
@@ -334,6 +335,103 @@ server.tool(
       return textResponse(`Copied: ${resolvedSource} -> ${dest}`);
     } catch (err) {
       return errorResponse(`Error copying entry: ${String(err)}`);
+    }
+  }
+);
+
+// --- codex_rename ---
+server.tool(
+  "codex_rename",
+  "Rename an entry key or alias in the CodexCLI data store",
+  {
+    oldKey: z.string().describe("Current dot-notation key (or alias name when is_alias is true)"),
+    newKey: z.string().describe("New dot-notation key (or alias name when is_alias is true)"),
+    is_alias: z.boolean().optional().describe("If true, rename the alias itself (not the entry key)"),
+    alias: z.string().optional().describe("Create a new alias for the renamed entry"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
+  },
+  async ({ oldKey, newKey, is_alias, alias, scope: scopeParam }) => {
+    try {
+      const scope = toScope(scopeParam);
+
+      // Alias rename mode
+      if (is_alias) {
+        const result = renameAlias(oldKey, newKey, scope);
+        if (!result) {
+          const aliases = loadAliases(scope);
+          if (!(oldKey in aliases)) {
+            return errorResponse(`Alias '${oldKey}' not found.`);
+          }
+          return errorResponse(`Alias '${newKey}' already exists.`);
+        }
+        return textResponse(`Alias '${oldKey}' renamed to '${newKey}'.`);
+      }
+
+      // Entry key rename
+      const resolvedOld = resolveKey(oldKey, scope);
+      const value = getValue(resolvedOld, scope);
+      if (value === undefined) {
+        return errorResponse(`Key '${oldKey}' not found.`);
+      }
+
+      const existing = getValue(newKey, scope);
+      if (existing !== undefined) {
+        return errorResponse(`Key '${newKey}' already exists. Remove it first or choose a different key.`);
+      }
+
+      // Move the value
+      if (typeof value === 'string') {
+        setValue(newKey, value, scope);
+      } else {
+        // Batch: load once, set all leaves, save once
+        const data = loadEntries(scope);
+        for (const [flatKey, flatVal] of Object.entries(flattenObject({ [resolvedOld]: value }))) {
+          setNestedValue(data, newKey + flatKey.slice(resolvedOld.length), String(flatVal));
+        }
+        saveEntries(data, scope);
+      }
+      removeValue(resolvedOld, scope);
+
+      // Update aliases: re-point any alias targeting oldKey (or children) to newKey
+      const aliases = loadAliases(scope);
+      const oldPrefix = resolvedOld + '.';
+      const updates: Array<[string, string]> = [];
+      for (const [a, target] of Object.entries(aliases)) {
+        if (target === resolvedOld) {
+          updates.push([a, newKey]);
+        } else if (target.startsWith(oldPrefix)) {
+          updates.push([a, newKey + target.slice(resolvedOld.length)]);
+        }
+      }
+
+      if (updates.length > 0) {
+        // Enforce one-alias-per-entry: remove any existing alias already pointing to a new target
+        const newTargets = new Set(updates.map(([, t]) => t));
+        for (const [a, target] of Object.entries(aliases)) {
+          if (newTargets.has(target)) {
+            delete aliases[a];
+          }
+        }
+        for (const [a, newTarget] of updates) {
+          aliases[a] = newTarget;
+        }
+        saveAliases(aliases, scope);
+      }
+
+      // Move confirm metadata
+      if (hasConfirm(resolvedOld)) {
+        removeConfirm(resolvedOld, scope);
+        setConfirm(newKey, scope);
+      }
+
+      // Set a new alias on the renamed key
+      if (alias) {
+        setAlias(alias, newKey, scope);
+      }
+
+      return textResponse(`Renamed: ${resolvedOld} -> ${newKey}`);
+    } catch (err) {
+      return errorResponse(`Error renaming entry: ${String(err)}`);
     }
   }
 );

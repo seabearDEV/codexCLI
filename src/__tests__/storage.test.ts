@@ -47,7 +47,7 @@ describe('Storage', () => {
     });
 
     it('in DEBUG mode, logs error object and gray stack trace', () => {
-      process.env.DEBUG = '1';
+      process.env.DEBUG = 'true';
       const err = new Error('oops');
 
       handleError('Something failed', err);
@@ -70,7 +70,7 @@ describe('Storage', () => {
     });
 
     it('includes context prefix in DEBUG mode', () => {
-      process.env.DEBUG = '1';
+      process.env.DEBUG = 'true';
       const err = new Error('oops');
 
       handleError('Something failed', err, 'ctx');

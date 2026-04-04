@@ -137,11 +137,20 @@ vi.mock('../alias', () => ({
   }),
   buildKeyToAliasMap: vi.fn(() => ({})),
   removeAliasesForKey: vi.fn(),
+  renameAlias: vi.fn((oldName: string, newName: string) => {
+    if (!(oldName in mockAliases)) return false;
+    if (newName in mockAliases) return false;
+    mockAliases[newName] = mockAliases[oldName];
+    delete mockAliases[oldName];
+    return true;
+  }),
 }));
 
 // Mock confirm
 vi.mock('../confirm', () => ({
   hasConfirm: vi.fn((key: string) => mockConfirmKeys[key] === true),
+  setConfirm: vi.fn((key: string) => { mockConfirmKeys[key] = true; }),
+  removeConfirm: vi.fn((key: string) => { delete mockConfirmKeys[key]; }),
   loadConfirmKeys: vi.fn(() => ({ ...mockConfirmKeys })),
   saveConfirmKeys: vi.fn((c: any) => {
     Object.keys(mockConfirmKeys).forEach(k => delete mockConfirmKeys[k]);
@@ -322,6 +331,74 @@ describe('MCP Server Tools', () => {
       const result = await toolHandlers['codex_remove']({ key: 'nope' });
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("'nope' not found");
+    });
+  });
+
+  describe('codex_rename', () => {
+    it('renames an entry key', async () => {
+      Object.assign(mockData, { old: { key: 'value' } });
+      const result = await toolHandlers['codex_rename']({ oldKey: 'old.key', newKey: 'new.key' });
+      expect(result.content[0].text).toContain('Renamed: old.key -> new.key');
+      expect(mockData.new?.key).toBe('value');
+      expect(mockData.old?.key).toBeUndefined();
+    });
+
+    it('returns error when source key not found', async () => {
+      const result = await toolHandlers['codex_rename']({ oldKey: 'missing', newKey: 'new' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("'missing' not found");
+    });
+
+    it('returns error when destination already exists', async () => {
+      Object.assign(mockData, { old: 'value', new: 'existing' });
+      const result = await toolHandlers['codex_rename']({ oldKey: 'old', newKey: 'new' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("'new' already exists");
+    });
+
+    it('re-points aliases from old key to new key', async () => {
+      Object.assign(mockData, { old: 'value' });
+      Object.assign(mockAliases, { shortcut: 'old' });
+      const result = await toolHandlers['codex_rename']({ oldKey: 'old', newKey: 'new' });
+      expect(result.content[0].text).toContain('Renamed: old -> new');
+      expect(mockAliases.shortcut).toBe('new');
+    });
+
+    it('moves confirm metadata to new key', async () => {
+      Object.assign(mockData, { old: 'echo dangerous' });
+      Object.assign(mockConfirmKeys, { old: true as const });
+      const result = await toolHandlers['codex_rename']({ oldKey: 'old', newKey: 'new' });
+      expect(result.content[0].text).toContain('Renamed: old -> new');
+      expect(mockConfirmKeys.old).toBeUndefined();
+      expect(mockConfirmKeys.new).toBe(true);
+    });
+
+    it('renames an alias when is_alias is true', async () => {
+      Object.assign(mockAliases, { oldAlias: 'some.key' });
+      const result = await toolHandlers['codex_rename']({ oldKey: 'oldAlias', newKey: 'newAlias', is_alias: true });
+      expect(result.content[0].text).toContain("Alias 'oldAlias' renamed to 'newAlias'");
+      expect(mockAliases.newAlias).toBe('some.key');
+      expect(mockAliases.oldAlias).toBeUndefined();
+    });
+
+    it('returns error for missing alias in alias mode', async () => {
+      const result = await toolHandlers['codex_rename']({ oldKey: 'nope', newKey: 'new', is_alias: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("'nope' not found");
+    });
+
+    it('returns error when target alias already exists', async () => {
+      Object.assign(mockAliases, { oldAlias: 'a.key', newAlias: 'b.key' });
+      const result = await toolHandlers['codex_rename']({ oldKey: 'oldAlias', newKey: 'newAlias', is_alias: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("'newAlias' already exists");
+    });
+
+    it('resolves alias before renaming entry', async () => {
+      Object.assign(mockData, { actual: { key: 'value' } });
+      Object.assign(mockAliases, { shortcut: 'actual.key' });
+      const result = await toolHandlers['codex_rename']({ oldKey: 'shortcut', newKey: 'renamed.key' });
+      expect(result.content[0].text).toContain('Renamed: actual.key -> renamed.key');
     });
   });
 
