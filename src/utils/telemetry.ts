@@ -59,39 +59,68 @@ function classifyOp(tool: string): TelemetryEntry['op'] {
 
 /**
  * Log an MCP tool call to the telemetry JSONL file.
- * Fire-and-forget — errors are silently ignored.
+ * Returns a promise for testing; callers that want fire-and-forget can ignore it.
+ * Errors are silently ignored — telemetry must never break the MCP server.
  */
-export function logToolCall(tool: string, key?: string): void {
+export function logToolCall(tool: string, key?: string): Promise<void> {
+  const entry: TelemetryEntry = {
+    ts: Date.now(),
+    tool,
+    session: sessionId,
+    op: classifyOp(tool),
+    ns: extractNamespace(key),
+  };
+  return new Promise<void>((resolve) => {
+    fs.appendFile(getTelemetryPath(), JSON.stringify(entry) + '\n', (_err) => resolve());
+  });
+}
+
+function pushTelemetryLine(entries: TelemetryEntry[], line: string): void {
+  if (!line.trim()) return;
   try {
-    const entry: TelemetryEntry = {
-      ts: Date.now(),
-      tool,
-      session: sessionId,
-      op: classifyOp(tool),
-      ns: extractNamespace(key),
-    };
-    fs.appendFileSync(getTelemetryPath(), JSON.stringify(entry) + '\n');
+    entries.push(JSON.parse(line) as TelemetryEntry);
   } catch {
-    // Never let telemetry break the MCP server
+    // Skip malformed lines
   }
 }
 
 /**
- * Read and parse the telemetry log. Returns entries newest-first.
+ * Read and parse the telemetry log. Returns entries in file order
+ * (oldest-first, since new entries are appended to the log).
  */
 export function loadTelemetry(): TelemetryEntry[] {
+  const chunkSize = 64 * 1024;
+  const entries: TelemetryEntry[] = [];
+
   try {
-    const content = fs.readFileSync(getTelemetryPath(), 'utf8');
-    const entries: TelemetryEntry[] = [];
-    for (const line of content.split('\n')) {
-      if (!line.trim()) continue;
-      try {
-        entries.push(JSON.parse(line) as TelemetryEntry);
-      } catch {
-        // Skip malformed lines
+    const fd = fs.openSync(getTelemetryPath(), 'r');
+    const buffer = Buffer.alloc(chunkSize);
+    let remainder = '';
+
+    try {
+      let bytesRead: number;
+      do {
+        // null position advances the fd's read offset automatically on each call
+        bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
+        if (bytesRead <= 0) break;
+
+        const chunk = remainder + buffer.toString('utf8', 0, bytesRead);
+        const lines = chunk.split('\n');
+        remainder = lines.pop() ?? '';
+
+        for (const line of lines) {
+          pushTelemetryLine(entries, line);
+        }
+      } while (bytesRead === buffer.length);
+
+      if (remainder) {
+        pushTelemetryLine(entries, remainder);
       }
+
+      return entries;
+    } finally {
+      fs.closeSync(fd);
     }
-    return entries;
   } catch {
     return [];
   }

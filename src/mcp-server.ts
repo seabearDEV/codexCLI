@@ -106,7 +106,16 @@ server.tool = ((...args: any[]) => {
   const origHandler = args[args.length - 1] as (params: Record<string, unknown>, extra: unknown) => Promise<unknown>;
   args[args.length - 1] = async (params: Record<string, unknown>, extra: unknown) => {
     if (name !== 'codex_stats') {
-      const key = (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
+      let key: string | undefined;
+      if (name === 'codex_copy') {
+        // Log destination (write target) rather than source for accurate write-back tracking
+        key = (params.dest ?? params.source) as string | undefined;
+      } else if (name === 'codex_alias_set') {
+        // Log the dot-notation path rather than the alias name for namespace coverage
+        key = params.path as string | undefined;
+      } else {
+        key = (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
+      }
       logToolCall(name, key);
     }
     return origHandler(params, extra);

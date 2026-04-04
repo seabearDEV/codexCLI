@@ -25,8 +25,8 @@ afterEach(() => {
 });
 
 describe('logToolCall', () => {
-  it('creates telemetry.jsonl and writes a valid entry', () => {
-    logToolCall('codex_get', 'arch.mcp');
+  it('creates telemetry.jsonl and writes a valid entry', async () => {
+    await logToolCall('codex_get', 'arch.mcp');
     const content = fs.readFileSync(path.join(tmpDir, 'telemetry.jsonl'), 'utf8');
     const entry = JSON.parse(content.trim()) as TelemetryEntry;
     expect(entry.tool).toBe('codex_get');
@@ -36,58 +36,58 @@ describe('logToolCall', () => {
     expect(entry.ts).toBeGreaterThan(0);
   });
 
-  it('appends multiple entries', () => {
-    logToolCall('codex_set', 'project.name');
-    logToolCall('codex_get', 'project.name');
+  it('appends multiple entries', async () => {
+    await logToolCall('codex_set', 'project.name');
+    await logToolCall('codex_get', 'project.name');
     const entries = loadTelemetry();
     expect(entries).toHaveLength(2);
   });
 
-  it('classifies writes correctly', () => {
-    logToolCall('codex_set', 'x');
-    logToolCall('codex_remove', 'x');
-    logToolCall('codex_copy', 'x');
-    logToolCall('codex_import');
-    logToolCall('codex_reset');
-    logToolCall('codex_alias_set', 'a');
-    logToolCall('codex_alias_remove', 'a');
-    logToolCall('codex_config_set');
-    logToolCall('codex_rename', 'x');
+  it('classifies writes correctly', async () => {
+    await logToolCall('codex_set', 'x');
+    await logToolCall('codex_remove', 'x');
+    await logToolCall('codex_copy', 'x');
+    await logToolCall('codex_import');
+    await logToolCall('codex_reset');
+    await logToolCall('codex_alias_set', 'a');
+    await logToolCall('codex_alias_remove', 'a');
+    await logToolCall('codex_config_set');
+    await logToolCall('codex_rename', 'x');
     const entries = loadTelemetry();
     expect(entries.every(e => e.op === 'write')).toBe(true);
   });
 
-  it('classifies reads correctly', () => {
-    logToolCall('codex_get', 'x');
-    logToolCall('codex_context');
-    logToolCall('codex_search', 'term');
-    logToolCall('codex_export');
-    logToolCall('codex_alias_list');
-    logToolCall('codex_config_get');
+  it('classifies reads correctly', async () => {
+    await logToolCall('codex_get', 'x');
+    await logToolCall('codex_context');
+    await logToolCall('codex_search', 'term');
+    await logToolCall('codex_export');
+    await logToolCall('codex_alias_list');
+    await logToolCall('codex_config_get');
     const entries = loadTelemetry();
     expect(entries.every(e => e.op === 'read')).toBe(true);
   });
 
-  it('classifies exec correctly', () => {
-    logToolCall('codex_run', 'cmd');
+  it('classifies exec correctly', async () => {
+    await logToolCall('codex_run', 'cmd');
     const entries = loadTelemetry();
     expect(entries[0].op).toBe('exec');
   });
 
-  it('extracts top-level namespace from dot-notation key', () => {
-    logToolCall('codex_get', 'arch.mcp.tools');
+  it('extracts top-level namespace from dot-notation key', async () => {
+    await logToolCall('codex_get', 'arch.mcp.tools');
     const entries = loadTelemetry();
     expect(entries[0].ns).toBe('arch');
   });
 
-  it('uses * for missing key', () => {
-    logToolCall('codex_context');
+  it('uses * for missing key', async () => {
+    await logToolCall('codex_context');
     const entries = loadTelemetry();
     expect(entries[0].ns).toBe('*');
   });
 
-  it('uses full key when no dots', () => {
-    logToolCall('codex_get', 'toplevel');
+  it('uses full key when no dots', async () => {
+    await logToolCall('codex_get', 'toplevel');
     const entries = loadTelemetry();
     expect(entries[0].ns).toBe('toplevel');
   });
