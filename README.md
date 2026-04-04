@@ -1,6 +1,6 @@
 # CodexCLI
 
-A command-line information store for quick reference of frequently used data.
+A command-line knowledge base with built-in AI agent integration via MCP.
 
 ## Table of Contents
 
@@ -18,6 +18,7 @@ A command-line information store for quick reference of frequently used data.
   - [Editing Data](#editing-data)
   - [Removing Data](#removing-data)
   - [Interpolation](#interpolation)
+    - [Conditional Interpolation](#conditional-interpolation)
     - [Exec Interpolation](#exec-interpolation)
   - [Encryption](#encryption)
   - [Configuration](#configuration)
@@ -34,13 +35,13 @@ A command-line information store for quick reference of frequently used data.
 
 ## Overview
 
-CodexCLI is a command-line tool designed to help you store, organize, and retrieve structured information efficiently. It uses a hierarchical dot notation system (similar to JSON) that makes it easy to organize related data.
+CodexCLI is a command-line tool and AI agent knowledge base. It stores structured information using hierarchical dot notation (similar to JSON) and exposes it to AI agents via MCP. The goal: make AI agents more effective by giving them persistent, shared project context across sessions.
 
 ## Features
 
 - **Hierarchical Data Storage**: Store data using intuitive dot notation paths (e.g., `server.production.ip`)
 - **Command Runner**: Execute stored shell commands with dry-run, composition (`:`) and chaining (`&&`), and optional per-entry confirmation
-- **Interpolation**: Reference stored values with `${key}` and execute stored commands with `$(key)` — resolved at read time
+- **Interpolation**: Reference stored values with `${key}`, execute stored commands with `$(key)`, and use conditional defaults `${key:-fallback}` — all resolved at read time
 - **Aliases**: Create shortcuts to frequently accessed paths
 - **Encryption**: Password-protect sensitive values
 - **Search**: Find entries by searching keys or values
@@ -50,10 +51,12 @@ CodexCLI is a command-line tool designed to help you store, organize, and retrie
 - **JSON Output**: Machine-readable `--json` flag on `get` and `find` for scripting
 - **Stdin Piping**: Pipe values into `set` from other commands
 - **Project-Scoped Data**: Opt-in `.codexcli.json` per project — project entries take precedence, fall through to global
-- **Auto-Backup**: Automatic timestamped backups before destructive operations
+- **Init Scaffolding**: `ccli init --scaffold` auto-populates from `package.json`, `go.mod`, `Cargo.toml`, or `pyproject.toml`
+- **Auto-Backup**: Automatic timestamped backups with configurable rotation (`max_backups` setting)
 - **File Locking**: Advisory locking prevents data corruption from concurrent access
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
-- **MCP Server**: Expose CodexCLI as a tool for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
+- **MCP Server**: 17 tools for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
+- **MCP Telemetry**: Track AI agent usage patterns — bootstrap rate, write-back rate, namespace coverage (`ccli stats`)
 
 ## Installation
 
@@ -377,6 +380,29 @@ ccli get paths.myproject --source
 ccli set paths.myproject -p
 ```
 
+#### Conditional Interpolation
+
+Use bash-style modifiers for fallback values and required-key checks:
+
+```bash
+# Default value — use fallback when key is not found
+ccli set greeting 'Hello, ${user.name:-stranger}!'
+ccli get greeting
+# → Hello, stranger!    (if user.name doesn't exist)
+# → Hello, Alice!       (if user.name is "Alice")
+
+# Required value — throw a custom error when key is not found
+ccli set deploy.cmd 'ssh ${deploy.host:?deploy.host must be set first}'
+ccli run deploy.cmd
+# → Error: deploy.host must be set first
+
+# Nested defaults — the fallback can itself contain ${} references
+ccli set url '${api.url:-${api.default_url}}/endpoint'
+
+# Empty default — resolves to empty string when key is missing
+ccli set optional '${maybe.key:-}'
+```
+
 #### Exec Interpolation
 
 Use `$(key)` to execute a stored command and substitute its stdout. The key must reference a stored string value containing a shell command.
@@ -453,10 +479,11 @@ ccli config examples
 
 Available settings:
 
-| Setting  | Values                       | Description                   |
-|----------|------------------------------|-------------------------------|
-| `colors` | `true` / `false`             | Enable/disable colored output |
-| `theme`  | `default` / `dark` / `light` | UI theme                      |
+| Setting       | Values                       | Description                                      |
+|---------------|------------------------------|--------------------------------------------------|
+| `colors`      | `true` / `false`             | Enable/disable colored output                    |
+| `theme`       | `default` / `dark` / `light` | UI theme                                         |
+| `max_backups` | integer (default: `10`)      | Number of auto-backups to keep (`0` to disable)  |
 
 ### Project-Scoped Data
 
@@ -465,6 +492,9 @@ CodexCLI supports per-project data files that live alongside your code. The `.co
 ```bash
 # Initialize a project data file in the current directory
 ccli init
+
+# Initialize and auto-populate from project files (package.json, go.mod, etc.)
+ccli init --scaffold
 
 # Store project knowledge
 ccli set commands.build "npm run build"
@@ -514,10 +544,12 @@ Keep values concise — one sentence or a short command. Use multiple keys under
 
 When an AI agent connects via MCP, the recommended workflow is:
 
-1. Call `codex_context` to load all stored project knowledge
+1. Call `codex_context` as your **first** tool call to load all stored project knowledge
 2. Check relevant namespaces (`arch`, `conventions`, `context`) before exploring the codebase
 3. Record non-obvious discoveries with `codex_set` as you work
 4. Update stale entries when you find they no longer match the code
+
+Agent usage is tracked automatically — run `ccli stats` to see bootstrap rate, write-back rate, and namespace coverage trends.
 
 ### Data Management
 
@@ -558,7 +590,7 @@ ccli data reset entries
 ccli data reset all -f
 ```
 
-> **Auto-backup:** Before destructive operations (`data reset`, non-merge `data import`), CodexCLI automatically creates a timestamped backup in `~/.codexcli/.backups/`.
+> **Auto-backup:** Before destructive operations (`data reset`, non-merge `data import`), CodexCLI automatically creates a timestamped backup in `~/.codexcli/.backups/`. The last 10 backups are kept by default — configure with `ccli config set max_backups <n>` (set to `0` to disable rotation).
 
 ### Shell Wrapper
 
@@ -611,13 +643,13 @@ eval "$(ccli config completions bash)"
 
 | Context | Completions |
 |---|---|
-| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `init`, `config`, `data`) |
+| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `init`, `stats`, `config`, `data`) |
 | `ccli get <TAB>` | Flags + stored data keys + aliases + namespace prefixes |
 | `ccli run <TAB>` | Flags + stored data keys + aliases |
 | `ccli run cd:<TAB>` | Data keys + aliases (completes the segment after `:`) |
 | `ccli set <TAB>` | Flags + namespace prefixes (one level at a time) |
 | `ccli config <TAB>` | Subcommands (`set`, `get`, `info`, `examples`, `completions`) |
-| `ccli config set <TAB>` | Config keys (`colors`, `theme`) |
+| `ccli config set <TAB>` | Config keys (`colors`, `theme`, `max_backups`) |
 | `ccli data <TAB>` | Subcommands (`export`, `import`, `reset`) |
 | `ccli data export <TAB>` | `entries`, `aliases`, `confirm`, `all` |
 
@@ -656,7 +688,8 @@ ccli --debug get server.production
 | `remove` | `rm` | `<key>` | Remove an entry and its alias |
 | `rename` | `rn` | `<old> <new>` | Rename an entry key or alias |
 | `config` | | `<subcommand>` | View or change configuration settings |
-| `init` | | | Create project-scoped `.codexcli.json` (`--remove` to delete) |
+| `init` | | | Create project-scoped `.codexcli.json` (`--scaffold` to auto-populate) |
+| `stats` | | | View MCP usage telemetry and trends (`--period`, `--json`) |
 | `data` | | `<subcommand>` | Manage stored data (export, import, reset) |
 
 **Config subcommands:** `set <key> <value>`, `get [key]`, `info`, `examples`, `completions <bash\|zsh\|install>`
@@ -750,17 +783,19 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | `codex_get` | Retrieve entries (specific key, subtree, or all; optional decrypt + password) |
 | `codex_remove` | Remove an entry or alias by key |
 | `codex_copy` | Copy an entry to a new key (optional force to overwrite) |
+| `codex_rename` | Rename an entry key or alias (re-points aliases, migrates confirm metadata) |
 | `codex_search` | Search entries by key or value (case-insensitive) |
 | `codex_alias_set` | Create or update an alias for a dot-notation path |
 | `codex_alias_remove` | Remove an alias |
 | `codex_alias_list` | List all defined aliases |
 | `codex_run` | Execute a stored command (dry-run, force to skip confirm check, capture output) |
 | `codex_config_get` | Get one or all configuration settings |
-| `codex_config_set` | Set a configuration setting (colors, theme) |
+| `codex_config_set` | Set a configuration setting (colors, theme, max_backups) |
 | `codex_export` | Export data and/or aliases as JSON text |
 | `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
 | `codex_context` | Compact summary of all stored project knowledge (use at session start) |
+| `codex_stats` | View MCP usage telemetry and AI agent effectiveness metrics |
 
 All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli.json` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.
 

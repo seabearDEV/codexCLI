@@ -18,9 +18,10 @@ A detailed plan for rewriting codexCLI from TypeScript/Node to Go. This document
 
 ## Current Codebase Metrics
 
-- **Source**: ~4,400 LOC across 32 files
-- **Tests**: ~5,600 LOC across 17 files (450 tests)
-- **Commands**: 7 primary + 2 command groups (config, data)
+- **Source**: ~6,200 LOC across 33 files
+- **Tests**: ~6,000 LOC across 18 files (500+ tests)
+- **Commands**: 8 primary + 2 command groups (config, data) + stats
+- **MCP tools**: 17
 - **Production deps**: 4 (commander, chalk, zod, @modelcontextprotocol/sdk)
 
 ---
