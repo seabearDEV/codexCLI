@@ -824,4 +824,73 @@ describe('MCP Server Tools', () => {
     });
   });
 
+  describe('codex_run with chain', () => {
+    it('resolves chain keys and joins with &&', async () => {
+      Object.assign(mockData, {
+        cmd: { a: 'echo step-a', b: 'echo step-b' },
+        macros: { both: 'cmd.a cmd.b' },
+      });
+      mockExecSync.mockReturnValue('step-a\nstep-b\n');
+
+      const result = await toolHandlers['codex_run']({ key: 'macros.both', chain: true });
+      expect(result.content[0].text).toContain('echo step-a && echo step-b');
+    });
+
+    it('supports dry run with chain', async () => {
+      Object.assign(mockData, {
+        cmd: { a: 'echo hi', b: 'echo bye' },
+        macros: { both: 'cmd.a cmd.b' },
+      });
+
+      const result = await toolHandlers['codex_run']({ key: 'macros.both', chain: true, dry: true });
+      expect(result.content[0].text).toBe('$ echo hi && echo bye');
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('returns error when a chain key is not found', async () => {
+      Object.assign(mockData, {
+        macros: { bad: 'cmd.exists cmd.missing' },
+        cmd: { exists: 'echo ok' },
+      });
+
+      const result = await toolHandlers['codex_run']({ key: 'macros.bad', chain: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("'cmd.missing' not found");
+    });
+  });
+
+  describe('codex_search with regex', () => {
+    it('matches entries by regex pattern', async () => {
+      Object.assign(mockData, {
+        server: { prod: { ip: '10.0.0.1' }, dev: { ip: '127.0.0.1' } },
+      });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: 'prod.*ip', regex: true });
+      expect(result.content[0].text).toContain('server.prod.ip');
+      expect(result.content[0].text).not.toContain('server.dev.ip');
+    });
+
+    it('returns error for invalid regex', async () => {
+      const result = await toolHandlers['codex_search']({ searchTerm: '[invalid', regex: true });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Invalid regex');
+    });
+
+    it('supports keysOnly', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: '10.0', keysOnly: true });
+      // 10.0 is only in the value, not the key — so no match with keysOnly
+      expect(result.content[0].text).toContain('No results');
+    });
+
+    it('supports valuesOnly', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+
+      const result = await toolHandlers['codex_search']({ searchTerm: 'server', valuesOnly: true });
+      // "server" is only in the key, not the value — so no match with valuesOnly
+      expect(result.content[0].text).toContain('No results');
+    });
+  });
+
 });

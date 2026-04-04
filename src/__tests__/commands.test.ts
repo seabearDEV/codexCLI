@@ -1291,6 +1291,55 @@ describe('Commands', () => {
     });
   });
 
+  describe('searchEntries regex and field filters', () => {
+    it('matches entries by regex pattern', () => {
+      storeState.entries = {
+        server: { prod: { ip: '10.0.0.1' }, dev: { ip: '127.0.0.1' } },
+      };
+
+      searchEntries('prod.*ip', { regex: true });
+
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('server.prod.ip');
+      expect(output).not.toContain('server.dev.ip');
+    });
+
+    it('shows error for invalid regex', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      searchEntries('[invalid', { regex: true });
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('filters by keys only', () => {
+      storeState.entries = { server: { ip: '10.0.0.1' } };
+
+      searchEntries('10.0', { keys: true });
+
+      // "10.0" is only in the value, not the key
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('No matches');
+    });
+
+    it('filters by values only', () => {
+      storeState.entries = { server: { ip: '10.0.0.1' } };
+
+      searchEntries('server', { values: true });
+
+      // "server" is only in the key, not the value
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('No matches');
+    });
+
+    it('finds value match with values filter', () => {
+      storeState.entries = { server: { ip: '10.0.0.1' } };
+
+      searchEntries('10.0', { values: true });
+
+      const output = (console.log as Mock).mock.calls.map((c: unknown[]) => c.join(' ')).join('\n');
+      expect(output).toContain('server.ip');
+    });
+  });
+
   describe('runCommand --source mode', () => {
     let stderrWriteSpy: SpyInstance;
     let stdoutWriteSpy: SpyInstance;

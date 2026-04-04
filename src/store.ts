@@ -304,6 +304,7 @@ function migrateToUnifiedFile(): { data: UnifiedData; mtime: number } | null {
           entries: (parsed.entries ?? {}) as CodexData,
           aliases: (parsed.aliases ?? {}) as Record<string, string>,
           confirm: (parsed.confirm ?? {}) as Record<string, true>,
+          _meta: (parsed._meta ?? undefined) as Record<string, number> | undefined,
         },
         mtime: stat.mtimeMs,
       };
