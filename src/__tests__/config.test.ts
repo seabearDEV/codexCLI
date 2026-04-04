@@ -230,8 +230,8 @@ describe('Config', () => {
       const first = loadConfig();
       const second = loadConfig();
 
-      expect(first).toEqual({ colors: false, theme: 'dark' });
-      expect(second).toEqual({ colors: false, theme: 'dark' });
+      expect(first).toEqual({ colors: false, theme: 'dark', max_backups: 10 });
+      expect(second).toEqual({ colors: false, theme: 'dark', max_backups: 10 });
       expect(fs.readFileSync).toHaveBeenCalledTimes(1);
     });
 

@@ -356,7 +356,8 @@ codexCLI
   .command('init')
   .description('Create a project-scoped .codexcli.json in the current directory')
   .option('--remove', 'Remove the project file')
-  .action((options: { remove?: boolean }) => {
+  .option('--scaffold', 'Auto-populate from project files (package.json, go.mod, etc.)')
+  .action((options: { remove?: boolean; scaffold?: boolean }) => {
     commands.handleProjectFile(options);
   });
 
