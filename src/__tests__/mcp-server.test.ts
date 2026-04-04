@@ -54,9 +54,11 @@ vi.mock('fs', () => {
     readFileSync: vi.fn(() => JSON.stringify({ entries: {}, aliases: {}, confirm: {} })),
     mkdirSync: vi.fn(),
     openSync: vi.fn(() => 3),
+    readSync: vi.fn(() => 0),
     writeSync: vi.fn(),
     closeSync: vi.fn(),
     unlinkSync: vi.fn(),
+    appendFile: vi.fn((_p: string, _data: string, cb: (err: NodeJS.ErrnoException | null) => void) => { cb(null); }),
     constants: { O_CREAT: 0x40, O_EXCL: 0x80, O_WRONLY: 0x01 },
   };
   return { default: mock, ...mock };

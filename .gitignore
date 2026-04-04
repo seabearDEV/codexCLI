@@ -149,3 +149,6 @@ vite.config.ts.timestamp-*
 # Dev data directory
 data/
 
+# Telemetry (per-machine, not project data)
+telemetry.jsonl
+
