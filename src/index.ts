@@ -361,6 +361,64 @@ codexCLI
     commands.handleProjectFile(options);
   });
 
+// Stats command: MCP telemetry and usage trends
+codexCLI
+  .command('stats')
+  .description('View MCP usage telemetry and AI agent effectiveness trends')
+  .option('-p, --period <period>', 'Time period: 7d, 30d, 90d, all', '30d')
+  .option('--json', 'Output raw JSON')
+  .action(async (options: { period: string; json?: boolean }) => {
+    const { computeStats } = await import('./utils/telemetry');
+    const days = options.period === '7d' ? 7 : options.period === '90d' ? 90 : options.period === 'all' ? 0 : 30;
+    const stats = computeStats(days);
+
+    if (options.json) {
+      console.log(JSON.stringify(stats, null, 2));
+      return;
+    }
+
+    const { color } = await import('./formatting');
+
+    if (stats.totalCalls === 0) {
+      console.log(color.gray('No telemetry data yet. Usage is tracked automatically when MCP tools are called.'));
+      return;
+    }
+
+    console.log(color.bold(`\nMCP Usage Stats (${stats.period === 'all' ? 'all time' : `last ${stats.period}`})`));
+    console.log('');
+    console.log(`  Sessions:        ${color.white(String(stats.totalSessions))}`);
+    console.log(`  Total calls:     ${color.white(String(stats.totalCalls))}`);
+
+    const bootstrapPct = (stats.bootstrapRate * 100).toFixed(0);
+    const bootstrapColor = stats.bootstrapRate >= 0.8 ? color.green : stats.bootstrapRate >= 0.5 ? color.yellow : color.red;
+    console.log(`  Bootstrap rate:  ${bootstrapColor(`${bootstrapPct}%`)} of sessions call codex_context first`);
+
+    const writeBackPct = (stats.writeBackRate * 100).toFixed(0);
+    const writeBackColor = stats.writeBackRate >= 0.5 ? color.green : stats.writeBackRate >= 0.25 ? color.yellow : color.red;
+    console.log(`  Write-back rate: ${writeBackColor(`${writeBackPct}%`)} of sessions store at least 1 entry`);
+
+    console.log(`  Read:write:      ${color.white(stats.readWriteRatio)} (${stats.reads} reads, ${stats.writes} writes, ${stats.execs} execs)`);
+
+    if (Object.keys(stats.namespaceCoverage).length > 0) {
+      console.log(color.bold('\nNamespace activity:'));
+      const sorted = Object.entries(stats.namespaceCoverage)
+        .sort(([, a], [, b]) => (b.reads + b.writes) - (a.reads + a.writes));
+      for (const [ns, data] of sorted) {
+        const age = data.lastWrite ? `${Math.floor((Date.now() - data.lastWrite) / 86400000)}d ago` : 'never';
+        const ageColor = data.lastWrite && (Date.now() - data.lastWrite) < 7 * 86400000 ? color.green : color.gray;
+        console.log(`  ${color.white(ns.padEnd(20))} ${String(data.reads).padStart(3)} reads  ${String(data.writes).padStart(3)} writes  last write: ${ageColor(age)}`);
+      }
+    }
+
+    if (stats.topTools.length > 0) {
+      console.log(color.bold('\nTop tools:'));
+      for (const { tool, count } of stats.topTools) {
+        console.log(`  ${color.white(tool.padEnd(24))} ${count} calls`);
+      }
+    }
+    console.log('');
+  });
+
 // MCP server subcommand: allows binary/Homebrew installs to run the MCP server
 codexCLI
   .command('mcp-server')
