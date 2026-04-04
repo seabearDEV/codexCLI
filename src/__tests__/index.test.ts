@@ -33,6 +33,9 @@ const mockGenerateBashScript = vi.fn().mockReturnValue('bash-script');
 const mockGenerateZshScript = vi.fn().mockReturnValue('zsh-script');
 const mockInstallCompletions = vi.fn();
 
+const mockGetEffectiveInstructions = vi.fn().mockReturnValue('effective instructions');
+const mockDefaultLLMInstructions = 'default instructions';
+
 function setupMocks() {
   vi.doMock('../commands', () => ({
     setEntry: mockSetEntry,
@@ -62,6 +65,10 @@ function setupMocks() {
     generateBashScript: mockGenerateBashScript,
     generateZshScript: mockGenerateZshScript,
     installCompletions: mockInstallCompletions,
+  }));
+  vi.doMock('../llm-instructions', () => ({
+    DEFAULT_LLM_INSTRUCTIONS: mockDefaultLLMInstructions,
+    getEffectiveInstructions: mockGetEffectiveInstructions,
   }));
 }
 
@@ -215,6 +222,17 @@ describe('CLI Entry Point (index.ts)', () => {
   it('config examples calls showExamples', async () => {
     await loadCLI('config', 'examples');
     expect(mockShowExamples).toHaveBeenCalled();
+  });
+
+  it('config llm-instructions prints effective instructions via pager', async () => {
+    await loadCLI('config', 'llm-instructions');
+    expect(mockGetEffectiveInstructions).toHaveBeenCalled();
+    expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining('effective instructions'));
+  });
+
+  it('config llm-instructions --default prints built-in defaults via pager', async () => {
+    await loadCLI('config', 'llm-instructions', '--default');
+    expect(process.stdout.write).toHaveBeenCalledWith(expect.stringContaining('default instructions'));
   });
 
   // --- Data subcommands ---
