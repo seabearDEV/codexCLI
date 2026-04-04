@@ -18,13 +18,27 @@ const MAX_DEPTH = 10;
  *   "key:?must be set" → { key: "key", modifier: ":?", modValue: "must be set" }
  */
 function parseRef(ref: string): { key: string; modifier?: ':-' | ':?'; modValue?: string } {
-  // Check for :- first, then :?
-  for (const mod of [':-', ':?'] as const) {
-    const idx = ref.indexOf(mod);
-    if (idx !== -1) {
-      return { key: ref.slice(0, idx), modifier: mod, modValue: ref.slice(idx + 2) };
+  // Scan left-to-right, skipping nested ${...} blocks, to find the first top-level :- or :?
+  let depth = 0;
+
+  for (let i = 0; i < ref.length - 1; i++) {
+    if (ref[i] === '$' && ref[i + 1] === '{') {
+      depth++;
+      i++;
+      continue;
+    }
+
+    if (ref[i] === '}' && depth > 0) {
+      depth--;
+      continue;
+    }
+
+    if (depth === 0 && ref[i] === ':' && (ref[i + 1] === '-' || ref[i + 1] === '?')) {
+      const modifier = ref.slice(i, i + 2) as ':-' | ':?';
+      return { key: ref.slice(0, i), modifier, modValue: ref.slice(i + 2) };
     }
   }
+
   return { key: ref };
 }
 
@@ -162,7 +176,7 @@ export function interpolate(
         }
         if (depth === 0) {
           const ref = result.slice(i + 2, j);
-          out += resolveRef(ref, maxDepth, seen, execCache);
+          out += ref === '' ? '${}' : resolveRef(ref, maxDepth, seen, execCache);
           i = j + 1;
         } else {
           // Unclosed brace — leave as-is

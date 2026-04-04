@@ -47,6 +47,15 @@
       "completions": "src/completions.ts (CLI_TREE defines all commands, getDynamicValues for tab completion)",
       "formatting": "src/formatting.ts (showHelp, showExamples, displayTree, color utilities)",
       "interpolate": "src/utils/interpolate.ts (${key} value interpolation, $(key) exec interpolation, conditional modifiers)"
+    },
+    "test": {
+      "key": "test value"
+    },
+    "search": {
+      "test": {
+        "1": "searchable value one",
+        "2": "searchable value two"
+      }
     }
   }
 }

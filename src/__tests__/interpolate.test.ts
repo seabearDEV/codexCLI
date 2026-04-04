@@ -98,6 +98,11 @@ describe('interpolate', () => {
     expect(interpolate('${unclosed')).toBe('${unclosed');
   });
 
+  it('leaves ${} (empty ref) unchanged', () => {
+    expect(interpolate('${}')).toBe('${}');
+    expect(interpolate('text ${} more')).toBe('text ${} more');
+  });
+
   it('trims whitespace in key references', () => {
     mockGetValue.mockReturnValueOnce('value');
     expect(interpolate('${ key }')).toBe('value');
@@ -176,6 +181,28 @@ describe('conditional interpolation ${key:-default} and ${key:?error}', () => {
     it('supports error message containing colons', () => {
       mockGetValue.mockReturnValueOnce(undefined);
       expect(() => interpolate('${missing:?error: key not set}')).toThrow('error: key not set');
+    });
+
+    it('returns existing value when key exists, even if :? message contains ${:-}', () => {
+      mockGetValue.mockReturnValueOnce('real');
+      expect(interpolate('${exists:?msg ${x:-y}}')).toBe('real');
+    });
+
+    it('throws with literal modValue when :? message contains nested ${:-}', () => {
+      mockGetValue.mockReturnValue(undefined);
+      expect(() => interpolate('${missing:?msg ${x:-y}}')).toThrow('msg ${x:-y}');
+    });
+  });
+
+  describe('parseRef ambiguity — modifier value contains the other modifier token', () => {
+    it(':- default containing :? is treated as plain default text', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(interpolate('${missing:-text:?not-an-error}')).toBe('text:?not-an-error');
+    });
+
+    it(':? message containing :- is treated as plain error text', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(() => interpolate('${missing:?error :-oops}')).toThrow('error :-oops');
     });
   });
 });
