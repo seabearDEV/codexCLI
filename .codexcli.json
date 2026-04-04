@@ -24,7 +24,8 @@
       "cli": "src/index.ts uses Commander.js. Commands: set/get/run/find/edit/copy/rename/remove/init/config/data/stats. Aliases: s/g/r/f/e/cp/rn/rm.",
       "binary": "Production ccli is a Node.js SEA binary. Dev cclid is npm-linked. getBinaryName() detects which via argv.",
       "telemetry": "src/utils/telemetry.ts — JSONL append log at getDataDirectory()/telemetry.jsonl (defaults to ~/.codexcli/telemetry.jsonl in production; overridable via CODEX_DATA_DIR). Logs tool name, session ID, op type (read/write/exec), namespace. computeStats() computes trending metrics. MCP wrapper auto-logs all tool calls.",
-      "interpolation": "src/utils/interpolate.ts — ${key} value refs, $(key) exec refs, ${key:-default} fallbacks, ${key:?error} required checks. Brace-aware parser for nested defaults. Recursive with circular ref detection, max depth 10."
+      "interpolation": "src/utils/interpolate.ts — ${key} value refs, $(key) exec refs, ${key:-default} fallbacks, ${key:?error} required checks. Brace-aware parser for nested defaults. Recursive with circular ref detection, max depth 10.",
+      "llmInstructions": "src/llm-instructions.ts — DEFAULT_LLM_INSTRUCTIONS (immutable built-in), getCustomInstructions() reads system.llm.instructions from store, getEffectiveInstructions() assembles defaults + custom as PROJECT CONTEXT appendix. CLI: ccli config llm-instructions [--default]"
     },
     "conventions": {
       "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",
