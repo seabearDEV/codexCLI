@@ -129,6 +129,9 @@ export function showHelp(): void {
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
   cmd('init',     '',   '',                   'Create project-scoped .codexcli.json');
+  cmd('stale',    '',   '[days]',             'Show entries not updated in N days');
+  cmd('lint',     '',   '',                   'Check entries against namespace schema');
+  cmd('stats',    '',   '',                   'View MCP usage telemetry and trends');
   cmd('config',   '',   '<subcommand>',       'View or change configuration settings');
   cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
   console.log();

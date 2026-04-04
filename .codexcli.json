@@ -1,8 +1,9 @@
 {
   "_meta": {
-    "search.test.1": 1775344957735,
-    "search.test.2": 1775344957837,
-    "test.key": 1775344957574
+    "search.test.1": 1775345268371,
+    "search.test.2": 1775345268463,
+    "test.key": 1775345268213,
+    "x": 1775345239190
   },
   "aliases": {},
   "confirm": {},
@@ -15,6 +16,7 @@
         "1": "searchable value one",
         "2": "searchable value two"
       }
-    }
+    },
+    "x": "y"
   }
 }
