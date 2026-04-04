@@ -111,6 +111,75 @@ describe('interpolate', () => {
   });
 });
 
+describe('conditional interpolation ${key:-default} and ${key:?error}', () => {
+  describe(':- (default value)', () => {
+    it('uses default when key is not found', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(interpolate('${missing:-fallback}')).toBe('fallback');
+    });
+
+    it('uses existing value when key exists (ignores default)', () => {
+      mockGetValue.mockReturnValueOnce('real');
+      expect(interpolate('${exists:-fallback}')).toBe('real');
+    });
+
+    it('supports empty default value', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(interpolate('${missing:-}')).toBe('');
+    });
+
+    it('interpolates ${} references within the default value', () => {
+      mockGetValue.mockImplementation((key: string) => {
+        if (key === 'missing') return undefined;
+        if (key === 'other') return 'resolved';
+        return undefined;
+      });
+      expect(interpolate('${missing:-${other}}')).toBe('resolved');
+    });
+
+    it('uses literal default containing colons', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(interpolate('${missing:-http://example.com}')).toBe('http://example.com');
+    });
+
+    it('works in a string with surrounding text', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(interpolate('hello ${name:-world}!')).toBe('hello world!');
+    });
+
+    it('works alongside normal interpolation', () => {
+      mockGetValue.mockImplementation((key: string) => {
+        if (key === 'greeting') return 'hi';
+        if (key === 'name') return undefined;
+        return undefined;
+      });
+      expect(interpolate('${greeting} ${name:-stranger}')).toBe('hi stranger');
+    });
+  });
+
+  describe(':? (required with custom error)', () => {
+    it('throws custom error when key is not found', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(() => interpolate('${missing:?API key is required}')).toThrow('API key is required');
+    });
+
+    it('uses existing value when key exists (no error)', () => {
+      mockGetValue.mockReturnValueOnce('real');
+      expect(interpolate('${exists:?should not throw}')).toBe('real');
+    });
+
+    it('throws generic message when :? has no message', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(() => interpolate('${missing:?}')).toThrow('"missing" is required but not set');
+    });
+
+    it('supports error message containing colons', () => {
+      mockGetValue.mockReturnValueOnce(undefined);
+      expect(() => interpolate('${missing:?error: key not set}')).toThrow('error: key not set');
+    });
+  });
+});
+
 describe('interpolateObject', () => {
   it('interpolates leaf string values in a flat object', () => {
     mockGetValue.mockImplementation((key: string) => {
