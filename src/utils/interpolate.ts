@@ -5,15 +5,52 @@ import { flattenObject } from './objectPath';
 import { isEncrypted } from './crypto';
 import { CodexValue } from '../types';
 
-const INTERPOLATION_REGEX = /\$\{([^}]+)\}/g;
 const EXEC_INTERPOLATION_REGEX = /\$\(([^)]+)\)/g;
 const MAX_DEPTH = 10;
 
 /**
+ * Parse a ref string for conditional modifiers (`:-` default, `:?` error).
+ * Returns the key and optional modifier with its value.
+ *
+ * Examples:
+ *   "key"              → { key: "key" }
+ *   "key:-fallback"    → { key: "key", modifier: ":-", modValue: "fallback" }
+ *   "key:?must be set" → { key: "key", modifier: ":?", modValue: "must be set" }
+ */
+function parseRef(ref: string): { key: string; modifier?: ':-' | ':?'; modValue?: string } {
+  // Scan left-to-right, skipping nested ${...} blocks, to find the first top-level :- or :?
+  let depth = 0;
+
+  for (let i = 0; i < ref.length - 1; i++) {
+    if (ref[i] === '$' && ref[i + 1] === '{') {
+      depth++;
+      i++;
+      continue;
+    }
+
+    if (ref[i] === '}' && depth > 0) {
+      depth--;
+      continue;
+    }
+
+    if (depth === 0 && ref[i] === ':' && (ref[i + 1] === '-' || ref[i + 1] === '?')) {
+      const modifier = ref.slice(i, i + 2) as ':-' | ':?';
+      return { key: ref.slice(0, i), modifier, modValue: ref.slice(i + 2) };
+    }
+  }
+
+  return { key: ref };
+}
+
+/**
  * Resolve a `${key}` reference: look up stored value, validate, and recurse.
+ * Supports conditional modifiers:
+ *   `${key:-default}` — use default if key is not found
+ *   `${key:?error}`   — throw custom error if key is not found
  */
 function resolveRef(ref: string, maxDepth: number, seen: Set<string>, execCache: Map<string, string>): string {
-  const resolvedKey = resolveKey(ref.trim());
+  const { key: rawKey, modifier, modValue } = parseRef(ref);
+  const resolvedKey = resolveKey(rawKey.trim());
 
   if (seen.has(resolvedKey)) {
     const chain = [...seen, resolvedKey].join(' → ');
@@ -23,15 +60,22 @@ function resolveRef(ref: string, maxDepth: number, seen: Set<string>, execCache:
   const resolved = getValue(resolvedKey);
 
   if (resolved === undefined) {
-    throw new Error(`Interpolation failed: "${ref}" not found`);
+    if (modifier === ':-') {
+      // Default value — interpolate it in case it contains ${} references
+      return interpolate(modValue ?? '', maxDepth, seen, execCache);
+    }
+    if (modifier === ':?') {
+      throw new Error(modValue || `"${rawKey.trim()}" is required but not set`);
+    }
+    throw new Error(`Interpolation failed: "${rawKey.trim()}" not found`);
   }
 
   if (typeof resolved !== 'string') {
-    throw new Error(`Interpolation failed: "${ref}" is not a string value`);
+    throw new Error(`Interpolation failed: "${rawKey.trim()}" is not a string value`);
   }
 
   if (isEncrypted(resolved)) {
-    throw new Error(`Interpolation failed: "${ref}" is encrypted`);
+    throw new Error(`Interpolation failed: "${rawKey.trim()}" is encrypted`);
   }
 
   if (maxDepth <= 0) {
@@ -115,12 +159,36 @@ export function interpolate(
   // Early return if no interpolation markers present
   if (!value.includes('${') && !value.includes('$(')) return value;
 
-  // Phase 1: resolve ${key} references
+  // Phase 1: resolve ${key} references (brace-aware to support nested ${} in defaults)
   let result = value;
   if (result.includes('${')) {
-    result = result.replace(INTERPOLATION_REGEX, (_match, ref: string) => {
-      return resolveRef(ref, maxDepth, seen, execCache);
-    });
+    let out = '';
+    let i = 0;
+    while (i < result.length) {
+      if (result[i] === '$' && result[i + 1] === '{') {
+        // Scan for matching closing brace, tracking nesting depth
+        let depth = 1;
+        let j = i + 2;
+        while (j < result.length && depth > 0) {
+          if (result[j] === '{' && j > 0 && result[j - 1] === '$') depth++;
+          else if (result[j] === '}') depth--;
+          if (depth > 0) j++;
+        }
+        if (depth === 0) {
+          const ref = result.slice(i + 2, j);
+          out += ref === '' ? '${}' : resolveRef(ref, maxDepth, seen, execCache);
+          i = j + 1;
+        } else {
+          // Unclosed brace — leave as-is
+          out += result[i];
+          i++;
+        }
+      } else {
+        out += result[i];
+        i++;
+      }
+    }
+    result = out;
   }
 
   // Phase 2: resolve $(key) exec references
