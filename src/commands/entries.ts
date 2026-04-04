@@ -689,26 +689,30 @@ export function renameEntry(oldKey: string, newKey: string, aliasMode = false, n
   // Batch: mutate in-place and save once (instead of O(A*4) file I/O)
   const aliases = loadAliases(scope);
   const oldPrefix = oldKey + '.';
-  let aliasesChanged = false;
+
+  // First pass: collect re-point updates (alias -> newTarget)
+  const updates: Array<[string, string]> = [];
   for (const [alias, target] of Object.entries(aliases)) {
-    let newTarget: string | null = null;
     if (target === oldKey) {
-      newTarget = newKey;
+      updates.push([alias, newKey]);
     } else if (target.startsWith(oldPrefix)) {
-      newTarget = newKey + target.slice(oldKey.length);
-    }
-    if (newTarget !== null) {
-      // Enforce one-alias-per-entry: remove any existing alias already targeting newTarget
-      for (const [existingAlias, existingTarget] of Object.entries(aliases)) {
-        if (existingTarget === newTarget && existingAlias !== alias) {
-          delete aliases[existingAlias];
-        }
-      }
-      aliases[alias] = newTarget;
-      aliasesChanged = true;
+      updates.push([alias, newKey + target.slice(oldKey.length)]);
     }
   }
-  if (aliasesChanged) {
+
+  if (updates.length > 0) {
+    // Enforce one-alias-per-entry: remove any existing alias already pointing
+    // to one of the new targets before re-pointing (same rule as setAlias)
+    const newTargets = new Set(updates.map(([, t]) => t));
+    for (const [alias, target] of Object.entries(aliases)) {
+      if (newTargets.has(target)) {
+        delete aliases[alias];
+      }
+    }
+    // Apply re-pointings
+    for (const [alias, newTarget] of updates) {
+      aliases[alias] = newTarget;
+    }
     saveAliases(aliases, scope);
   }
 
