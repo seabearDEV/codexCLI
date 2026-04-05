@@ -21,7 +21,7 @@
     "context.devWorkflow": 1775358827618,
     "context.mcpCwd": 1775347274785,
     "context.migration": 1775347272043,
-    "context.testDataLeaks": 1775353276435,
+    "context.testDataLeaks": 1775360216518,
     "conventions.atomicWrites": 1775347269392,
     "conventions.debug": 1775347270745,
     "conventions.output": 1775347266674,
@@ -94,7 +94,7 @@
       "migration": "Auto-migrates old 3-file format to unified data.json on first access. Old files renamed to .backup.",
       "configSeparate": "config.json is separate from data.json — user preferences, not project data",
       "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to find project files — its cwd may differ from project root",
-      "testDataLeaks": "CODEX_DATA_DIR only redirects global store. If .codexcli.json exists in cwd, test writes hit the project store. Running npm test or commands.check will re-add test.* and search.test.* entries — always clean .codexcli.json before committing.",
+      "testDataLeaks": "CODEX_DATA_DIR redirects global store + audit/telemetry logs to temp dir during tests. Project store (.codexcli.json) can still get test entries if it exists in cwd — always clean before committing.",
       "devWorkflow": "Use cclid (dev) / cclid-mcp (MCP dev) for local testing — never ccli in dev. Release: git tag triggers CI.",
       "aliasCollision": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation."
     },
