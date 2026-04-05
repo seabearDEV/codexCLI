@@ -40,7 +40,7 @@ export function handleConfig(setting?: string, value?: string, options?: { list?
   }
 
   // If both setting and value provided, update the setting
-  setConfigSetting(setting, value!);
+  setConfigSetting(setting, value);
   resetColorCache();
   console.log(`Updated ${color.green(setting)} to: ${value}`);
 }

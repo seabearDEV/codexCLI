@@ -48,6 +48,8 @@ export function sanitizeParams(params: Record<string, unknown>): Record<string, 
   for (const [k, v] of Object.entries(params)) {
     if (k === 'password') {
       result[k] = '[redacted]';
+    } else if (typeof v === 'string' && isEncrypted(v)) {
+      result[k] = '[encrypted]';
     } else if (typeof v === 'string' && v.length > MAX_VALUE_LENGTH) {
       result[k] = v.slice(0, MAX_VALUE_LENGTH) + '...[truncated]';
     } else {
@@ -62,10 +64,10 @@ export function logAudit(partial: Omit<AuditEntry, 'ts' | 'session' | 'agent'>):
     ...partial,
     ts: Date.now(),
     session: sessionId,
-    agent: process.env.CODEX_AGENT_NAME || undefined,
+    agent: process.env.CODEX_AGENT_NAME ?? undefined,
   };
   return new Promise<void>((resolve) => {
-    fs.appendFile(getAuditPath(), JSON.stringify(entry) + '\n', (_err) => resolve());
+    fs.appendFile(getAuditPath(), JSON.stringify(entry) + '\n', { mode: 0o600 }, () => resolve());
   });
 }
 

@@ -65,6 +65,7 @@ function resolveRef(ref: string, maxDepth: number, seen: Set<string>, execCache:
       return interpolate(modValue ?? '', maxDepth, seen, execCache);
     }
     if (modifier === ':?') {
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string should also use generic message
       throw new Error(modValue || `"${rawKey.trim()}" is required but not set`);
     }
     throw new Error(`Interpolation failed: "${rawKey.trim()}" not found`);

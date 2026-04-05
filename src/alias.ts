@@ -3,19 +3,19 @@ import { Scope, loadAliasMap, saveAliasMap, loadAliasMapMerged, findProjectFile 
 
 
 
-export function loadAliases(scope?: Scope | undefined): Record<string, string> {
+export function loadAliases(scope?: Scope  ): Record<string, string> {
   if (!scope || scope === 'auto') {
     return loadAliasMapMerged();
   }
   return loadAliasMap(scope);
 }
 
-export function saveAliases(data: Record<string, string>, scope?: Scope | undefined): void {
+export function saveAliases(data: Record<string, string>, scope?: Scope  ): void {
   saveAliasMap(data, scope);
 }
 
 // Create or update an alias (one alias per entry — replaces any existing alias for the same target)
-export function setAlias(alias: string, path: string, scope?: Scope | undefined): void {
+export function setAlias(alias: string, path: string, scope?: Scope  ): void {
   const aliases = loadAliasMap(scope);
   // Enforce one alias per entry: O(1) lookup via inverted map
   const keyToAlias = buildKeyToAliasMap(aliases);
@@ -29,7 +29,7 @@ export function setAlias(alias: string, path: string, scope?: Scope | undefined)
 }
 
 // Remove an alias
-export function removeAlias(alias: string, scope?: Scope | undefined): boolean {
+export function removeAlias(alias: string, scope?: Scope  ): boolean {
   if (!scope || scope === 'auto') {
     // Try project first, then global
     if (findProjectFile()) {
@@ -59,7 +59,7 @@ export function removeAlias(alias: string, scope?: Scope | undefined): boolean {
 }
 
 // Rename an alias
-export function renameAlias(oldName: string, newName: string, scope?: Scope | undefined): boolean {
+export function renameAlias(oldName: string, newName: string, scope?: Scope  ): boolean {
   if (!scope || scope === 'auto') {
     // Try project first, then global
     if (findProjectFile()) {
@@ -92,7 +92,7 @@ export function renameAlias(oldName: string, newName: string, scope?: Scope | un
 
 // Resolve a key that might be an alias
 // With 'auto' scope: checks project aliases first, then global
-export function resolveKey(key: string, scope?: Scope | undefined): string {
+export function resolveKey(key: string, scope?: Scope  ): string {
   // Strip trailing colon (CLI tab-completion artifact)
   const cleanKey = key.replace(/:$/, '');
   if (!scope || scope === 'auto') {
@@ -112,7 +112,7 @@ export function resolveKey(key: string, scope?: Scope | undefined): string {
 }
 
 // Remove any aliases whose target matches `key` or is a child of `key` (cascade delete)
-export function removeAliasesForKey(key: string, scope?: Scope | undefined): void {
+export function removeAliasesForKey(key: string, scope?: Scope  ): void {
   if (!scope || scope === 'auto') {
     // Remove from both scopes
     removeAliasesFromScope(key, 'global');

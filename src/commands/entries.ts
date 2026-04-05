@@ -20,7 +20,7 @@ import { isEncrypted, encryptValue, decryptValue } from '../utils/crypto';
 import { interpolate, interpolateObject } from '../utils/interpolate';
 import { getBinaryName } from '../utils/binaryName';
 
-function toScope(global?: boolean | undefined): Scope | undefined {
+function toScope(global?: boolean  ): Scope | undefined {
   return global ? 'global' : undefined;
 }
 
@@ -178,7 +178,7 @@ async function promptAndEncrypt(value: string): Promise<string | null> {
   return encryptValue(value, password);
 }
 
-async function handlePostSetConfirm(key: string, confirm: boolean | undefined, scope?: Scope | undefined): Promise<void> {
+async function handlePostSetConfirm(key: string, confirm: boolean | undefined, scope?: Scope  ): Promise<void> {
   if (confirm === true) {
     setConfirm(key, scope);
   } else if (confirm === false) {
@@ -558,7 +558,8 @@ export async function editEntry(key: string, options: { decrypt?: boolean, globa
       }
     }
 
-    const tmpFile = path.join(os.tmpdir(), `codexcli-edit-${Date.now()}.tmp`);
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codexcli-edit-'));
+    const tmpFile = path.join(tmpDir, 'value.tmp');
     fs.writeFileSync(tmpFile, value, { encoding: 'utf8', mode: 0o600 });
 
     try {
@@ -591,6 +592,7 @@ export async function editEntry(key: string, options: { decrypt?: boolean, globa
       printSuccess(`Entry '${key}' updated successfully.`);
     } finally {
       try { fs.unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
+      try { fs.rmdirSync(tmpDir); } catch { /* ignore cleanup errors */ }
     }
   } catch (error) {
     handleError('Failed to edit entry:', error);
@@ -723,7 +725,7 @@ export function renameEntry(oldKey: string, newKey: string, aliasMode = false, n
   const oldPrefix = oldKey + '.';
 
   // First pass: collect re-point updates (alias -> newTarget)
-  const updates: Array<[string, string]> = [];
+  const updates: [string, string][] = [];
   for (const [alias, target] of Object.entries(aliases)) {
     if (target === oldKey) {
       updates.push([alias, newKey]);

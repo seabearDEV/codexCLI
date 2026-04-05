@@ -68,7 +68,7 @@ export function classifyOp(tool: string): TelemetryEntry['op'] {
  * Returns a promise for testing; callers that want fire-and-forget can ignore it.
  * Errors are silently ignored — telemetry must never break the MCP server.
  */
-export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global' | undefined): Promise<void> {
+export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global'  ): Promise<void> {
   const entry: TelemetryEntry = {
     ts: Date.now(),
     tool,
@@ -79,7 +79,7 @@ export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 
     scope,
   };
   return new Promise<void>((resolve) => {
-    fs.appendFile(getTelemetryPath(), JSON.stringify(entry) + '\n', (_err) => resolve());
+    fs.appendFile(getTelemetryPath(), JSON.stringify(entry) + '\n', { mode: 0o600 }, () => resolve());
   });
 }
 
@@ -147,7 +147,7 @@ export interface TelemetryStats {
   execs: number;
   readWriteRatio: string;
   namespaceCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }>;
-  topTools: Array<{ tool: string; count: number }>;
+  topTools: { tool: string; count: number }[];
   scopeBreakdown: { project: number; global: number; unscoped: number };
 }
 
@@ -155,7 +155,7 @@ export interface TelemetryStats {
  * Compute trending stats from telemetry entries.
  * @param periodDays - Number of days to analyze (0 = all time)
  */
-export function computeStats(periodDays: number = 0): TelemetryStats {
+export function computeStats(periodDays = 0): TelemetryStats {
   const all = loadTelemetry();
   const cutoff = periodDays > 0 ? Date.now() - periodDays * 86400000 : 0;
   const entries = cutoff > 0 ? all.filter(e => e.ts >= cutoff) : all;

@@ -97,7 +97,7 @@ server.tool = ((...args: any[]) => {
 
     // Telemetry (lightweight, existing behavior)
     if (!SKIP_AUDIT.has(name)) {
-      logToolCall(name, key, 'mcp', resolvedScope);
+      void logToolCall(name, key, 'mcp', resolvedScope);
     }
 
     const shouldAudit = !SKIP_AUDIT.has(name);
@@ -125,7 +125,7 @@ server.tool = ((...args: any[]) => {
       result = await origHandler(params, extra);
       if (result && typeof result === 'object' && 'isError' in result && (result as { isError: boolean }).isError) {
         success = false;
-        const content = (result as { content?: Array<{ text?: string }> }).content;
+        const content = (result as { content?: { text?: string }[] }).content;
         errorMsg = content?.[0]?.text;
       }
     } catch (err) {
@@ -144,7 +144,7 @@ server.tool = ((...args: any[]) => {
         } catch { /* ignore */ }
       }
 
-      logAudit({
+      void logAudit({
         src: 'mcp',
         tool: name,
         op,
@@ -160,6 +160,7 @@ server.tool = ((...args: any[]) => {
 
     return result;
   };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
   return (_origTool as (...a: any[]) => unknown)(...args);
 }) as typeof server.tool;
 
@@ -468,7 +469,7 @@ server.tool(
       // Update aliases: re-point any alias targeting oldKey (or children) to newKey
       const aliases = loadAliases(scope);
       const oldPrefix = resolvedOld + '.';
-      const updates: Array<[string, string]> = [];
+      const updates: [string, string][] = [];
       for (const [a, target] of Object.entries(aliases)) {
         if (target === resolvedOld) {
           updates.push([a, newKey]);
@@ -1212,7 +1213,7 @@ export async function startMcpServer(): Promise<void> {
 if (process.argv[1] && (process.argv[1].endsWith('mcp-server.js') || process.argv[1].endsWith('cclid-mcp'))) {
   // Support CODEX_PROJECT_DIR env var or --cwd flag for project-scoped data detection
   const projectDir = process.env.CODEX_PROJECT_DIR
-    ?? (process.argv.indexOf('--cwd') !== -1 ? process.argv[process.argv.indexOf('--cwd') + 1] : undefined);
+    ?? (process.argv.includes('--cwd') ? process.argv[process.argv.indexOf('--cwd') + 1] : undefined);
   if (projectDir) {
     process.chdir(projectDir);
   }

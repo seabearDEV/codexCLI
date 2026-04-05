@@ -370,7 +370,7 @@ function scaffoldProject(): void {
   if (fs.existsSync(goModPath)) {
     try {
       const goMod = fs.readFileSync(goModPath, 'utf8');
-      const moduleLine = goMod.match(/^module\s+(.+)$/m);
+      const moduleLine = /^module\s+(.+)$/m.exec(goMod);
       if (moduleLine) discovered.push({ key: 'project.name', value: moduleLine[1] });
     } catch { /* ignore */ }
     discovered.push({ key: 'project.stack', value: 'Go' });

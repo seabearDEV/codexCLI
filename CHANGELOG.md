@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-04-04
+
+### Fixed
+
+- **75 lint errors resolved** — auto-fixed redundant type constituents, switched to nullish coalescing where safe, added `void` to fire-and-forget telemetry/audit promises, suppressed unavoidable `any` in dynamic MCP tool wrapper.
+- **Prototype pollution in `deepMerge()`** — added `isSafeKey()` guard to block `__proto__`, `constructor`, and `prototype` keys during JSON import merges.
+- **Audit/telemetry log file permissions** — explicit `0o600` mode on `appendFile` so logs are created owner-readable only.
+- **Predictable temp file names in edit** — replaced `Date.now()` naming with `fs.mkdtempSync()` for secure temp directory creation.
+- **Encrypted values in audit params** — `sanitizeParams()` now masks encrypted values as `[encrypted]` in addition to redacting passwords.
+- **Test data removed from `.codexcli.json`** — cleaned leaked `test.*` and `search.test.*` entries from project data file.
+
 ## [1.2.0] - 2026-04-04
 
 ### Added

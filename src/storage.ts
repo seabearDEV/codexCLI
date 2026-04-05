@@ -32,7 +32,7 @@ export function handleError(message: string, error: unknown, context?: string): 
 /**
  * Load data from storage
  */
-export function loadData(scope?: Scope | undefined): CodexData {
+export function loadData(scope?: Scope  ): CodexData {
   debug('loadData called', { scope });
   if (!scope || scope === 'auto') {
     return loadEntriesMerged();
@@ -43,7 +43,7 @@ export function loadData(scope?: Scope | undefined): CodexData {
 /**
  * Save data to storage
  */
-export function saveData(data: CodexData, scope?: Scope | undefined): void {
+export function saveData(data: CodexData, scope?: Scope  ): void {
   saveEntries(data, scope);
 }
 
@@ -53,7 +53,7 @@ export function saveData(data: CodexData, scope?: Scope | undefined): void {
  * Get a value or subtree by dot-path key.
  * With 'auto' scope: checks project first, falls through to global.
  */
-export function getValue(key: string, scope?: Scope | undefined): CodexValue | undefined {
+export function getValue(key: string, scope?: Scope  ): CodexValue | undefined {
   if (!scope || scope === 'auto') {
     // Fallthrough: project first, then global
     if (findProjectFile()) {
@@ -69,7 +69,7 @@ export function getValue(key: string, scope?: Scope | undefined): CodexValue | u
 /**
  * Set a single leaf value by dot-path key.
  */
-export function setValue(key: string, value: string, scope?: Scope | undefined): void {
+export function setValue(key: string, value: string, scope?: Scope  ): void {
   const effectiveScope = scope ?? 'auto';
   const data = loadEntries(effectiveScope);
   setNestedValue(data, key, value);
@@ -80,7 +80,7 @@ export function setValue(key: string, value: string, scope?: Scope | undefined):
  * Remove an entry (and children) by dot-path key. Returns true if anything was removed.
  * With 'auto' scope: removes from whichever scope contains it (project preferred).
  */
-export function removeValue(key: string, scope?: Scope | undefined): boolean {
+export function removeValue(key: string, scope?: Scope  ): boolean {
   if (!scope || scope === 'auto') {
     if (findProjectFile()) {
       const projectData = loadEntries('project');
@@ -113,7 +113,7 @@ export function removeValue(key: string, scope?: Scope | undefined): boolean {
  * Return all entries as flat dot-path -> value pairs.
  * With 'auto' scope: merges project over global.
  */
-export function getEntriesFlat(scope?: Scope | undefined): Record<string, string> {
+export function getEntriesFlat(scope?: Scope  ): Record<string, string> {
   if (!scope || scope === 'auto') {
     return flattenObject(loadEntriesMerged());
   }

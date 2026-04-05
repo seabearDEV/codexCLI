@@ -8,7 +8,7 @@ import { getBinaryName } from './utils/binaryName';
 let _colorEnabled: boolean | null = null;
 
 export function isColorEnabled(): boolean {
-  if (_colorEnabled === null) _colorEnabled = loadConfig().colors;
+  _colorEnabled ??= loadConfig().colors;
   return _colorEnabled;
 }
 

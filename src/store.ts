@@ -163,14 +163,14 @@ function getProjectStore(): ScopedStore | null {
 
 // ── Scope resolution ───────────────────────────────────────────────────
 
-function getEffectiveScope(scope?: Scope | undefined): 'project' | 'global' {
+function getEffectiveScope(scope?: Scope  ): 'project' | 'global' {
   if (scope === 'project') return 'project';
   if (scope === 'global') return 'global';
   // auto: use project if available
   return findProjectFile() ? 'project' : 'global';
 }
 
-function resolveStore(scope?: Scope | undefined): ScopedStore {
+function resolveStore(scope?: Scope  ): ScopedStore {
   const effective = getEffectiveScope(scope);
   if (effective === 'project') {
     const ps = getProjectStore();
@@ -182,31 +182,31 @@ function resolveStore(scope?: Scope | undefined): ScopedStore {
 
 // ── Section accessors ──────────────────────────────────────────────────
 
-export function loadEntries(scope?: Scope | undefined): CodexData {
+export function loadEntries(scope?: Scope  ): CodexData {
   return resolveStore(scope).load().entries;
 }
 
-export function saveEntries(data: CodexData, scope?: Scope | undefined): void {
+export function saveEntries(data: CodexData, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   store.save({ ...current, entries: data });
 }
 
-export function loadAliasMap(scope?: Scope | undefined): Record<string, string> {
+export function loadAliasMap(scope?: Scope  ): Record<string, string> {
   return resolveStore(scope).load().aliases;
 }
 
-export function saveAliasMap(data: Record<string, string>, scope?: Scope | undefined): void {
+export function saveAliasMap(data: Record<string, string>, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   store.save({ ...current, aliases: data });
 }
 
-export function loadConfirmMap(scope?: Scope | undefined): Record<string, true> {
+export function loadConfirmMap(scope?: Scope  ): Record<string, true> {
   return resolveStore(scope).load().confirm;
 }
 
-export function saveConfirmMap(data: Record<string, true>, scope?: Scope | undefined): void {
+export function saveConfirmMap(data: Record<string, true>, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   store.save({ ...current, confirm: data });
@@ -256,18 +256,18 @@ export function clearStoreCaches(): void {
 
 // ── Meta (staleness tracking) ─────────────────────────────────────────
 
-export function loadMeta(scope?: Scope | undefined): Record<string, number> {
+export function loadMeta(scope?: Scope  ): Record<string, number> {
   return resolveStore(scope).load()._meta ?? {};
 }
 
-export function touchMeta(key: string, scope?: Scope | undefined): void {
+export function touchMeta(key: string, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   const meta = { ...(current._meta ?? {}), [key]: Date.now() };
   store.save({ ...current, _meta: meta });
 }
 
-export function removeMeta(key: string, scope?: Scope | undefined): void {
+export function removeMeta(key: string, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   if (!current._meta) return;
@@ -281,7 +281,7 @@ export function removeMeta(key: string, scope?: Scope | undefined): void {
 }
 
 /** Save entries and touch _meta[key] in a single write. */
-export function saveEntriesAndTouchMeta(data: CodexData, key: string, scope?: Scope | undefined): void {
+export function saveEntriesAndTouchMeta(data: CodexData, key: string, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   const meta = { ...(current._meta ?? {}), [key]: Date.now() };
@@ -289,7 +289,7 @@ export function saveEntriesAndTouchMeta(data: CodexData, key: string, scope?: Sc
 }
 
 /** Save entries and remove _meta keys (and children) in a single write. */
-export function saveEntriesAndRemoveMeta(data: CodexData, key: string, scope?: Scope | undefined): void {
+export function saveEntriesAndRemoveMeta(data: CodexData, key: string, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   if (!current._meta) {

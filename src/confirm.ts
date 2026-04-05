@@ -3,19 +3,19 @@ import { Scope, loadConfirmMap, saveConfirmMap, loadConfirmMapMerged, findProjec
 
 
 
-export function loadConfirmKeys(scope?: Scope | undefined): Record<string, true> {
+export function loadConfirmKeys(scope?: Scope  ): Record<string, true> {
   if (!scope || scope === 'auto') {
     return loadConfirmMapMerged();
   }
   return loadConfirmMap(scope);
 }
 
-export function saveConfirmKeys(data: Record<string, true>, scope?: Scope | undefined): void {
+export function saveConfirmKeys(data: Record<string, true>, scope?: Scope  ): void {
   saveConfirmMap(data, scope);
 }
 
 // Mark a key as requiring confirmation
-export function setConfirm(key: string, scope?: Scope | undefined): void {
+export function setConfirm(key: string, scope?: Scope  ): void {
   const keys = loadConfirmMap(scope);
   keys[key] = true;
   saveConfirmMap(keys, scope);
@@ -23,7 +23,7 @@ export function setConfirm(key: string, scope?: Scope | undefined): void {
 }
 
 // Remove confirmation requirement from a key
-export function removeConfirm(key: string, scope?: Scope | undefined): void {
+export function removeConfirm(key: string, scope?: Scope  ): void {
   if (!scope || scope === 'auto') {
     // Try project first, then global
     if (findProjectFile()) {
@@ -59,7 +59,7 @@ export function hasConfirm(key: string): boolean {
 }
 
 // Cascade delete: remove key and any children (e.g., removing "commands" removes "commands.deploy")
-export function removeConfirmForKey(key: string, scope?: Scope | undefined): void {
+export function removeConfirmForKey(key: string, scope?: Scope  ): void {
   if (!scope || scope === 'auto') {
     removeConfirmFromScope(key, 'global');
     if (findProjectFile()) {
