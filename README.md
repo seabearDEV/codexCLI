@@ -59,7 +59,7 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
 - **Staleness Detection**: Track when entries were last updated, find stale knowledge (`ccli stale`)
 - **Schema Validation**: Check entries against recommended namespaces (`ccli lint`), customizable via `_schema.namespaces`
-- **MCP Server**: 20 tools for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
+- **MCP Server**: 20 tools for any MCP-compatible AI agent (Claude Code, Copilot, ChatGPT, etc.) via the Model Context Protocol
 - **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs (`ccli audit`)
 
 ## Installation
@@ -562,8 +562,11 @@ Keep values concise — one sentence or a short command. Use multiple keys under
 
 When an AI agent connects via MCP, the recommended workflow is:
 
-1. Call `codex_context` as your **first** tool call to load all stored project knowledge
-2. Check relevant namespaces (`arch`, `conventions`, `context`) before exploring the codebase
+1. Call `codex_context` as your **first** tool call to bootstrap session knowledge. Pick the right tier for the task:
+   - `tier:"essential"` — answering questions, small fixes, single-file edits
+   - omit / `tier:"standard"` — multi-file changes, bug fixes, new features (default)
+   - `tier:"full"` — refactoring subsystems, changing architecture, onboarding to the codebase
+2. Check relevant namespaces (`arch`, `conventions`, `context`, `files`) before exploring the codebase
 3. Record non-obvious discoveries with `codex_set` as you work
 4. Update stale entries when you find they no longer match the code
 
@@ -760,7 +763,7 @@ ccli --debug get server.production
 
 ## MCP Server (AI Agent Integration)
 
-CodexCLI includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, allowing AI agents like Claude Code and Claude Desktop to read and write your CodexCLI data store as a native tool.
+CodexCLI includes a built-in [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server, allowing any MCP-compatible AI agent to read and write your CodexCLI data store as a native tool. Works with Claude Code, Claude Desktop, GitHub Copilot, ChatGPT, and any other client that supports MCP.
 
 ### Setup
 
@@ -839,22 +842,22 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 
 | Tool | Description |
 |---|---|
-| `codex_set` | Set an entry (key + value, optional alias, optional encrypt + password) |
-| `codex_get` | Retrieve entries (specific key, subtree, or all; optional decrypt + password) |
-| `codex_remove` | Remove an entry or alias by key |
+| `codex_set` | Store project knowledge as a key-value entry (dot notation, optional alias, optional encryption) |
+| `codex_get` | Retrieve stored knowledge by dot-notation key, or list all entries (optional decrypt) |
+| `codex_remove` | Remove a stored entry or alias by key |
 | `codex_copy` | Copy an entry to a new key (optional force to overwrite) |
 | `codex_rename` | Rename an entry key or alias (re-points aliases, migrates confirm metadata) |
-| `codex_search` | Search entries by key or value (case-insensitive) |
+| `codex_search` | Search stored knowledge by keyword (keys, values, or both) |
 | `codex_alias_set` | Create or update an alias for a dot-notation path |
 | `codex_alias_remove` | Remove an alias |
 | `codex_alias_list` | List all defined aliases |
-| `codex_run` | Execute a stored command (dry-run, force to skip confirm check, capture output) |
+| `codex_run` | Execute a stored shell command by key (dry-run, interpolation, confirmation prompts) |
 | `codex_config_get` | Get one or all configuration settings |
 | `codex_config_set` | Set a configuration setting (colors, theme, max_backups) |
 | `codex_export` | Export data and/or aliases as JSON text |
 | `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
-| `codex_context` | Compact summary of all stored project knowledge (use at session start; includes age tags for stale entries) |
+| `codex_context` | Compact summary of stored project knowledge (use at session start; supports tiers: essential, standard, full) |
 | `codex_stale` | Find entries not updated recently (threshold in days, default 30) |
 | `codex_stats` | View usage telemetry and effectiveness metrics (MCP sessions, CLI calls, scope breakdown) |
 | `codex_audit` | Query the audit log of data mutations (before/after diffs, agent identity, scope, success/fail) |
