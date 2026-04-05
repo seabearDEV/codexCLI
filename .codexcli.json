@@ -33,10 +33,7 @@
     "project.install": 1775347236636,
     "project.name": 1775347230199,
     "project.stack": 1775347233583,
-    "project.vision": 1775347234508,
-    "search.test.1": 1775351149091,
-    "search.test.2": 1775351149176,
-    "test.key": 1775351148899
+    "project.vision": 1775347234508
   },
   "aliases": {},
   "confirm": {},
@@ -86,15 +83,6 @@
       "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to find project files — its cwd may differ from project root",
       "testDataLeaks": "CODEX_DATA_DIR only redirects global store. If .codexcli.json exists in cwd, writes still hit the project store. Use a temp working directory for live CLI testing.",
       "devWorkflow": "Dev: npm run dev:watch for auto-rebuild. Test: npm test. Use cclid/cclid-mcp for local testing. PR via GitHub, release via git tag triggering CI."
-    },
-    "test": {
-      "key": "test value"
-    },
-    "search": {
-      "test": {
-        "1": "searchable value one",
-        "2": "searchable value two"
-      }
     }
   }
 }
