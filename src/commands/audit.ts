@@ -1,4 +1,5 @@
 import { queryAuditLog, AuditEntry } from '../utils/audit';
+import { parsePeriodDays } from '../utils';
 import { color } from '../formatting';
 
 export interface AuditCommandOptions {
@@ -36,8 +37,7 @@ function truncate(str: string, maxLen: number): string {
 }
 
 export function showAuditLog(key: string | undefined, options: AuditCommandOptions): void {
-  const periodMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, 'all': 0 };
-  const days = periodMap[options.period ?? '30d'] ?? 30;
+  const days = parsePeriodDays(options.period);
   const limit = options.limit ?? 50;
 
   const src = options.mcp ? 'mcp' as const : options.cli ? 'cli' as const : undefined;

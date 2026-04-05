@@ -7,7 +7,6 @@ import { z } from "zod";
 
 import { execSync } from "child_process";
 import fs from "fs";
-import path from "path";
 
 import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Scope } from "./storage";
 import { CodexData } from "./types";
@@ -27,7 +26,6 @@ import {
 } from "./alias";
 import {
   ensureDataDirectoryExists,
-  getDataDirectory,
 } from "./utils/paths";
 import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from "./store";
 import { hasConfirm, setConfirm, removeConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
@@ -37,9 +35,10 @@ import { version } from "../package.json";
 import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
-import { logToolCall, computeStats, classifyOp } from "./utils/telemetry";
-import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams } from "./utils/audit";
+import { logToolCall, computeStats, classifyOp, getTelemetryPath } from "./utils/telemetry";
+import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams, getAuditPath } from "./utils/audit";
 import { getEffectiveInstructions } from "./llm-instructions";
+import { parsePeriodDays } from "./utils";
 
 function toScope(scopeParam?: string): Scope {
   return (scopeParam ?? 'auto') as Scope;
@@ -992,7 +991,7 @@ server.tool(
     try {
       // Log-file resets — global only
       if (type === "audit" || type === "telemetry") {
-        const file = path.join(getDataDirectory(), type === "audit" ? "audit.jsonl" : "telemetry.jsonl");
+        const file = type === "audit" ? getAuditPath() : getTelemetryPath();
         if (fs.existsSync(file)) fs.unlinkSync(file);
         return textResponse(`${type === "audit" ? "Audit log" : "Telemetry"} has been cleared.`);
       }
@@ -1115,8 +1114,7 @@ server.tool(
   },
   async ({ period }) => {
     try {
-      const days = period === '7d' ? 7 : period === '90d' ? 90 : period === 'all' ? 0 : 30;
-      const stats = computeStats(days);
+      const stats = computeStats(parsePeriodDays(period));
 
       if (stats.totalCalls === 0) {
         return textResponse("No telemetry data yet. Usage will be tracked automatically as MCP tools are called.");
@@ -1183,8 +1181,7 @@ server.tool(
   },
   async ({ key, period, writes_only, src, limit }) => {
     try {
-      const days = period === '7d' ? 7 : period === '90d' ? 90 : period === 'all' ? 0 : 30;
-      const entries = queryAuditLog({ key, periodDays: days, writesOnly: writes_only, src, limit: limit ?? 50 });
+      const entries = queryAuditLog({ key, periodDays: parsePeriodDays(period), writesOnly: writes_only, src, limit: limit ?? 50 });
 
       if (entries.length === 0) {
         return textResponse("No audit entries found.");

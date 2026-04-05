@@ -13,7 +13,8 @@ import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
 import { findProjectFile, clearProjectFileCache } from '../store';
 import { saveJsonSorted } from '../utils/saveJsonSorted';
-import { getDataDirectory } from '../utils/paths';
+import { getAuditPath } from '../utils/audit';
+import { getTelemetryPath } from '../utils/telemetry';
 
 function resolveScope(options: { global?: boolean | undefined, project?: boolean | undefined }): Scope | undefined {
   if (options.global) return 'global';
@@ -175,7 +176,7 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
 
     // Log-file resets (audit, telemetry) — global only, no backup needed
     if (type === 'audit' || type === 'telemetry') {
-      const file = path.join(getDataDirectory(), type === 'audit' ? 'audit.jsonl' : 'telemetry.jsonl');
+      const file = type === 'audit' ? getAuditPath() : getTelemetryPath();
       if (fs.existsSync(file)) {
         fs.unlinkSync(file);
       }

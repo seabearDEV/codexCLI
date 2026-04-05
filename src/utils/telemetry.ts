@@ -16,7 +16,7 @@ export interface TelemetryEntry {
 // One session ID per MCP server process
 const sessionId = crypto.randomBytes(4).toString('hex');
 
-function getTelemetryPath(): string {
+export function getTelemetryPath(): string {
   return path.join(getDataDirectory(), 'telemetry.jsonl');
 }
 

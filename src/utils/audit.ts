@@ -31,7 +31,7 @@ export interface AuditQueryOptions {
 
 const sessionId = crypto.randomBytes(4).toString('hex');
 
-function getAuditPath(): string {
+export function getAuditPath(): string {
   return path.join(getDataDirectory(), 'audit.jsonl');
 }
 
@@ -124,25 +124,14 @@ export function queryAuditLog(options: AuditQueryOptions = {}): AuditEntry[] {
     ? Date.now() - options.periodDays * 86400000
     : 0;
   const limit = options.limit ?? 50;
+  const keyPrefix = options.key ? options.key + '.' : undefined;
 
-  let filtered = all;
-
-  if (cutoff > 0) {
-    filtered = filtered.filter(e => e.ts >= cutoff);
-  }
-
-  if (options.key) {
-    const prefix = options.key + '.';
-    filtered = filtered.filter(e => e.key === options.key || e.key?.startsWith(prefix));
-  }
-
-  if (options.writesOnly) {
-    filtered = filtered.filter(e => e.op === 'write');
-  }
-
-  if (options.src) {
-    filtered = filtered.filter(e => e.src === options.src);
-  }
+  const filtered = all.filter(e =>
+    (cutoff <= 0 || e.ts >= cutoff) &&
+    (!options.key || e.key === options.key || !!e.key?.startsWith(keyPrefix!)) &&
+    (!options.writesOnly || e.op === 'write') &&
+    (!options.src || e.src === options.src)
+  );
 
   // Newest first
   filtered.sort((a, b) => b.ts - a.ts);

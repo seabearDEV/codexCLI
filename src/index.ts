@@ -492,8 +492,8 @@ codexCLI
   .option('--json', 'Output raw JSON')
   .action(async (options: { period: string; json?: boolean }) => {
     const { computeStats } = await import('./utils/telemetry');
-    const days = options.period === '7d' ? 7 : options.period === '90d' ? 90 : options.period === 'all' ? 0 : 30;
-    const stats = computeStats(days);
+    const { parsePeriodDays } = await import('./utils');
+    const stats = computeStats(parsePeriodDays(options.period));
 
     if (options.json) {
       console.log(JSON.stringify(stats, null, 2));
