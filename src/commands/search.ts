@@ -17,7 +17,14 @@ function buildMatcher(searchTerm: string, useRegex: boolean): MatchFn {
     if (searchTerm.length > MAX_REGEX_LENGTH) {
       throw new Error(`Regex pattern too long (max ${MAX_REGEX_LENGTH} characters)`);
     }
-    const re = new RegExp(searchTerm, 'i');
+    let re: RegExp;
+    try {
+      re = new RegExp(searchTerm, 'i');
+    } catch (err) {
+      // Re-throw with a clearer message so callers can handle and report it
+      const message = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to compile regex pattern: ${message}`);
+    }
     return (text: string) => re.test(text);
   }
   const lc = searchTerm.toLowerCase();
