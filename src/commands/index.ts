@@ -4,3 +4,4 @@ export { exportData, importData, resetData, handleProjectFile } from './data-man
 export { handleConfig, configSet } from './config-commands';
 export { showInfo } from './info';
 export { lintEntries } from './lint';
+export { showAuditLog } from './audit';

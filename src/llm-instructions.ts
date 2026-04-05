@@ -29,12 +29,13 @@ TOOL TIPS:
 - codex_set — store a key-value pair (use dot notation, keep values concise)
 - codex_search — find entries by keyword
 - codex_run — execute a stored shell command (respects confirm metadata)
-- codex_stats — view your usage metrics (bootstrap rate, write-back rate, trends)
+- codex_stats — view your usage metrics (bootstrap rate, write-back rate, scope breakdown, trends)
+- codex_audit — query the audit log of data mutations (before/after diffs, agent identity)
 
 EFFECTIVE USAGE:
 - Always call codex_context as your FIRST tool call to bootstrap session knowledge.
 - Write back: when you learn something non-obvious, store it before the session ends.
-- Usage is tracked — codex_stats shows how effectively the knowledge base is being used.`;
+- All mutations are audited — codex_audit shows what changed, when, and by whom.`;
 
 /**
  * Get the custom LLM instructions from the data store, if any.

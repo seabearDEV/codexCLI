@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0] - 2026-04-04
+
+### Added
+
+- **Audit log** — full mutation tracking at `~/.codexcli/audit.jsonl`. Captures before/after values, success/fail, scope, agent identity, and sanitized params for every write operation. Encrypted values masked, passwords redacted.
+- **`codex_audit` MCP tool** — query the audit log with key filter, time period, writes-only, and limit.
+- **`ccli audit [key]` CLI command** — browse audit entries with diff-style before/after display. Supports `--period`, `--writes`, `--json`, `--limit`.
+- **Scope tracking in telemetry** — telemetry now tracks scope as `project`, `global`, or `unscoped` for unresolved/auto cases. Stats display shows scope breakdown.
+- **`--agent` flag** on `ccli mcp-server` — sets `CODEX_AGENT_NAME` for audit attribution. Also readable via env var.
+
+### Fixed
+
+- **`codex_alias_remove` scope bug** (#36) — MCP handler now uses `removeAlias()` which correctly falls through project → global, instead of manual merged-map delete that silently succeeded on the wrong scope.
+- **`codex_stale` and `codex_lint` classification** — now correctly classified as read ops instead of meta.
+
+### Changed
+
+- **Unified CLI + MCP telemetry** — CLI commands now log to telemetry alongside MCP calls. Stats display separates MCP sessions from CLI calls.
+- **`.codexcli.json` overhauled** — tightened entries, removed redundant `files.*` namespace, added `project.vision`, `project.install`, `context.devWorkflow`, full `_meta` timestamps.
+
 ## [0.8.0] - 2026-04-02
 
 ### Added

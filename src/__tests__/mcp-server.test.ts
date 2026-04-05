@@ -225,6 +225,31 @@ vi.mock('../config', () => ({
   VALID_THEMES: ['default', 'dark', 'light'],
 }));
 
+// Mock telemetry
+vi.mock('../utils/telemetry', () => ({
+  logToolCall: vi.fn(() => Promise.resolve()),
+  computeStats: vi.fn(() => ({
+    period: '30d', totalCalls: 0, mcpSessions: 0, mcpCalls: 0, cliCalls: 0,
+    bootstrapRate: 0, writeBackRate: 0, reads: 0, writes: 0, execs: 0,
+    readWriteRatio: '0:0', namespaceCoverage: {}, topTools: [], scopeBreakdown: { project: 0, global: 0, unscoped: 0 },
+  })),
+  classifyOp: vi.fn((tool: string) => {
+    if (['codex_set', 'codex_remove', 'codex_copy', 'codex_rename', 'codex_import', 'codex_reset', 'codex_alias_set', 'codex_alias_remove', 'codex_config_set', 'codex_init'].includes(tool)) return 'write';
+    if (tool === 'codex_run') return 'exec';
+    if (['codex_context', 'codex_get', 'codex_search', 'codex_export', 'codex_alias_list', 'codex_config_get', 'codex_stale', 'codex_lint'].includes(tool)) return 'read';
+    return 'meta';
+  }),
+}));
+
+// Mock audit
+vi.mock('../utils/audit', () => ({
+  logAudit: vi.fn(() => Promise.resolve()),
+  queryAuditLog: vi.fn(() => []),
+  sanitizeValue: vi.fn((v: string | undefined) => v),
+  sanitizeParams: vi.fn((p: Record<string, unknown>) => p),
+  classifyOp: vi.fn(() => 'meta'),
+}));
+
 // Mock deepMerge — use real implementation
 vi.mock('../utils/deepMerge', () => ({
   deepMerge: vi.fn((target: Record<string, any>, source: Record<string, any>) => {
@@ -976,6 +1001,134 @@ describe('MCP Server Tools', () => {
 
       const result = await toolHandlers['codex_stale']({ days: 30, scope: 'global' });
       expect(result.content[0].text).toContain('g');
+    });
+  });
+
+  describe('codex_audit', () => {
+    it('returns no entries message when empty', async () => {
+      const result = await toolHandlers['codex_audit']({});
+      expect(result.content[0].text).toContain('No audit entries found');
+    });
+
+    it('returns formatted entries when data exists', async () => {
+      const { queryAuditLog } = await import('../utils/audit');
+      (queryAuditLog as any).mockReturnValueOnce([
+        { ts: Date.now(), session: 'abc', src: 'mcp', tool: 'codex_set', op: 'write', key: 'arch.mcp', scope: 'project', success: true, before: 'old', after: 'new' },
+      ]);
+      const result = await toolHandlers['codex_audit']({});
+      expect(result.content[0].text).toContain('Audit Log');
+      expect(result.content[0].text).toContain('codex_set');
+      expect(result.content[0].text).toContain('arch.mcp');
+      expect(result.content[0].text).toContain('- old');
+      expect(result.content[0].text).toContain('+ new');
+    });
+
+    it('passes filter params to queryAuditLog', async () => {
+      const { queryAuditLog } = await import('../utils/audit');
+      await toolHandlers['codex_audit']({ key: 'arch', period: '7d', writes_only: true, limit: 10 });
+      expect(queryAuditLog).toHaveBeenCalledWith({ key: 'arch', periodDays: 7, writesOnly: true, limit: 10 });
+    });
+  });
+
+  describe('MCP wrapper audit logging', () => {
+    let logAuditMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      resetMocks();
+      const auditModule = await import('../utils/audit');
+      logAuditMock = auditModule.logAudit as ReturnType<typeof vi.fn>;
+      logAuditMock.mockClear();
+    });
+
+    it('calls logAudit with before/after for codex_set', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+      await toolHandlers['codex_set']({ key: 'server.ip', value: '10.0.0.2' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          src: 'mcp',
+          tool: 'codex_set',
+          op: 'write',
+          key: 'server.ip',
+          success: true,
+          before: '10.0.0.1',
+          after: '10.0.0.2',
+        })
+      );
+    });
+
+    it('calls logAudit with success: false when handler returns isError', async () => {
+      // Attempt to get a missing key — codex_get returns isError
+      await toolHandlers['codex_get']({ key: 'nonexistent' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_get',
+          success: false,
+        })
+      );
+    });
+
+    it('calls logAudit with alias name as key for codex_alias_set', async () => {
+      await toolHandlers['codex_alias_set']({ alias: 'srv', path: 'server.ip' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_alias_set',
+          op: 'write',
+          key: 'srv',
+          success: true,
+        })
+      );
+    });
+
+    it('captures alias target in before for codex_alias_set when alias exists', async () => {
+      Object.assign(mockAliases, { srv: 'server.old' });
+      await toolHandlers['codex_alias_set']({ alias: 'srv', path: 'server.ip' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_alias_set',
+          key: 'srv',
+          before: 'server.old',
+        })
+      );
+    });
+
+    it('calls logAudit with alias name as key for codex_alias_remove', async () => {
+      Object.assign(mockAliases, { srv: 'server.ip' });
+      await toolHandlers['codex_alias_remove']({ alias: 'srv' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_alias_remove',
+          op: 'write',
+          key: 'srv',
+          success: true,
+          before: 'server.ip',
+        })
+      );
+    });
+
+    it('resolves alias key to actual path before capturing value for codex_remove', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+      Object.assign(mockAliases, { srv: 'server.ip' });
+      await toolHandlers['codex_remove']({ key: 'srv' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_remove',
+          key: 'srv',
+          before: '10.0.0.1',
+          success: true,
+        })
+      );
+    });
+
+    it('does not call logAudit for codex_stats', async () => {
+      logAuditMock.mockClear();
+      await toolHandlers['codex_stats']({});
+      expect(logAuditMock).not.toHaveBeenCalled();
+    });
+
+    it('does not call logAudit for codex_audit tool itself', async () => {
+      logAuditMock.mockClear();
+      await toolHandlers['codex_audit']({});
+      expect(logAuditMock).not.toHaveBeenCalled();
     });
   });
 
