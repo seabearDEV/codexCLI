@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import * as commands from './commands';
-import { removeAlias, resolveKey } from './alias';
+import { removeAlias, resolveKey, loadAliases } from './alias';
 import { showHelp, showExamples } from './formatting';
 import { askPassword, askConfirmation, printError } from './commands/helpers';
 import { version } from '../package.json';
@@ -87,10 +87,12 @@ codexCLI
           return;
         }
         const rk = resolveKey(k);
+        const prevExitCode = process.exitCode;
         const before = captureCliValue(rk, options.global);
         await commands.setEntry(rk, v, options.force);
         const after = captureCliValue(rk, options.global);
-        logAudit({ src: 'cli', tool: 'codex_set', op: 'write', key: rk, scope: options.global ? 'global' : 'auto', success: true, before, after, params: sanitizeParams({ key: rk, value: v }) });
+        const success = process.exitCode === prevExitCode && JSON.stringify(before) !== JSON.stringify(after);
+        logAudit({ src: 'cli', tool: 'codex_set', op: 'write', key: rk, scope: options.global ? 'global' : 'auto', success, before, after, params: sanitizeParams({ key: rk, value: v }) });
       }
       return;
     }
@@ -139,10 +141,12 @@ codexCLI
       value = valueArray.join(' ');
     }
     const resolvedKey = resolveKey(key);
+    const prevExitCode = process.exitCode;
     const before = captureCliValue(resolvedKey, options.global);
     await commands.setEntry(resolvedKey, value, options.force, options.encrypt, options.alias, options.confirm, options.global);
     const after = captureCliValue(resolvedKey, options.global);
-    logAudit({ src: 'cli', tool: 'codex_set', op: 'write', key: resolvedKey, scope: options.global ? 'global' : 'auto', success: true, before, after, params: sanitizeParams({ key: resolvedKey, value: value ?? '' }) });
+    const success = process.exitCode === prevExitCode && JSON.stringify(before) !== JSON.stringify(after);
+    logAudit({ src: 'cli', tool: 'codex_set', op: 'write', key: resolvedKey, scope: options.global ? 'global' : 'auto', success, before, after, params: sanitizeParams({ key: resolvedKey, value: value ?? '' }) });
     if (options.clear) {
       process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
     }
@@ -267,9 +271,10 @@ codexCLI
     const tool = options.alias ? 'codex_alias_remove' : 'codex_remove';
     logToolCall(tool, key, 'cli', options.global ? 'global' : undefined);
     const resolvedKey = options.alias ? key : resolveKey(key);
-    const before = captureCliValue(resolvedKey, options.global);
     if (options.alias) {
       const scope = options.global ? 'global' as const : undefined;
+      const aliases = loadAliases(scope);
+      const before = aliases[key];
       const removed = removeAlias(key, scope);
       if (removed) {
         console.log(`Alias '${key}' removed successfully.`);
@@ -280,9 +285,14 @@ codexCLI
         logAudit({ src: 'cli', tool, op: 'write', key: resolvedKey, scope: options.global ? 'global' : 'auto', success: false, error: 'Alias not found', params: { key: resolvedKey } });
       }
     } else {
+      const targetScope = options.global ? 'global' as const : 'project' as const;
+      const beforeInTargetScope = getValue(resolvedKey, targetScope);
+      const before = captureCliValue(resolvedKey, options.global);
       await commands.removeEntry(resolvedKey, options.force, options.global);
+      const afterInTargetScope = getValue(resolvedKey, targetScope);
       const after = captureCliValue(resolvedKey, options.global);
-      logAudit({ src: 'cli', tool, op: 'write', key: resolvedKey, scope: options.global ? 'global' : 'auto', success: after === undefined, before, after, params: { key: resolvedKey } });
+      const removed = beforeInTargetScope !== undefined && afterInTargetScope === undefined;
+      logAudit({ src: 'cli', tool, op: 'write', key: resolvedKey, scope: options.global ? 'global' : 'auto', success: removed, before, after, params: { key: resolvedKey } });
     }
   });
 

@@ -1030,4 +1030,106 @@ describe('MCP Server Tools', () => {
     });
   });
 
+  describe('MCP wrapper audit logging', () => {
+    let logAuditMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(async () => {
+      resetMocks();
+      const auditModule = await import('../utils/audit');
+      logAuditMock = auditModule.logAudit as ReturnType<typeof vi.fn>;
+      logAuditMock.mockClear();
+    });
+
+    it('calls logAudit with before/after for codex_set', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+      await toolHandlers['codex_set']({ key: 'server.ip', value: '10.0.0.2' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          src: 'mcp',
+          tool: 'codex_set',
+          op: 'write',
+          key: 'server.ip',
+          success: true,
+          before: '10.0.0.1',
+          after: '10.0.0.2',
+        })
+      );
+    });
+
+    it('calls logAudit with success: false when handler returns isError', async () => {
+      // Attempt to get a missing key — codex_get returns isError
+      await toolHandlers['codex_get']({ key: 'nonexistent' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_get',
+          success: false,
+        })
+      );
+    });
+
+    it('calls logAudit with alias name as key for codex_alias_set', async () => {
+      await toolHandlers['codex_alias_set']({ alias: 'srv', path: 'server.ip' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_alias_set',
+          op: 'write',
+          key: 'srv',
+          success: true,
+        })
+      );
+    });
+
+    it('captures alias target in before for codex_alias_set when alias exists', async () => {
+      Object.assign(mockAliases, { srv: 'server.old' });
+      await toolHandlers['codex_alias_set']({ alias: 'srv', path: 'server.ip' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_alias_set',
+          key: 'srv',
+          before: 'server.old',
+        })
+      );
+    });
+
+    it('calls logAudit with alias name as key for codex_alias_remove', async () => {
+      Object.assign(mockAliases, { srv: 'server.ip' });
+      await toolHandlers['codex_alias_remove']({ alias: 'srv' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_alias_remove',
+          op: 'write',
+          key: 'srv',
+          success: true,
+          before: 'server.ip',
+        })
+      );
+    });
+
+    it('resolves alias key to actual path before capturing value for codex_remove', async () => {
+      Object.assign(mockData, { server: { ip: '10.0.0.1' } });
+      Object.assign(mockAliases, { srv: 'server.ip' });
+      await toolHandlers['codex_remove']({ key: 'srv' });
+      expect(logAuditMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tool: 'codex_remove',
+          key: 'srv',
+          before: '10.0.0.1',
+          success: true,
+        })
+      );
+    });
+
+    it('does not call logAudit for codex_stats', async () => {
+      logAuditMock.mockClear();
+      await toolHandlers['codex_stats']({});
+      expect(logAuditMock).not.toHaveBeenCalled();
+    });
+
+    it('does not call logAudit for codex_audit tool itself', async () => {
+      logAuditMock.mockClear();
+      await toolHandlers['codex_audit']({});
+      expect(logAuditMock).not.toHaveBeenCalled();
+    });
+  });
+
 });
