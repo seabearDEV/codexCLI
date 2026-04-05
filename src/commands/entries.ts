@@ -436,7 +436,8 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   const value = getValue(key, lookupScope);
 
   if (value === undefined) {
-    console.error(`Entry '${key}' not found`);
+    printError(`Entry '${key}' not found.`);
+    process.exitCode = 1;
     return;
   }
 

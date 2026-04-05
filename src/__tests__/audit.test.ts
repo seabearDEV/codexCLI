@@ -4,11 +4,14 @@ import os from 'os';
 
 let tmpDir: string;
 
+let mockProjectFile: string | null = null;
+
 vi.mock('../utils/paths', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../utils/paths')>();
   return {
     ...orig,
     getDataDirectory: () => tmpDir,
+    findProjectFile: () => mockProjectFile,
   };
 });
 
@@ -25,6 +28,7 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
   delete process.env.CODEX_AGENT_NAME;
+  mockProjectFile = null;
 });
 
 describe('sanitizeValue', () => {
@@ -115,6 +119,30 @@ describe('logAudit', () => {
     });
     const entries = loadAuditLog();
     expect(entries[0].agent).toBeUndefined();
+  });
+
+  it('records project directory from findProjectFile', async () => {
+    mockProjectFile = '/home/user/myproject/.codexcli.json';
+    await logAudit({
+      src: 'mcp',
+      tool: 'codex_set',
+      op: 'write',
+      success: true,
+    });
+    const entries = loadAuditLog();
+    expect(entries[0].project).toBe('/home/user/myproject');
+  });
+
+  it('leaves project undefined when no project file found', async () => {
+    mockProjectFile = null;
+    await logAudit({
+      src: 'cli',
+      tool: 'codex_set',
+      op: 'write',
+      success: true,
+    });
+    const entries = loadAuditLog();
+    expect(entries[0].project).toBeUndefined();
   });
 
   it('appends multiple entries', async () => {
@@ -228,6 +256,17 @@ describe('queryAuditLog', () => {
     expect(cli[0].src).toBe('cli');
   });
 
+  it('filters by project', () => {
+    writeEntries([
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_set', op: 'write', key: 'a', project: '/home/user/projectA', success: true },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_set', op: 'write', key: 'b', project: '/home/user/projectB', success: true },
+      { ts: now, session: 's1', src: 'cli', tool: 'codex_set', op: 'write', key: 'c', success: true },
+    ]);
+    const result = queryAuditLog({ project: '/home/user/projectA' });
+    expect(result).toHaveLength(1);
+    expect(result[0].key).toBe('a');
+  });
+
   it('returns all with period 0', () => {
     writeEntries([
       { ts: now - 365 * day, session: 'old', src: 'mcp', tool: 'codex_set', op: 'write', success: true },
@@ -235,5 +274,94 @@ describe('queryAuditLog', () => {
     ]);
     const result = queryAuditLog({ periodDays: 0 });
     expect(result).toHaveLength(2);
+  });
+
+  it('filters by hitsOnly', () => {
+    writeEntries([
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_get', op: 'read', key: 'a', success: true, hit: true },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_get', op: 'read', key: 'b', success: false, hit: false },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_set', op: 'write', key: 'c', success: true },
+    ]);
+    const result = queryAuditLog({ hitsOnly: true });
+    expect(result).toHaveLength(1);
+    expect(result[0].key).toBe('a');
+  });
+
+  it('filters by missesOnly', () => {
+    writeEntries([
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_get', op: 'read', key: 'a', success: true, hit: true },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_get', op: 'read', key: 'b', success: false, hit: false },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_set', op: 'write', key: 'c', success: true },
+    ]);
+    const result = queryAuditLog({ missesOnly: true });
+    expect(result).toHaveLength(1);
+    expect(result[0].key).toBe('b');
+  });
+
+  it('filters by redundantOnly', () => {
+    writeEntries([
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_set', op: 'write', key: 'a', success: true, redundant: true },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_set', op: 'write', key: 'b', success: true },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_get', op: 'read', key: 'c', success: true, hit: true },
+    ]);
+    const result = queryAuditLog({ redundantOnly: true });
+    expect(result).toHaveLength(1);
+    expect(result[0].key).toBe('a');
+  });
+});
+
+describe('token-efficiency metrics', () => {
+  it('preserves all metric fields through log/load roundtrip', async () => {
+    await logAudit({
+      src: 'mcp',
+      tool: 'codex_context',
+      op: 'read',
+      success: true,
+      responseSize: 4200,
+      requestSize: 35,
+      hit: true,
+      tier: 'standard',
+      entryCount: 13,
+    });
+    const entries = loadAuditLog();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].responseSize).toBe(4200);
+    expect(entries[0].requestSize).toBe(35);
+    expect(entries[0].hit).toBe(true);
+    expect(entries[0].tier).toBe('standard');
+    expect(entries[0].entryCount).toBe(13);
+    expect(entries[0].redundant).toBeUndefined();
+  });
+
+  it('preserves redundant flag through roundtrip', async () => {
+    await logAudit({
+      src: 'mcp',
+      tool: 'codex_set',
+      op: 'write',
+      success: true,
+      before: 'same',
+      after: 'same',
+      redundant: true,
+      responseSize: 50,
+      requestSize: 120,
+    });
+    const entries = loadAuditLog();
+    expect(entries[0].redundant).toBe(true);
+  });
+
+  it('omits undefined metric fields from JSON', async () => {
+    await logAudit({
+      src: 'cli',
+      tool: 'codex_set',
+      op: 'write',
+      success: true,
+    });
+    const raw = fs.readFileSync(path.join(tmpDir, 'audit.jsonl'), 'utf8').trim();
+    const parsed = JSON.parse(raw);
+    expect(parsed).not.toHaveProperty('responseSize');
+    expect(parsed).not.toHaveProperty('hit');
+    expect(parsed).not.toHaveProperty('tier');
+    expect(parsed).not.toHaveProperty('entryCount');
+    expect(parsed).not.toHaveProperty('redundant');
   });
 });

@@ -87,6 +87,43 @@ function captureValue(name: string, key: string | undefined, scope: Scope): stri
   } catch { return undefined; }
 }
 
+// --- Token-efficiency metric helpers ---
+
+/** Extract the text content from an MCP tool result */
+function extractResponseText(result: unknown): string {
+  if (!result || typeof result !== 'object') return '';
+  const content = (result as { content?: { text?: string }[] }).content;
+  if (!Array.isArray(content)) return '';
+  return content.map(c => c.text ?? '').join('');
+}
+
+/** Known empty-result patterns that indicate a read "miss" */
+const MISS_PATTERNS = [
+  'not found',
+  'no entries found',
+  'no entries stored',
+  'no results found',
+  'no aliases defined',
+  'no audit entries',
+];
+
+/** Determine if a read operation was a hit (returned useful data) */
+function determineHit(result: unknown, success: boolean): boolean {
+  if (!success) return false;
+  const text = extractResponseText(result).toLowerCase();
+  return !MISS_PATTERNS.some(p => text.includes(p));
+}
+
+/** Try to extract entry count from response text */
+function extractEntryCount(text: string): number | undefined {
+  // codex_context footer: "(N entries)"
+  const tierMatch = text.match(/\((\d+) entries?\)/);
+  if (tierMatch) return parseInt(tierMatch[1], 10);
+  // Count non-empty content lines (rough approximation for listings)
+  const lines = text.split('\n').filter(l => l.trim() && !l.startsWith('[tier:') && !l.startsWith('Aliases:'));
+  return lines.length > 0 ? lines.length : undefined;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 server.tool = ((...args: any[]) => {
   const name = args[0] as string;
@@ -146,6 +183,15 @@ server.tool = ((...args: any[]) => {
         } catch { /* ignore */ }
       }
 
+      // Token-efficiency metrics
+      const responseText = extractResponseText(result);
+      const responseSize = Buffer.byteLength(responseText, 'utf8');
+      const requestSize = Buffer.byteLength(JSON.stringify(params), 'utf8');
+      const hit = op === 'read' ? determineHit(result, success) : undefined;
+      const tier = name === 'codex_context' ? (params.tier as string ?? 'standard') : undefined;
+      const entryCount = op === 'read' && success ? extractEntryCount(responseText) : undefined;
+      const redundant = isWrite && before !== undefined && after !== undefined && before === after ? true : undefined;
+
       void logAudit({
         src: 'mcp',
         tool: name,
@@ -157,6 +203,12 @@ server.tool = ((...args: any[]) => {
         after: isWrite ? after : undefined,
         error: errorMsg,
         params: sanitizeParams(params),
+        responseSize,
+        requestSize,
+        hit,
+        tier,
+        entryCount,
+        redundant,
       });
     }
 
@@ -1206,11 +1258,15 @@ server.tool(
     period: z.enum(["7d", "30d", "90d", "all"]).optional().describe("Time period to query (default: 30d)"),
     writes_only: z.boolean().optional().describe("Show only write operations"),
     src: z.enum(["mcp", "cli"]).optional().describe("Filter by source: mcp or cli"),
+    project: z.string().optional().describe("Filter by project directory path"),
+    hits_only: z.boolean().optional().describe("Show only read operations that returned data (hits)"),
+    misses_only: z.boolean().optional().describe("Show only read operations that found nothing (misses)"),
+    redundant_only: z.boolean().optional().describe("Show only writes where value didn't change"),
     limit: z.number().int().min(1).max(500).optional().describe("Max entries to return (default: 50)"),
   },
-  async ({ key, period, writes_only, src, limit }) => {
+  async ({ key, period, writes_only, src, project, hits_only, misses_only, redundant_only, limit }) => {
     try {
-      const entries = queryAuditLog({ key, periodDays: parsePeriodDays(period), writesOnly: writes_only, src, limit: limit ?? 50 });
+      const entries = queryAuditLog({ key, periodDays: parsePeriodDays(period), writesOnly: writes_only, src, project, hitsOnly: hits_only, missesOnly: misses_only, redundantOnly: redundant_only, limit: limit ?? 50 });
 
       if (entries.length === 0) {
         return textResponse("No audit entries found.");
@@ -1224,12 +1280,23 @@ server.tool(
         const status = e.success ? 'OK' : 'FAIL';
         const keyStr = e.key ?? '(bulk)';
         const parts = [`${time}  ${e.src}  ${e.tool.padEnd(20)}  ${keyStr}  [${e.scope ?? 'auto'}]  ${status}`];
+        if (e.project) parts[0] += `  project=${e.project}`;
         if (e.agent) parts[0] += `  agent=${e.agent}`;
         lines.push(parts[0]);
 
         if (e.before !== undefined) lines.push(`  - ${e.before}`);
         if (e.after !== undefined) lines.push(`  + ${e.after}`);
         if (e.error) lines.push(`  error: ${e.error}`);
+
+        // Token-efficiency metrics
+        const tags: string[] = [];
+        if (e.responseSize !== undefined) tags.push(`res=${e.responseSize}B`);
+        if (e.requestSize !== undefined) tags.push(`req=${e.requestSize}B`);
+        if (e.hit !== undefined) tags.push(e.hit ? 'hit' : 'miss');
+        if (e.tier !== undefined) tags.push(`tier=${e.tier}`);
+        if (e.entryCount !== undefined) tags.push(`n=${e.entryCount}`);
+        if (e.redundant) tags.push('redundant');
+        if (tags.length > 0) lines.push(`  [${tags.join(', ')}]`);
       }
 
       return textResponse(lines.join('\n'));

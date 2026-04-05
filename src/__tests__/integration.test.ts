@@ -6,7 +6,7 @@ import * as os from 'os';
 describe('CLI Integration Tests', () => {
   // Create a temporary directory for test data
   const testDir = path.join(os.tmpdir(), 'codexcli-test-' + Math.random().toString(36).substring(2));
-  const execOpts = { env: { ...process.env, CODEX_DATA_DIR: testDir, CODEX_NO_PROJECT: '1' } };
+  const execOpts = { env: { ...process.env, CODEX_DATA_DIR: testDir, CODEX_NO_PROJECT: '1' }, stdio: ['pipe', 'pipe', 'pipe'] as const };
 
   const run = (args: string) => execSync(`node dist/index.js ${args}`, execOpts).toString();
 
@@ -51,7 +51,15 @@ describe('CLI Integration Tests', () => {
 
     run('remove remove.test');
 
-    result = run('get remove.test');
+    // get on a removed key exits non-zero, so execSync throws
+    try {
+      result = run('get remove.test');
+    } catch (err: unknown) {
+      const stderr = (err as { stderr?: Buffer }).stderr?.toString() ?? '';
+      expect(stderr).toContain('not found');
+      return;
+    }
+    // If it didn't throw, the entry shouldn't contain the old value
     expect(result).not.toContain('value to remove');
   });
 });

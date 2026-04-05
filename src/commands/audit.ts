@@ -1,3 +1,4 @@
+import path from 'path';
 import { queryAuditLog, AuditEntry } from '../utils/audit';
 import { parsePeriodDays } from '../utils';
 import { color } from '../formatting';
@@ -9,6 +10,10 @@ export interface AuditCommandOptions {
   cli?: boolean;
   json?: boolean;
   limit?: number;
+  project?: string;
+  hits?: boolean;
+  misses?: boolean;
+  redundant?: boolean;
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -31,6 +36,27 @@ function srcLabel(entry: AuditEntry): string {
   return 'cli';
 }
 
+function projectLabel(entry: AuditEntry): string {
+  if (!entry.project) return '';
+  return path.basename(entry.project);
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`;
+  return `${(bytes / 1024).toFixed(1)}K`;
+}
+
+function metricsLine(entry: AuditEntry): string {
+  const tags: string[] = [];
+  if (entry.responseSize !== undefined) tags.push(`res=${formatBytes(entry.responseSize)}`);
+  if (entry.requestSize !== undefined) tags.push(`req=${formatBytes(entry.requestSize)}`);
+  if (entry.hit !== undefined) tags.push(entry.hit ? 'hit' : 'miss');
+  if (entry.tier !== undefined) tags.push(`tier=${entry.tier}`);
+  if (entry.entryCount !== undefined) tags.push(`n=${entry.entryCount}`);
+  if (entry.redundant) tags.push('redundant');
+  return tags.length > 0 ? tags.join('  ') : '';
+}
+
 function truncate(str: string, maxLen: number): string {
   if (maxLen <= 0 || str.length <= maxLen) return str;
   return str.slice(0, maxLen - 1) + '\u2026';
@@ -47,6 +73,10 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
     periodDays: days,
     writesOnly: options.writes,
     src,
+    project: options.project,
+    hitsOnly: options.hits,
+    missesOnly: options.misses,
+    redundantOnly: options.redundant,
     limit,
   });
 
@@ -69,6 +99,10 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
   const DIFF_INDENT = 14;
   const diffMax = termWidth - DIFF_INDENT - 2; // "- " or "+ " prefix
 
+  // Show project column when entries span multiple projects
+  const projectNames = new Set(entries.map(e => e.project ?? ''));
+  const showProject = projectNames.size > 1 || (projectNames.size === 1 && !projectNames.has(''));
+
   let lastDate = '';
 
   for (const entry of entries) {
@@ -85,8 +119,9 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
     const srcStr = color.gray(srcLabel(entry));
     const status = entry.success ? color.green('OK') : color.red('FAIL');
     const scope = entry.scope && entry.scope !== 'auto' ? `  ${color.gray('[' + entry.scope + ']')}` : '';
+    const proj = showProject ? `  ${color.gray(projectLabel(entry) || 'global')}` : '';
 
-    console.log(`${dateCol} ${timeCol}  ${tool}  ${keyStr}  ${srcStr}  ${status}${scope}`);
+    console.log(`${dateCol} ${timeCol}  ${tool}  ${keyStr}  ${srcStr}  ${status}${scope}${proj}`);
 
     const pad = ' '.repeat(DIFF_INDENT);
     if (entry.before !== undefined) {
@@ -98,13 +133,18 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
     if (entry.error) {
       console.log(`${pad}${color.red('error: ' + truncate(entry.error, diffMax))}`);
     }
+    const metrics = metricsLine(entry);
+    if (metrics) {
+      console.log(`${pad}${color.gray(metrics)}`);
+    }
 
-    if (hasDiff) console.log('');
+    if (hasDiff || metrics) console.log('');
   }
 
-  // Trailing newline if last entry didn't already add one via diff
+  // Trailing newline if last entry didn't already add one via diff/metrics
   const last = entries[entries.length - 1];
-  if (!(last.before !== undefined || last.after !== undefined || last.error)) {
+  const lastHasDetail = last.before !== undefined || last.after !== undefined || last.error || metricsLine(last);
+  if (!lastHasDetail) {
     console.log('');
   }
 }

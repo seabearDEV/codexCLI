@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { getDataDirectory } from './paths';
+import { getDataDirectory, findProjectFile } from './paths';
 import { classifyOp } from './telemetry';
 import { isEncrypted } from './crypto';
 
@@ -13,12 +13,20 @@ export interface AuditEntry {
   op: 'read' | 'write' | 'exec' | 'meta';
   key?: string | undefined;
   scope?: string | undefined;
+  project?: string | undefined;
   success: boolean;
   before?: string | undefined;
   after?: string | undefined;
   error?: string | undefined;
   params?: Record<string, unknown> | undefined;
   agent?: string | undefined;
+  // Token-efficiency metrics
+  responseSize?: number | undefined;
+  requestSize?: number | undefined;
+  hit?: boolean | undefined;
+  tier?: string | undefined;
+  entryCount?: number | undefined;
+  redundant?: boolean | undefined;
 }
 
 export interface AuditQueryOptions {
@@ -26,6 +34,10 @@ export interface AuditQueryOptions {
   periodDays?: number | undefined;
   writesOnly?: boolean | undefined;
   src?: 'mcp' | 'cli' | undefined;
+  project?: string | undefined;
+  hitsOnly?: boolean | undefined;
+  missesOnly?: boolean | undefined;
+  redundantOnly?: boolean | undefined;
   limit?: number | undefined;
 }
 
@@ -60,11 +72,13 @@ export function sanitizeParams(params: Record<string, unknown>): Record<string, 
   return result;
 }
 
-export function logAudit(partial: Omit<AuditEntry, 'ts' | 'session' | 'agent'>): Promise<void> {
+export function logAudit(partial: Omit<AuditEntry, 'ts' | 'session' | 'agent' | 'project'>): Promise<void> {
+  const projectFile = findProjectFile();
   const entry: AuditEntry = {
     ...partial,
     ts: Date.now(),
     session: sessionId,
+    project: projectFile ? path.dirname(projectFile) : undefined,
     agent: process.env.CODEX_AGENT_NAME ?? undefined,
   };
   return new Promise<void>((resolve) => {
@@ -130,7 +144,11 @@ export function queryAuditLog(options: AuditQueryOptions = {}): AuditEntry[] {
     (cutoff <= 0 || e.ts >= cutoff) &&
     (!options.key || e.key === options.key || !!e.key?.startsWith(keyPrefix!)) &&
     (!options.writesOnly || e.op === 'write') &&
-    (!options.src || e.src === options.src)
+    (!options.src || e.src === options.src) &&
+    (!options.project || e.project === options.project) &&
+    (!options.hitsOnly || e.hit === true) &&
+    (!options.missesOnly || e.hit === false) &&
+    (!options.redundantOnly || e.redundant === true)
   );
 
   // Newest first

@@ -563,9 +563,13 @@ codexCLI
   .option('-w, --writes', 'Show only write operations')
   .option('--mcp', 'Show only MCP operations')
   .option('--cli', 'Show only CLI operations')
+  .option('--project <path>', 'Filter by project directory path')
+  .option('--hits', 'Show only reads that returned data')
+  .option('--misses', 'Show only reads that found nothing')
+  .option('--redundant', 'Show only writes where value didn\'t change')
   .option('-j, --json', 'Output as JSON')
   .option('-n, --limit <n>', 'Max entries to show (default: 50)', parseInt)
-  .action(async (key: string | undefined, options: { period: string; writes?: boolean; mcp?: boolean; cli?: boolean; json?: boolean; limit?: number }) => {
+  .action(async (key: string | undefined, options: { period: string; writes?: boolean; mcp?: boolean; cli?: boolean; project?: string; hits?: boolean; misses?: boolean; redundant?: boolean; json?: boolean; limit?: number }) => {
     const { showAuditLog } = await import('./commands/audit');
     await withPager(() => showAuditLog(key, options));
   });
