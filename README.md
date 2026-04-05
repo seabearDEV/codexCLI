@@ -59,8 +59,8 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
 - **Staleness Detection**: Track when entries were last updated, find stale knowledge (`ccli stale`)
 - **Schema Validation**: Check entries against recommended namespaces (`ccli lint`), customizable via `_schema.namespaces`
-- **MCP Server**: 19 tools for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
-- **MCP Telemetry**: Track AI agent usage patterns — bootstrap rate, write-back rate, namespace coverage (`ccli stats`)
+- **MCP Server**: 20 tools for AI agents (Claude Code, Claude Desktop) via the Model Context Protocol
+- **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs (`ccli audit`)
 
 ## Installation
 
@@ -856,7 +856,8 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | `codex_reset` | Reset data and/or aliases to empty state |
 | `codex_context` | Compact summary of all stored project knowledge (use at session start; includes age tags for stale entries) |
 | `codex_stale` | Find entries not updated recently (threshold in days, default 30) |
-| `codex_stats` | View MCP usage telemetry and AI agent effectiveness metrics |
+| `codex_stats` | View usage telemetry and effectiveness metrics (MCP sessions, CLI calls, scope breakdown) |
+| `codex_audit` | Query the audit log of data mutations (before/after diffs, agent identity, scope, success/fail) |
 
 All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli.json` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.
 

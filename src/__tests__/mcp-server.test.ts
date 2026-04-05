@@ -225,6 +225,31 @@ vi.mock('../config', () => ({
   VALID_THEMES: ['default', 'dark', 'light'],
 }));
 
+// Mock telemetry
+vi.mock('../utils/telemetry', () => ({
+  logToolCall: vi.fn(() => Promise.resolve()),
+  computeStats: vi.fn(() => ({
+    period: '30d', totalCalls: 0, mcpSessions: 0, mcpCalls: 0, cliCalls: 0,
+    bootstrapRate: 0, writeBackRate: 0, reads: 0, writes: 0, execs: 0,
+    readWriteRatio: '0:0', namespaceCoverage: {}, topTools: [], scopeBreakdown: { project: 0, global: 0, unscoped: 0 },
+  })),
+  classifyOp: vi.fn((tool: string) => {
+    if (['codex_set', 'codex_remove', 'codex_copy', 'codex_rename', 'codex_import', 'codex_reset', 'codex_alias_set', 'codex_alias_remove', 'codex_config_set', 'codex_init'].includes(tool)) return 'write';
+    if (tool === 'codex_run') return 'exec';
+    if (['codex_context', 'codex_get', 'codex_search', 'codex_export', 'codex_alias_list', 'codex_config_get', 'codex_stale', 'codex_lint'].includes(tool)) return 'read';
+    return 'meta';
+  }),
+}));
+
+// Mock audit
+vi.mock('../utils/audit', () => ({
+  logAudit: vi.fn(() => Promise.resolve()),
+  queryAuditLog: vi.fn(() => []),
+  sanitizeValue: vi.fn((v: string | undefined) => v),
+  sanitizeParams: vi.fn((p: Record<string, unknown>) => p),
+  classifyOp: vi.fn(() => 'meta'),
+}));
+
 // Mock deepMerge — use real implementation
 vi.mock('../utils/deepMerge', () => ({
   deepMerge: vi.fn((target: Record<string, any>, source: Record<string, any>) => {
@@ -976,6 +1001,32 @@ describe('MCP Server Tools', () => {
 
       const result = await toolHandlers['codex_stale']({ days: 30, scope: 'global' });
       expect(result.content[0].text).toContain('g');
+    });
+  });
+
+  describe('codex_audit', () => {
+    it('returns no entries message when empty', async () => {
+      const result = await toolHandlers['codex_audit']({});
+      expect(result.content[0].text).toContain('No audit entries found');
+    });
+
+    it('returns formatted entries when data exists', async () => {
+      const { queryAuditLog } = await import('../utils/audit');
+      (queryAuditLog as any).mockReturnValueOnce([
+        { ts: Date.now(), session: 'abc', src: 'mcp', tool: 'codex_set', op: 'write', key: 'arch.mcp', scope: 'project', success: true, before: 'old', after: 'new' },
+      ]);
+      const result = await toolHandlers['codex_audit']({});
+      expect(result.content[0].text).toContain('Audit Log');
+      expect(result.content[0].text).toContain('codex_set');
+      expect(result.content[0].text).toContain('arch.mcp');
+      expect(result.content[0].text).toContain('- old');
+      expect(result.content[0].text).toContain('+ new');
+    });
+
+    it('passes filter params to queryAuditLog', async () => {
+      const { queryAuditLog } = await import('../utils/audit');
+      await toolHandlers['codex_audit']({ key: 'arch', period: '7d', writes_only: true, limit: 10 });
+      expect(queryAuditLog).toHaveBeenCalledWith({ key: 'arch', periodDays: 7, writesOnly: true, limit: 10 });
     });
   });
 

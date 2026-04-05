@@ -44,6 +44,13 @@ describe('logToolCall', () => {
     expect(entry.src).toBe('cli');
   });
 
+  it('records scope when specified', async () => {
+    await logToolCall('codex_set', 'arch.mcp', 'mcp', 'project');
+    const content = fs.readFileSync(path.join(tmpDir, 'telemetry.jsonl'), 'utf8');
+    const entry = JSON.parse(content.trim()) as TelemetryEntry;
+    expect(entry.scope).toBe('project');
+  });
+
   it('appends multiple entries', async () => {
     await logToolCall('codex_set', 'project.name');
     await logToolCall('codex_get', 'project.name');
@@ -131,6 +138,7 @@ describe('computeStats', () => {
     expect(stats.mcpSessions).toBe(0);
     expect(stats.mcpCalls).toBe(0);
     expect(stats.cliCalls).toBe(0);
+    expect(stats.scopeBreakdown).toEqual({ project: 0, global: 0, unscoped: 0 });
   });
 
   it('computes bootstrap rate correctly', () => {
@@ -234,6 +242,18 @@ describe('computeStats', () => {
     expect(stats.mcpSessions).toBe(1);
     expect(stats.mcpCalls).toBe(2);
     expect(stats.cliCalls).toBe(0);
+  });
+
+  it('tracks scope breakdown', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_set', session: 's1', op: 'write', ns: 'a', scope: 'project' },
+      { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'b', scope: 'project' },
+      { ts: now - 80, tool: 'codex_set', session: 's1', op: 'write', ns: 'c', scope: 'global' },
+      { ts: now - 70, tool: 'codex_get', session: 's1', op: 'read', ns: 'd' },
+    ]);
+    const stats = computeStats();
+    expect(stats.scopeBreakdown).toEqual({ project: 2, global: 1, unscoped: 1 });
   });
 
   it('returns top tools sorted by count', () => {

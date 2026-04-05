@@ -210,7 +210,17 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--json': 'Output raw JSON',
     },
     argType: null,
-    description: 'View MCP usage telemetry',
+    description: 'View usage telemetry',
+  },
+  audit: {
+    flags: {
+      '--period': 'Time period (7d, 30d, 90d, all)', '-p': 'Time period (7d, 30d, 90d, all)',
+      '--writes': 'Show writes only', '-w': 'Show writes only',
+      '--json': 'Output raw JSON', '-j': 'Output raw JSON',
+      '--limit': 'Max entries to show', '-n': 'Max entries to show',
+    },
+    argType: 'dataKey' as ArgType,
+    description: 'View audit log',
   },
   data: {
     flags: {},

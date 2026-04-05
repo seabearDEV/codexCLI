@@ -34,7 +34,8 @@ import { version } from "../package.json";
 import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
-import { logToolCall, computeStats } from "./utils/telemetry";
+import { logToolCall, computeStats, classifyOp } from "./utils/telemetry";
+import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams } from "./utils/audit";
 import { getEffectiveInstructions } from "./llm-instructions";
 
 function toScope(scopeParam?: string): Scope {
@@ -57,28 +58,106 @@ const server = new McpServer(
   { ...(llmInstructions && { instructions: llmInstructions }) },
 );
 
-// Wrap server.tool to auto-log telemetry for every tool call
+// Wrap server.tool to auto-log telemetry and audit for every tool call
 const _origTool = server.tool.bind(server);
+const SKIP_AUDIT = new Set(['codex_stats', 'codex_audit']);
+const BULK_OPS = new Set(['codex_import', 'codex_reset']);
+
+function extractKey(name: string, params: Record<string, unknown>): string | undefined {
+  if (name === 'codex_copy') return (params.dest ?? params.source) as string | undefined;
+  if (name === 'codex_alias_set') return params.path as string | undefined;
+  return (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
+}
+
+function captureValue(name: string, key: string | undefined, scope: Scope): string | undefined {
+  if (!key || BULK_OPS.has(name)) return undefined;
+  try {
+    // Alias operations: capture the alias target
+    if (name === 'codex_alias_set' || name === 'codex_alias_remove') {
+      const aliases = loadAliases(scope);
+      const alias = name === 'codex_alias_set' ? key : key; // key is the path for set, alias name for remove
+      return aliases[alias];
+    }
+    const val = getValue(key, scope);
+    if (val === undefined) return undefined;
+    return sanitizeValue(typeof val === 'object' ? JSON.stringify(val) : String(val));
+  } catch { return undefined; }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 server.tool = ((...args: any[]) => {
   const name = args[0] as string;
-  // The handler is always the last argument
   const origHandler = args[args.length - 1] as (params: Record<string, unknown>, extra: unknown) => Promise<unknown>;
   args[args.length - 1] = async (params: Record<string, unknown>, extra: unknown) => {
-    if (name !== 'codex_stats') {
-      let key: string | undefined;
-      if (name === 'codex_copy') {
-        // Log destination (write target) rather than source for accurate write-back tracking
-        key = (params.dest ?? params.source) as string | undefined;
-      } else if (name === 'codex_alias_set') {
-        // Log the dot-notation path rather than the alias name for namespace coverage
-        key = params.path as string | undefined;
-      } else {
-        key = (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
-      }
-      logToolCall(name, key, 'mcp');
+    const key = extractKey(name, params);
+
+    const scope = toScope(params.scope as string | undefined);
+    const resolvedScope = scope === 'auto' ? undefined : scope as 'project' | 'global' | undefined;
+
+    // Telemetry (lightweight, existing behavior)
+    if (!SKIP_AUDIT.has(name)) {
+      logToolCall(name, key, 'mcp', resolvedScope);
     }
-    return origHandler(params, extra);
+
+    const shouldAudit = !SKIP_AUDIT.has(name);
+    if (!shouldAudit) return origHandler(params, extra);
+
+    const op = classifyOp(name);
+    const isWrite = op === 'write' || op === 'exec';
+
+    // Capture before-value for writes
+    let before: string | undefined;
+    if (isWrite && !BULK_OPS.has(name)) {
+      before = captureValue(name, key, scope);
+    } else if (isWrite && BULK_OPS.has(name)) {
+      try {
+        const count = Object.keys(getEntriesFlat(scope)).length;
+        before = `${count} entries`;
+      } catch { /* ignore */ }
+    }
+
+    // Execute handler
+    let result: unknown;
+    let success = true;
+    let errorMsg: string | undefined;
+    try {
+      result = await origHandler(params, extra);
+      if (result && typeof result === 'object' && 'isError' in result && (result as { isError: boolean }).isError) {
+        success = false;
+        const content = (result as { content?: Array<{ text?: string }> }).content;
+        errorMsg = content?.[0]?.text;
+      }
+    } catch (err) {
+      success = false;
+      errorMsg = String(err);
+      throw err;
+    } finally {
+      // Capture after-value for writes
+      let after: string | undefined;
+      if (isWrite && success && !BULK_OPS.has(name)) {
+        after = captureValue(name, key, scope);
+      } else if (isWrite && BULK_OPS.has(name) && success) {
+        try {
+          const count = Object.keys(getEntriesFlat(scope)).length;
+          after = `${count} entries`;
+        } catch { /* ignore */ }
+      }
+
+      logAudit({
+        src: 'mcp',
+        tool: name,
+        op,
+        key,
+        scope: (params.scope as string) ?? 'auto',
+        success,
+        before: isWrite ? before : undefined,
+        after: isWrite ? after : undefined,
+        error: errorMsg,
+        params: sanitizeParams(params),
+      });
+    }
+
+    return result;
   };
   return (_origTool as (...a: any[]) => unknown)(...args);
 }) as typeof server.tool;
@@ -1044,6 +1123,15 @@ server.tool(
       lines.push(`Total calls:     ${stats.totalCalls}`);
       lines.push(`Read:write:      ${stats.readWriteRatio} (${stats.reads} reads, ${stats.writes} writes, ${stats.execs} execs)`);
 
+      const { project, global: glob, unscoped } = stats.scopeBreakdown;
+      if (project > 0 || glob > 0) {
+        const parts = [];
+        if (project > 0) parts.push(`${project} project`);
+        if (glob > 0) parts.push(`${glob} global`);
+        if (unscoped > 0) parts.push(`${unscoped} unscoped`);
+        lines.push(`Scope:           ${parts.join(', ')}`);
+      }
+
       if (Object.keys(stats.namespaceCoverage).length > 0) {
         lines.push('');
         lines.push('Namespace activity:');
@@ -1066,6 +1154,48 @@ server.tool(
       return textResponse(lines.join('\n'));
     } catch (err) {
       return errorResponse(`Error computing stats: ${String(err)}`);
+    }
+  }
+);
+
+// --- codex_audit ---
+server.tool(
+  "codex_audit",
+  "Query the audit log of data mutations and operations",
+  {
+    key: z.string().optional().describe("Filter by exact key or key prefix"),
+    period: z.enum(["7d", "30d", "90d", "all"]).optional().describe("Time period to query (default: 30d)"),
+    writes_only: z.boolean().optional().describe("Show only write operations"),
+    limit: z.number().int().min(1).max(500).optional().describe("Max entries to return (default: 50)"),
+  },
+  async ({ key, period, writes_only, limit }) => {
+    try {
+      const days = period === '7d' ? 7 : period === '90d' ? 90 : period === 'all' ? 0 : 30;
+      const entries = queryAuditLog({ key, periodDays: days, writesOnly: writes_only, limit: limit ?? 50 });
+
+      if (entries.length === 0) {
+        return textResponse("No audit entries found.");
+      }
+
+      const lines: string[] = [];
+      lines.push(`Audit Log (${entries.length} entries)\n`);
+
+      for (const e of entries) {
+        const time = new Date(e.ts).toISOString().replace('T', ' ').slice(0, 19);
+        const status = e.success ? 'OK' : 'FAIL';
+        const keyStr = e.key ?? '(bulk)';
+        const parts = [`${time}  ${e.src}  ${e.tool.padEnd(20)}  ${keyStr}  [${e.scope ?? 'auto'}]  ${status}`];
+        if (e.agent) parts[0] += `  agent=${e.agent}`;
+        lines.push(parts[0]);
+
+        if (e.before !== undefined) lines.push(`  - ${e.before}`);
+        if (e.after !== undefined) lines.push(`  + ${e.after}`);
+        if (e.error) lines.push(`  error: ${e.error}`);
+      }
+
+      return textResponse(lines.join('\n'));
+    } catch (err) {
+      return errorResponse(`Error querying audit log: ${String(err)}`);
     }
   }
 );

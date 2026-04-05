@@ -10,6 +10,7 @@ export interface TelemetryEntry {
   op: 'read' | 'write' | 'exec' | 'meta';
   ns: string;
   src?: 'mcp' | 'cli';
+  scope?: 'project' | 'global' | undefined;
 }
 
 // One session ID per MCP server process
@@ -32,7 +33,7 @@ function extractNamespace(key?: string): string {
 /**
  * Classify an MCP tool call as read, write, exec, or meta.
  */
-function classifyOp(tool: string): TelemetryEntry['op'] {
+export function classifyOp(tool: string): TelemetryEntry['op'] {
   switch (tool) {
     case 'codex_set':
     case 'codex_remove':
@@ -67,7 +68,7 @@ function classifyOp(tool: string): TelemetryEntry['op'] {
  * Returns a promise for testing; callers that want fire-and-forget can ignore it.
  * Errors are silently ignored — telemetry must never break the MCP server.
  */
-export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp'): Promise<void> {
+export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global' | undefined): Promise<void> {
   const entry: TelemetryEntry = {
     ts: Date.now(),
     tool,
@@ -75,6 +76,7 @@ export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 
     op: classifyOp(tool),
     ns: extractNamespace(key),
     src: source,
+    scope,
   };
   return new Promise<void>((resolve) => {
     fs.appendFile(getTelemetryPath(), JSON.stringify(entry) + '\n', (_err) => resolve());
@@ -146,6 +148,7 @@ export interface TelemetryStats {
   readWriteRatio: string;
   namespaceCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }>;
   topTools: Array<{ tool: string; count: number }>;
+  scopeBreakdown: { project: number; global: number; unscoped: number };
 }
 
 /**
@@ -206,6 +209,14 @@ export function computeStats(periodDays: number = 0): TelemetryStats {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
+  // Scope breakdown
+  const scopeBreakdown = { project: 0, global: 0, unscoped: 0 };
+  for (const e of entries) {
+    if (e.scope === 'project') scopeBreakdown.project++;
+    else if (e.scope === 'global') scopeBreakdown.global++;
+    else scopeBreakdown.unscoped++;
+  }
+
   const mcpSessions = mcpSessionData.size;
   const period = periodDays > 0 ? `${periodDays}d` : 'all';
 
@@ -223,5 +234,6 @@ export function computeStats(periodDays: number = 0): TelemetryStats {
     readWriteRatio: writes > 0 ? `${(reads / writes).toFixed(1)}:1` : reads > 0 ? '∞:1' : '0:0',
     namespaceCoverage: nsCoverage,
     topTools,
+    scopeBreakdown,
   };
 }

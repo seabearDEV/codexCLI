@@ -17,7 +17,7 @@ CodexCLI is a structured, persistent knowledge base for software projects — ac
 - [x] Shell tab-completion (Bash, Zsh) with dynamic key completion
 - [x] Shell wrapper for `cd`/`export` in current shell
 - [x] Per-entry confirmation (`--confirm` / `--no-confirm`)
-- [x] MCP server with 17 tools for AI agent integration
+- [x] MCP server with 20 tools for AI agent integration
 - [x] LLM instructions (built-in defaults, user-overridable via `system.llm.instructions`)
 - [x] Depth-limited browsing (`--depth` / `-k`)
 - [x] Keys-only default output with `--values` flag
