@@ -1017,21 +1017,44 @@ server.tool(
 );
 
 // --- codex_context ---
+
+const ESSENTIAL_PREFIXES = ['project.', 'commands.', 'conventions.'];
+const STANDARD_EXCLUDE_PREFIXES = ['arch.'];
+
+function filterEntriesByTier(
+  flat: Record<string, string>,
+  tier: 'essential' | 'standard' | 'full'
+): Record<string, string> {
+  if (tier === 'full') return flat;
+  if (tier === 'essential') {
+    return Object.fromEntries(
+      Object.entries(flat).filter(([k]) => ESSENTIAL_PREFIXES.some(p => k.startsWith(p)))
+    );
+  }
+  // standard: exclude arch.*
+  return Object.fromEntries(
+    Object.entries(flat).filter(([k]) => !STANDARD_EXCLUDE_PREFIXES.some(p => k.startsWith(p)))
+  );
+}
+
 server.tool(
   "codex_context",
-  "Get a compact summary of all stored project knowledge in one call (use at session start to bootstrap context)",
+  "Get a compact summary of stored project knowledge (use at session start). Supports tier param: essential (minimal), standard (default, excludes arch), full (everything)",
   {
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
+    tier: z.enum(["essential", "standard", "full"]).optional().describe("Context tier: essential (project/commands/conventions only), standard (default, excludes arch.*), full (everything)"),
   },
-  async ({ scope: scopeParam }) => {
+  async ({ scope: scopeParam, tier }) => {
     try {
       const hasProject = !!findProjectFile();
       const effectiveScope: Scope = scopeParam ? scopeParam as Scope : hasProject ? 'project' : 'auto';
 
       const flat = getEntriesFlat(effectiveScope);
+      const effectiveTier = tier ?? 'standard';
+      const filtered = filterEntriesByTier(flat, effectiveTier);
       const aliases = loadAliases(effectiveScope);
 
-      if (Object.keys(flat).length === 0 && Object.keys(aliases).length === 0) {
+      if (Object.keys(filtered).length === 0 && Object.keys(aliases).length === 0) {
         return textResponse("No entries stored. Use codex_set to add project knowledge.");
       }
 
@@ -1043,8 +1066,8 @@ server.tool(
 
       const lines: string[] = [];
 
-      if (Object.keys(flat).length > 0) {
-        for (const [k, v] of Object.entries(flat)) {
+      if (Object.keys(filtered).length > 0) {
+        for (const [k, v] of Object.entries(filtered)) {
           const ts = meta[k];
           let ageTag = '';
           if (ts !== undefined && ts < staleCutoff) {
@@ -1060,6 +1083,11 @@ server.tool(
         for (const [a, t] of Object.entries(aliases)) {
           lines.push(`  ${a} -> ${t}`);
         }
+      }
+
+      if (effectiveTier !== 'full') {
+        lines.push('');
+        lines.push(`[tier: ${effectiveTier} — pass tier:"full" for complete context]`);
       }
 
       return textResponse(lines.join("\n"));

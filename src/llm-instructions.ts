@@ -24,7 +24,7 @@ SCOPE:
 - codex_get with no key shows project entries by default. Pass all: true to see both scopes.
 
 TOOL TIPS:
-- codex_context — compact summary of all entries (best for session start)
+- codex_context — compact summary of entries (best for session start). Accepts tier: "essential" (minimal), "standard" (default, excludes arch), "full" (everything)
 - codex_get — retrieve specific keys or browse namespaces (use depth: 1 to scan top-level)
 - codex_set — store a key-value pair (use dot notation, keep values concise)
 - codex_search — find entries by keyword
@@ -33,7 +33,7 @@ TOOL TIPS:
 - codex_audit — query the audit log of data mutations (before/after diffs, agent identity)
 
 EFFECTIVE USAGE:
-- Always call codex_context as your FIRST tool call to bootstrap session knowledge.
+- Always call codex_context as your FIRST tool call to bootstrap session knowledge. Use tier:"essential" for quick tasks, omit for standard context, or tier:"full" for architecture work.
 - Write back: when you learn something non-obvious, store it before the session ends.
 - All mutations are audited — codex_audit shows what changed, when, and by whom.`;
 

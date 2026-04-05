@@ -867,6 +867,69 @@ describe('MCP Server Tools', () => {
       expect(text).toContain('key: value');
       expect(text).not.toContain('Aliases:');
     });
+
+    it('filters to essential tier', async () => {
+      Object.assign(mockData, {
+        project: { name: 'test' },
+        commands: { build: 'npm run build' },
+        conventions: { style: 'prettier' },
+        arch: { pattern: 'MVC' },
+        deps: { express: '4.x' },
+      });
+      const result = await toolHandlers['codex_context']({ tier: 'essential' });
+      const text = result.content[0].text;
+      expect(text).toContain('project.name: test');
+      expect(text).toContain('commands.build:');
+      expect(text).toContain('conventions.style:');
+      expect(text).not.toContain('arch.pattern');
+      expect(text).not.toContain('deps.express');
+      expect(text).toContain('[tier: essential');
+    });
+
+    it('defaults to standard tier excluding arch', async () => {
+      Object.assign(mockData, {
+        project: { name: 'test' },
+        arch: { pattern: 'MVC' },
+        context: { note: 'important' },
+      });
+      const result = await toolHandlers['codex_context']({});
+      const text = result.content[0].text;
+      expect(text).toContain('project.name: test');
+      expect(text).toContain('context.note: important');
+      expect(text).not.toContain('arch.pattern');
+      expect(text).toContain('[tier: standard');
+    });
+
+    it('full tier includes everything', async () => {
+      Object.assign(mockData, {
+        project: { name: 'test' },
+        arch: { pattern: 'MVC' },
+      });
+      const result = await toolHandlers['codex_context']({ tier: 'full' });
+      const text = result.content[0].text;
+      expect(text).toContain('project.name: test');
+      expect(text).toContain('arch.pattern: MVC');
+      expect(text).not.toContain('[tier:');
+    });
+
+    it('includes custom namespaces in standard tier', async () => {
+      Object.assign(mockData, {
+        myteam: { workflow: 'agile' },
+        arch: { pattern: 'MVC' },
+      });
+      const result = await toolHandlers['codex_context']({});
+      const text = result.content[0].text;
+      expect(text).toContain('myteam.workflow: agile');
+      expect(text).not.toContain('arch.pattern');
+    });
+
+    it('includes aliases regardless of tier', async () => {
+      Object.assign(mockData, { project: { name: 'test' } });
+      Object.assign(mockAliases, { p: 'project.name' });
+      const result = await toolHandlers['codex_context']({ tier: 'essential' });
+      const text = result.content[0].text;
+      expect(text).toContain('p -> project.name');
+    });
   });
 
   describe('codex_run with chain', () => {
