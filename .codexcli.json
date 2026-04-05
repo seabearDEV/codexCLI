@@ -15,10 +15,11 @@
     "arch.telemetry": 1775358827586,
     "commands.check": 1775353132791,
     "commands.clean": 1775353133317,
-    "commands.release": 1775353016606,
+    "commands.release": 1775362842974,
     "context.aliasCollision": 1775356765156,
     "context.configSeparate": 1775347273418,
     "context.devWorkflow": 1775358827618,
+    "context.execInterpolation": 1775362844353,
     "context.mcpCwd": 1775347274785,
     "context.migration": 1775347272043,
     "context.testDataLeaks": 1775360216518,
@@ -75,7 +76,7 @@
       "goals": "1) Token efficiency — fewer tokens per session. 2) Dogfooding — use codexCLI MCP for own project maintenance. 3) Dual-audience .codexcli.json — useful for devs AND GenAI agents. 4) Agent-agnostic — work across Claude, Copilot, ChatGPT, Cursor, etc."
     },
     "commands": {
-      "release": "git push origin main && VERSION=$(node -p \"require('./package.json').version\") && git tag \"v$VERSION\" && git push origin \"v$VERSION\" && echo \"🚀 Released v$VERSION\"",
+      "release": "git push origin main && VERSION=`node -p \"require('./package.json').version\"` && git tag \"v$VERSION\" && git push origin \"v$VERSION\" && echo \"🚀 Released v$VERSION\"",
       "check": "npm run build && npm run lint && npm test",
       "clean": "rm -rf dist && npm run build"
     },
@@ -108,7 +109,8 @@
       "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to find project files — its cwd may differ from project root",
       "testDataLeaks": "CODEX_DATA_DIR redirects global store + audit/telemetry logs to temp dir during tests. Project store (.codexcli.json) can still get test entries if it exists in cwd — always clean before committing.",
       "devWorkflow": "Use cclid (dev) / cclid-mcp (MCP dev) for local testing — never ccli in dev. Release: git tag triggers CI.",
-      "aliasCollision": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation."
+      "aliasCollision": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation.",
+      "execInterpolation": "Shell $(...) collides with codexCLI's exec interpolation syntax $(key). In stored commands, use backticks instead: `cmd` not $(cmd)."
     },
     "files": {
       "entry": "src/index.ts — CLI entry point, Commander.js setup, all command registration, CLI-side audit logging",
