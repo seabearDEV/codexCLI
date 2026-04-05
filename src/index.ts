@@ -12,6 +12,7 @@ import { getDataDirectory } from './utils/paths';
 import { getBinaryName } from './utils/binaryName';
 import fs from 'fs';
 import { DEFAULT_LLM_INSTRUCTIONS, getEffectiveInstructions } from './llm-instructions';
+import { logToolCall } from './utils/telemetry';
 
 // Early-exit handler for shell tab-completion (must run before Commander parses args)
 const completionFlagIndex = process.argv.indexOf('--get-completions');
@@ -55,6 +56,7 @@ codexCLI
   .option('--no-confirm', 'Remove confirmation requirement from this entry')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean, global?: boolean }) => {
+    logToolCall('codex_set', key, 'cli');
     // Batch mode: `set a=1 b=2 c=3`
     if (key.includes('=')) {
       const pairs = [key, ...valueArray];
@@ -143,6 +145,7 @@ codexCLI
   .option('-G, --global', 'Target global data store')
   .option('-A, --all', 'Show entries from all scopes (project + global)')
   .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
+    logToolCall('codex_get', key, 'cli');
     if (key) {
       key = resolveKey(key);
     }
@@ -162,6 +165,7 @@ codexCLI
   .option('--chain', 'Treat stored value as space-separated key references to resolve and chain')
   .option('-G, --global', 'Target global data store')
   .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, chain?: boolean, global?: boolean }) => {
+    logToolCall('codex_run', keys[0], 'cli');
     await commands.runCommand(keys, options);
   });
 
@@ -173,6 +177,7 @@ codexCLI
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-G, --global', 'Target global data store')
   .action(async (source: string, dest: string, options: { force?: boolean, global?: boolean }) => {
+    logToolCall('codex_copy', dest, 'cli');
     await commands.copyEntry(resolveKey(source), dest, options.force, options.global);
   });
 
@@ -190,6 +195,7 @@ codexCLI
   .option('-v, --values', 'Search values only (skip key matching)')
   .option('-G, --global', 'Target global data store')
   .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, regex?: boolean, keys?: boolean, values?: boolean, global?: boolean }) => {
+    logToolCall('codex_search', term, 'cli');
     await withPager(() => commands.searchEntries(term, options));
   });
 
@@ -201,6 +207,7 @@ codexCLI
   .option('-d, --decrypt', 'Decrypt an encrypted value before editing')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, options: { decrypt?: boolean, global?: boolean }) => {
+    logToolCall('codex_set', key, 'cli');
     await commands.editEntry(resolveKey(key), options);
   });
 
@@ -213,6 +220,7 @@ codexCLI
   .option('--set-alias <name>', 'Set an alias on the renamed key')
   .option('-G, --global', 'Target global data store')
   .action((oldName: string, newName: string, options: { alias?: boolean, setAlias?: string, global?: boolean }) => {
+    logToolCall('codex_rename', oldName, 'cli');
     if (options.alias) {
       commands.renameEntry(oldName, newName, true, undefined, options.global);
     } else {
@@ -229,6 +237,7 @@ codexCLI
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, options: { alias?: boolean, force?: boolean, global?: boolean }) => {
+    logToolCall(options.alias ? 'codex_alias_remove' : 'codex_remove', key, 'cli');
     if (options.alias) {
       const scope = options.global ? 'global' as const : undefined;
       const removed = removeAlias(key, scope);
@@ -250,6 +259,7 @@ codexCLI
   .option('-j, --json', 'Output as JSON')
   .option('-G, --global', 'Target global data store')
   .action(async (days: string | undefined, options: { json?: boolean, global?: boolean }) => {
+    logToolCall('codex_stale', undefined, 'cli');
     const { loadMeta, loadMetaMerged } = await import('./store');
     const { getEntriesFlat } = await import('./storage');
     const { color } = await import('./formatting');
@@ -294,6 +304,7 @@ codexCLI
   .option('-j, --json', 'Output as JSON')
   .option('-G, --global', 'Target global data store')
   .action((options: { json?: boolean, global?: boolean }) => {
+    logToolCall('codex_lint', undefined, 'cli');
     commands.lintEntries(options);
   });
 
@@ -309,6 +320,7 @@ configCommand
   .command('set <key> <value>')
   .description('Set a configuration value')
   .action((key: string, value: string) => {
+    logToolCall('codex_config_set', key, 'cli');
     commands.configSet(key, value);
   });
 
@@ -316,6 +328,7 @@ configCommand
   .command('get [key]')
   .description('Get configuration values')
   .action(async (key?: string) => {
+    logToolCall('codex_config_get', key, 'cli');
     await withPager(() => commands.handleConfig(key));
   });
 
@@ -380,6 +393,7 @@ dataCommand
   .option('-G, --global', 'Export from global data store only')
   .option('-P, --project', 'Export from project data store only')
   .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean, global?: boolean, project?: boolean }) => {
+    logToolCall('codex_export', undefined, 'cli');
     await withPager(() => commands.exportData(type, options));
   });
 
@@ -392,6 +406,7 @@ dataCommand
   .option('-G, --global', 'Import into global data store')
   .option('-P, --project', 'Import into project data store')
   .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean, preview?: boolean, global?: boolean, project?: boolean }) => {
+    logToolCall('codex_import', undefined, 'cli');
     await commands.importData(type, file, options);
   });
 
@@ -402,6 +417,7 @@ dataCommand
   .option('-G, --global', 'Reset global data store only')
   .option('-P, --project', 'Reset project data store only')
   .action(async (type: string, options: { force?: boolean, global?: boolean, project?: boolean }) => {
+    logToolCall('codex_reset', undefined, 'cli');
     await commands.resetData(type, options);
   });
 
@@ -420,13 +436,14 @@ codexCLI
   .option('--remove', 'Remove the project file')
   .option('--scaffold', 'Auto-populate from project files (package.json, go.mod, etc.)')
   .action((options: { remove?: boolean; scaffold?: boolean }) => {
+    logToolCall('codex_init', undefined, 'cli');
     commands.handleProjectFile(options);
   });
 
-// Stats command: MCP telemetry and usage trends
+// Stats command: telemetry and usage trends
 codexCLI
   .command('stats')
-  .description('View MCP usage telemetry and AI agent effectiveness trends')
+  .description('View usage telemetry and effectiveness trends')
   .option('-p, --period <period>', 'Time period: 7d, 30d, 90d, all', '30d')
   .option('--json', 'Output raw JSON')
   .action(async (options: { period: string; json?: boolean }) => {
@@ -442,23 +459,27 @@ codexCLI
     const { color } = await import('./formatting');
 
     if (stats.totalCalls === 0) {
-      console.log(color.gray('No telemetry data yet. Usage is tracked automatically when MCP tools are called.'));
+      console.log(color.gray('No telemetry data yet. Usage is tracked automatically via CLI and MCP.'));
       return;
     }
 
-    console.log(color.bold(`\nMCP Usage Stats (${stats.period === 'all' ? 'all time' : `last ${stats.period}`})`));
+    console.log(color.bold(`\nCodexCLI Usage Stats (${stats.period === 'all' ? 'all time' : `last ${stats.period}`})`));
     console.log('');
-    console.log(`  Sessions:        ${color.white(String(stats.totalSessions))}`);
+    console.log(`  MCP sessions:    ${color.white(String(stats.mcpSessions))}`);
+    console.log(`  MCP calls:       ${color.white(String(stats.mcpCalls))}`);
+
+    if (stats.mcpSessions > 0) {
+      const bootstrapPct = (stats.bootstrapRate * 100).toFixed(0);
+      const bootstrapColor = stats.bootstrapRate >= 0.8 ? color.green : stats.bootstrapRate >= 0.5 ? color.yellow : color.red;
+      console.log(`    Bootstrap rate:  ${bootstrapColor(`${bootstrapPct}%`)} of sessions call codex_context first`);
+
+      const writeBackPct = (stats.writeBackRate * 100).toFixed(0);
+      const writeBackColor = stats.writeBackRate >= 0.5 ? color.green : stats.writeBackRate >= 0.25 ? color.yellow : color.red;
+      console.log(`    Write-back rate: ${writeBackColor(`${writeBackPct}%`)} of sessions store at least 1 entry`);
+    }
+
+    console.log(`  CLI calls:       ${color.white(String(stats.cliCalls))}`);
     console.log(`  Total calls:     ${color.white(String(stats.totalCalls))}`);
-
-    const bootstrapPct = (stats.bootstrapRate * 100).toFixed(0);
-    const bootstrapColor = stats.bootstrapRate >= 0.8 ? color.green : stats.bootstrapRate >= 0.5 ? color.yellow : color.red;
-    console.log(`  Bootstrap rate:  ${bootstrapColor(`${bootstrapPct}%`)} of sessions call codex_context first`);
-
-    const writeBackPct = (stats.writeBackRate * 100).toFixed(0);
-    const writeBackColor = stats.writeBackRate >= 0.5 ? color.green : stats.writeBackRate >= 0.25 ? color.yellow : color.red;
-    console.log(`  Write-back rate: ${writeBackColor(`${writeBackPct}%`)} of sessions store at least 1 entry`);
-
     console.log(`  Read:write:      ${color.white(stats.readWriteRatio)} (${stats.reads} reads, ${stats.writes} writes, ${stats.execs} execs)`);
 
     if (Object.keys(stats.namespaceCoverage).length > 0) {

@@ -139,6 +139,11 @@ vi.mock('../alias', () => ({
     return aliases[k] ?? k;
   }),
   buildKeyToAliasMap: vi.fn(() => ({})),
+  removeAlias: vi.fn((alias: string) => {
+    if (!(alias in mockAliases)) return false;
+    delete mockAliases[alias];
+    return true;
+  }),
   removeAliasesForKey: vi.fn(),
   renameAlias: vi.fn((oldName: string, newName: string) => {
     if (!(oldName in mockAliases)) return false;

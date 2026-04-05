@@ -17,6 +17,7 @@ import {
   loadAliases,
   saveAliases,
   setAlias,
+  removeAlias,
   resolveKey,
   buildKeyToAliasMap,
   removeAliasesForKey,
@@ -75,7 +76,7 @@ server.tool = ((...args: any[]) => {
       } else {
         key = (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
       }
-      logToolCall(name, key);
+      logToolCall(name, key, 'mcp');
     }
     return origHandler(params, extra);
   };
@@ -524,12 +525,10 @@ server.tool(
   async ({ alias, scope: scopeParam }) => {
     try {
       const scope = toScope(scopeParam);
-      const aliases = loadAliases(scope);
-      if (!(alias in aliases)) {
+      const removed = removeAlias(alias, scope);
+      if (!removed) {
         return errorResponse(`Alias '${alias}' not found.`);
       }
-      delete aliases[alias];
-      saveAliases(aliases, scope);
       return textResponse(`Alias removed: ${alias}`);
     } catch (err) {
       return errorResponse(`Error removing alias: ${String(err)}`);
@@ -1033,12 +1032,16 @@ server.tool(
       }
 
       const lines: string[] = [];
-      lines.push(`MCP Usage Stats (${stats.period === 'all' ? 'all time' : `last ${stats.period}`})`);
+      lines.push(`CodexCLI Usage Stats (${stats.period === 'all' ? 'all time' : `last ${stats.period}`})`);
       lines.push('');
-      lines.push(`Sessions:        ${stats.totalSessions}`);
+      lines.push(`MCP sessions:    ${stats.mcpSessions}`);
+      lines.push(`MCP calls:       ${stats.mcpCalls}`);
+      if (stats.mcpSessions > 0) {
+        lines.push(`  Bootstrap rate:  ${(stats.bootstrapRate * 100).toFixed(0)}% of sessions call codex_context first`);
+        lines.push(`  Write-back rate: ${(stats.writeBackRate * 100).toFixed(0)}% of sessions store at least 1 entry`);
+      }
+      lines.push(`CLI calls:       ${stats.cliCalls}`);
       lines.push(`Total calls:     ${stats.totalCalls}`);
-      lines.push(`Bootstrap rate:  ${(stats.bootstrapRate * 100).toFixed(0)}% of sessions call codex_context first`);
-      lines.push(`Write-back rate: ${(stats.writeBackRate * 100).toFixed(0)}% of sessions store at least 1 entry`);
       lines.push(`Read:write:      ${stats.readWriteRatio} (${stats.reads} reads, ${stats.writes} writes, ${stats.execs} execs)`);
 
       if (Object.keys(stats.namespaceCoverage).length > 0) {

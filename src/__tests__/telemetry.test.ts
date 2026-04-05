@@ -34,6 +34,14 @@ describe('logToolCall', () => {
     expect(entry.ns).toBe('arch');
     expect(entry.session).toMatch(/^[a-f0-9]{8}$/);
     expect(entry.ts).toBeGreaterThan(0);
+    expect(entry.src).toBe('mcp');
+  });
+
+  it('records cli source when specified', async () => {
+    await logToolCall('codex_get', 'arch.mcp', 'cli');
+    const content = fs.readFileSync(path.join(tmpDir, 'telemetry.jsonl'), 'utf8');
+    const entry = JSON.parse(content.trim()) as TelemetryEntry;
+    expect(entry.src).toBe('cli');
   });
 
   it('appends multiple entries', async () => {
@@ -64,6 +72,8 @@ describe('logToolCall', () => {
     await logToolCall('codex_export');
     await logToolCall('codex_alias_list');
     await logToolCall('codex_config_get');
+    await logToolCall('codex_stale');
+    await logToolCall('codex_lint');
     const entries = loadTelemetry();
     expect(entries.every(e => e.op === 'read')).toBe(true);
   });
@@ -118,7 +128,9 @@ describe('computeStats', () => {
   it('returns zero stats when no data', () => {
     const stats = computeStats();
     expect(stats.totalCalls).toBe(0);
-    expect(stats.totalSessions).toBe(0);
+    expect(stats.mcpSessions).toBe(0);
+    expect(stats.mcpCalls).toBe(0);
+    expect(stats.cliCalls).toBe(0);
   });
 
   it('computes bootstrap rate correctly', () => {
@@ -132,7 +144,7 @@ describe('computeStats', () => {
       { ts: now - 70, tool: 'codex_context', session: 's2', op: 'read', ns: '*' },
     ]);
     const stats = computeStats();
-    expect(stats.totalSessions).toBe(2);
+    expect(stats.mcpSessions).toBe(2);
     expect(stats.bootstrapRate).toBe(0.5);
   });
 
@@ -185,11 +197,43 @@ describe('computeStats', () => {
     ]);
     const stats7d = computeStats(7);
     expect(stats7d.totalCalls).toBe(1);
-    expect(stats7d.totalSessions).toBe(1);
+    expect(stats7d.mcpSessions).toBe(1);
 
     const statsAll = computeStats(0);
     expect(statsAll.totalCalls).toBe(2);
-    expect(statsAll.totalSessions).toBe(2);
+    expect(statsAll.mcpSessions).toBe(2);
+  });
+
+  it('separates MCP and CLI stats', () => {
+    const now = Date.now();
+    writeEntries([
+      // MCP session
+      { ts: now - 100, tool: 'codex_context', session: 'mcp1', op: 'read', ns: '*', src: 'mcp' },
+      { ts: now - 90, tool: 'codex_set', session: 'mcp1', op: 'write', ns: 'arch', src: 'mcp' },
+      // CLI calls
+      { ts: now - 80, tool: 'codex_get', session: 'cli1', op: 'read', ns: 'arch', src: 'cli' },
+      { ts: now - 70, tool: 'codex_set', session: 'cli2', op: 'write', ns: 'project', src: 'cli' },
+    ]);
+    const stats = computeStats();
+    expect(stats.mcpSessions).toBe(1);
+    expect(stats.mcpCalls).toBe(2);
+    expect(stats.cliCalls).toBe(2);
+    expect(stats.totalCalls).toBe(4);
+    // Bootstrap rate only considers MCP sessions
+    expect(stats.bootstrapRate).toBe(1);
+    expect(stats.writeBackRate).toBe(1);
+  });
+
+  it('treats legacy entries without src as MCP', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_context', session: 's1', op: 'read', ns: '*' },
+      { ts: now - 90, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch' },
+    ]);
+    const stats = computeStats();
+    expect(stats.mcpSessions).toBe(1);
+    expect(stats.mcpCalls).toBe(2);
+    expect(stats.cliCalls).toBe(0);
   });
 
   it('returns top tools sorted by count', () => {

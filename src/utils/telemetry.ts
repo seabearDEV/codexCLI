@@ -9,6 +9,7 @@ export interface TelemetryEntry {
   session: string;
   op: 'read' | 'write' | 'exec' | 'meta';
   ns: string;
+  src?: 'mcp' | 'cli';
 }
 
 // One session ID per MCP server process
@@ -51,7 +52,11 @@ function classifyOp(tool: string): TelemetryEntry['op'] {
     case 'codex_export':
     case 'codex_alias_list':
     case 'codex_config_get':
+    case 'codex_stale':
+    case 'codex_lint':
       return 'read';
+    case 'codex_init':
+      return 'write';
     default:
       return 'meta';
   }
@@ -62,13 +67,14 @@ function classifyOp(tool: string): TelemetryEntry['op'] {
  * Returns a promise for testing; callers that want fire-and-forget can ignore it.
  * Errors are silently ignored — telemetry must never break the MCP server.
  */
-export function logToolCall(tool: string, key?: string): Promise<void> {
+export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp'): Promise<void> {
   const entry: TelemetryEntry = {
     ts: Date.now(),
     tool,
     session: sessionId,
     op: classifyOp(tool),
     ns: extractNamespace(key),
+    src: source,
   };
   return new Promise<void>((resolve) => {
     fs.appendFile(getTelemetryPath(), JSON.stringify(entry) + '\n', (_err) => resolve());
@@ -128,8 +134,10 @@ export function loadTelemetry(): TelemetryEntry[] {
 
 export interface TelemetryStats {
   period: string;
-  totalSessions: number;
   totalCalls: number;
+  mcpSessions: number;
+  mcpCalls: number;
+  cliCalls: number;
   bootstrapRate: number;
   writeBackRate: number;
   reads: number;
@@ -149,23 +157,25 @@ export function computeStats(periodDays: number = 0): TelemetryStats {
   const cutoff = periodDays > 0 ? Date.now() - periodDays * 86400000 : 0;
   const entries = cutoff > 0 ? all.filter(e => e.ts >= cutoff) : all;
 
-  const sessions = new Set(entries.map(e => e.session));
-  const sessionData = new Map<string, TelemetryEntry[]>();
-  for (const e of entries) {
-    if (!sessionData.has(e.session)) sessionData.set(e.session, []);
-    sessionData.get(e.session)!.push(e);
+  // Separate MCP and CLI entries (entries without src field are legacy MCP)
+  const mcpEntries = entries.filter(e => e.src !== 'cli');
+  const cliEntries = entries.filter(e => e.src === 'cli');
+
+  // MCP session metrics (bootstrap rate, write-back rate only apply to MCP)
+  const mcpSessionData = new Map<string, TelemetryEntry[]>();
+  for (const e of mcpEntries) {
+    if (!mcpSessionData.has(e.session)) mcpSessionData.set(e.session, []);
+    mcpSessionData.get(e.session)!.push(e);
   }
 
-  // Bootstrap rate: % of sessions whose first call is codex_context
   let bootstrapped = 0;
-  for (const [, calls] of sessionData) {
+  for (const [, calls] of mcpSessionData) {
     const sorted = [...calls].sort((a, b) => a.ts - b.ts);
     if (sorted[0]?.tool === 'codex_context') bootstrapped++;
   }
 
-  // Write-back rate: % of sessions with at least one write
   let wroteBack = 0;
-  for (const [, calls] of sessionData) {
+  for (const [, calls] of mcpSessionData) {
     if (calls.some(c => c.op === 'write')) wroteBack++;
   }
 
@@ -196,15 +206,17 @@ export function computeStats(periodDays: number = 0): TelemetryStats {
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  const totalSessions = sessions.size;
+  const mcpSessions = mcpSessionData.size;
   const period = periodDays > 0 ? `${periodDays}d` : 'all';
 
   return {
     period,
-    totalSessions,
     totalCalls: entries.length,
-    bootstrapRate: totalSessions > 0 ? bootstrapped / totalSessions : 0,
-    writeBackRate: totalSessions > 0 ? wroteBack / totalSessions : 0,
+    mcpSessions,
+    mcpCalls: mcpEntries.length,
+    cliCalls: cliEntries.length,
+    bootstrapRate: mcpSessions > 0 ? bootstrapped / mcpSessions : 0,
+    writeBackRate: mcpSessions > 0 ? wroteBack / mcpSessions : 0,
     reads,
     writes,
     execs,
