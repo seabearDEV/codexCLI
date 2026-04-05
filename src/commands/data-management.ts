@@ -5,7 +5,7 @@ import { loadAliases, saveAliases } from '../alias';
 import { loadConfirmKeys, saveConfirmKeys } from '../confirm';
 import { CodexData, ExportOptions, ImportOptions, ResetOptions } from '../types';
 import path from 'path';
-import { validateDataType, confirmOrAbort, getInvalidDataTypeMessage, printSuccess, printError, printWarning } from './helpers';
+import { validateDataType, validateResetType, confirmOrAbort, getInvalidDataTypeMessage, getInvalidResetTypeMessage, printSuccess, printError, printWarning } from './helpers';
 import { deepMerge } from '../utils/deepMerge';
 import { flattenObject } from '../utils/objectPath';
 import { maskEncryptedValues } from '../utils/crypto';
@@ -13,6 +13,7 @@ import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
 import { findProjectFile, clearProjectFileCache } from '../store';
 import { saveJsonSorted } from '../utils/saveJsonSorted';
+import { getDataDirectory } from '../utils/paths';
 
 function resolveScope(options: { global?: boolean | undefined, project?: boolean | undefined }): Scope | undefined {
   if (options.global) return 'global';
@@ -160,8 +161,8 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
   const scope = resolveScope(options);
   try {
     // Validate type parameter
-    if (!validateDataType(type)) {
-      printError(getInvalidDataTypeMessage(type));
+    if (!validateResetType(type)) {
+      printError(getInvalidResetTypeMessage(type));
       return;
     }
 
@@ -170,6 +171,16 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
       console.log(color.yellow(`⚠ This will reset your ${type} to an empty state.`));
       const confirmed = await confirmOrAbort('Continue? [y/N] ');
       if (!confirmed) return;
+    }
+
+    // Log-file resets (audit, telemetry) — global only, no backup needed
+    if (type === 'audit' || type === 'telemetry') {
+      const file = path.join(getDataDirectory(), type === 'audit' ? 'audit.jsonl' : 'telemetry.jsonl');
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+      }
+      printSuccess(`${type === 'audit' ? 'Audit log' : 'Telemetry'} has been cleared`);
+      return;
     }
 
     // Auto-backup before reset

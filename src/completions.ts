@@ -5,7 +5,7 @@ import { loadData } from './storage';
 import { loadAliases } from './alias';
 import { flattenObject } from './utils/objectPath';
 import { debug } from './utils/debug';
-import { VALID_DATA_TYPES } from './commands/helpers';
+import { VALID_DATA_TYPES, VALID_RESET_TYPES } from './commands/helpers';
 import { VALID_CONFIG_KEYS } from './config';
 import { getBinaryName } from './utils/binaryName';
 
@@ -25,7 +25,7 @@ function getMaxCompletionItems(): number {
 }
 
 // Argument types for dynamic completion
-type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'dataKeyWithNamespaces' | 'configKey' | 'exportType' | null;
+type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'dataKeyWithNamespaces' | 'configKey' | 'exportType' | 'resetType' | null;
 
 interface CommandDef {
   flags: Record<string, string>;
@@ -38,6 +38,7 @@ interface CommandDef {
 
 const CONFIG_KEYS: readonly string[] = VALID_CONFIG_KEYS;
 const EXPORT_TYPES: readonly string[] = VALID_DATA_TYPES;
+const RESET_TYPES: readonly string[] = VALID_RESET_TYPES;
 
 const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--tree': 'Display as tree',
@@ -216,6 +217,7 @@ const CLI_TREE: Record<string, CommandDef> = {
     flags: {
       '--period': 'Time period (7d, 30d, 90d, all)', '-p': 'Time period (7d, 30d, 90d, all)',
       '--writes': 'Show writes only', '-w': 'Show writes only',
+      '--mcp': 'Show MCP operations only', '--cli': 'Show CLI operations only',
       '--json': 'Output raw JSON', '-j': 'Output raw JSON',
       '--limit': 'Max entries to show', '-n': 'Max entries to show',
     },
@@ -255,7 +257,7 @@ const CLI_TREE: Record<string, CommandDef> = {
           '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
           '--project': FLAG_DESCRIPTIONS['--project'], '-P': FLAG_DESCRIPTIONS['-P'],
         },
-        argType: 'exportType',
+        argType: 'resetType' as ArgType,
         description: 'Reset to empty state',
       },
       projectfile: {
@@ -324,6 +326,8 @@ function getDynamicValues(argType: ArgType): CompletionItem[] {
       return CONFIG_KEYS.map(k => ({ value: k, description: 'Config setting', group: 'config' }));
     case 'exportType':
       return EXPORT_TYPES.map(t => ({ value: t, description: 'Export type', group: 'types' }));
+    case 'resetType':
+      return RESET_TYPES.map(t => ({ value: t, description: 'Reset type', group: 'types' }));
     default:
       return [];
   }

@@ -561,9 +561,11 @@ codexCLI
   .description('View the audit log of data mutations')
   .option('-p, --period <period>', 'Time period: 7d, 30d, 90d, all', '30d')
   .option('-w, --writes', 'Show only write operations')
+  .option('--mcp', 'Show only MCP operations')
+  .option('--cli', 'Show only CLI operations')
   .option('-j, --json', 'Output as JSON')
   .option('-n, --limit <n>', 'Max entries to show (default: 50)', parseInt)
-  .action(async (key: string | undefined, options: { period: string; writes?: boolean; json?: boolean; limit?: number }) => {
+  .action(async (key: string | undefined, options: { period: string; writes?: boolean; mcp?: boolean; cli?: boolean; json?: boolean; limit?: number }) => {
     const { showAuditLog } = await import('./commands/audit');
     await withPager(() => showAuditLog(key, options));
   });

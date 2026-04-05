@@ -94,6 +94,12 @@ export function findProjectFile(): string | null {
     return projectFileCache === '' ? null : projectFileCache;
   }
 
+  // Allow tests to suppress project file discovery entirely
+  if (process.env.CODEX_NO_PROJECT) {
+    projectFileCache = '';
+    return null;
+  }
+
   const globalDir = getDataDirectory();
   let dir = process.cwd();
   const root = path.parse(dir).root;

@@ -6,7 +6,7 @@ import * as os from 'os';
 describe('CLI Integration Tests', () => {
   // Create a temporary directory for test data
   const testDir = path.join(os.tmpdir(), 'codexcli-test-' + Math.random().toString(36).substring(2));
-  const execOpts = { env: { ...process.env, CODEX_DATA_DIR: testDir } };
+  const execOpts = { env: { ...process.env, CODEX_DATA_DIR: testDir, CODEX_NO_PROJECT: '1' } };
 
   const run = (args: string) => execSync(`node dist/index.js ${args}`, execOpts).toString();
 

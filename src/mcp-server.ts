@@ -6,6 +6,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 
 import { execSync } from "child_process";
+import fs from "fs";
+import path from "path";
 
 import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Scope } from "./storage";
 import { CodexData } from "./types";
@@ -25,6 +27,7 @@ import {
 } from "./alias";
 import {
   ensureDataDirectoryExists,
+  getDataDirectory,
 } from "./utils/paths";
 import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from "./store";
 import { hasConfirm, setConfirm, removeConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
@@ -980,13 +983,20 @@ server.tool(
 // --- codex_reset ---
 server.tool(
   "codex_reset",
-  "Reset entries and/or aliases to empty state",
+  "Reset entries and/or aliases to empty state, or clear audit/telemetry logs",
   {
-    type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to reset"),
-    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
+    type: z.enum(["entries", "aliases", "confirm", "all", "audit", "telemetry"]).describe("What to reset ('all' covers entries+aliases+confirm, not logs)"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global). Ignored for audit/telemetry."),
   },
   async ({ type, scope: scopeParam }) => {
     try {
+      // Log-file resets — global only
+      if (type === "audit" || type === "telemetry") {
+        const file = path.join(getDataDirectory(), type === "audit" ? "audit.jsonl" : "telemetry.jsonl");
+        if (fs.existsSync(file)) fs.unlinkSync(file);
+        return textResponse(`${type === "audit" ? "Audit log" : "Telemetry"} has been cleared.`);
+      }
+
       const scope = toScope(scopeParam);
       if (type === "entries" || type === "all") {
         saveData({}, scope);
@@ -1168,12 +1178,13 @@ server.tool(
     key: z.string().optional().describe("Filter by exact key or key prefix"),
     period: z.enum(["7d", "30d", "90d", "all"]).optional().describe("Time period to query (default: 30d)"),
     writes_only: z.boolean().optional().describe("Show only write operations"),
+    src: z.enum(["mcp", "cli"]).optional().describe("Filter by source: mcp or cli"),
     limit: z.number().int().min(1).max(500).optional().describe("Max entries to return (default: 50)"),
   },
-  async ({ key, period, writes_only, limit }) => {
+  async ({ key, period, writes_only, src, limit }) => {
     try {
       const days = period === '7d' ? 7 : period === '90d' ? 90 : period === 'all' ? 0 : 30;
-      const entries = queryAuditLog({ key, periodDays: days, writesOnly: writes_only, limit: limit ?? 50 });
+      const entries = queryAuditLog({ key, periodDays: days, writesOnly: writes_only, src, limit: limit ?? 50 });
 
       if (entries.length === 0) {
         return textResponse("No audit entries found.");

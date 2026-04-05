@@ -25,6 +25,7 @@ export interface AuditQueryOptions {
   key?: string | undefined;
   periodDays?: number | undefined;
   writesOnly?: boolean | undefined;
+  src?: 'mcp' | 'cli' | undefined;
   limit?: number | undefined;
 }
 
@@ -137,6 +138,10 @@ export function queryAuditLog(options: AuditQueryOptions = {}): AuditEntry[] {
 
   if (options.writesOnly) {
     filtered = filtered.filter(e => e.op === 'write');
+  }
+
+  if (options.src) {
+    filtered = filtered.filter(e => e.src === options.src);
   }
 
   // Newest first

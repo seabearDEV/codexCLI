@@ -213,6 +213,21 @@ describe('queryAuditLog', () => {
     expect(result).toHaveLength(3);
   });
 
+  it('filters by src', () => {
+    writeEntries([
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_set', op: 'write', success: true },
+      { ts: now, session: 's1', src: 'cli', tool: 'codex_set', op: 'write', success: true },
+      { ts: now, session: 's1', src: 'mcp', tool: 'codex_get', op: 'read', success: true },
+    ]);
+    const mcp = queryAuditLog({ src: 'mcp' });
+    expect(mcp).toHaveLength(2);
+    expect(mcp.every(e => e.src === 'mcp')).toBe(true);
+
+    const cli = queryAuditLog({ src: 'cli' });
+    expect(cli).toHaveLength(1);
+    expect(cli[0].src).toBe('cli');
+  });
+
   it('returns all with period 0', () => {
     writeEntries([
       { ts: now - 365 * day, session: 'old', src: 'mcp', tool: 'codex_set', op: 'write', success: true },
