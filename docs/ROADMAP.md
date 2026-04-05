@@ -47,44 +47,32 @@ CodexCLI is a structured, persistent knowledge base for software projects — ac
 - [x] Fixed DEBUG check inconsistency across modules
 - [x] Removed dead code (~100 lines), deduplicated CLI_TREE shortcuts
 
-### v0.9.x (in review)
+### v0.9.x
 - [x] Conditional interpolation: `${key:-default}` and `${key:?error}` ([#14](https://github.com/seabearDEV/codexCLI/issues/14), [PR #31](https://github.com/seabearDEV/codexCLI/pull/31))
 - [x] MCP telemetry: usage tracking, `codex_stats` tool, `ccli stats` command ([PR #32](https://github.com/seabearDEV/codexCLI/pull/32))
 - [x] Configurable backup rotation: `max_backups` config setting ([#10](https://github.com/seabearDEV/codexCLI/issues/10), [PR #33](https://github.com/seabearDEV/codexCLI/pull/33))
 - [x] Init scaffolding: `ccli init --scaffold` for Node.js, Go, Python, Rust ([PR #33](https://github.com/seabearDEV/codexCLI/pull/33))
 - [x] LLM instructions refactor: append model, `ccli config llm-instructions` ([PR #34](https://github.com/seabearDEV/codexCLI/pull/34))
 
+### v1.0.0 — v1.4.x
+- [x] Staleness detection: `_meta` timestamps, `ccli stale`, `codex_stale`, age tags in `codex_context`
+- [x] Schema validation: `ccli lint`, configurable `_schema.namespaces`
+- [x] Advanced search: regex patterns (`--regex`), field-specific filtering (`--keys`, `--values`)
+- [x] Audit log: before/after diffs, agent identity, `ccli audit` + `codex_audit`
+- [x] Tiered `codex_context`: essential, standard, full tiers for token efficiency
+- [x] Test isolation: `CODEX_DATA_DIR` redirects global store + audit/telemetry to temp dir
+- [x] Agent-agnostic optimizations: enriched tool descriptions, deduped entries, "prefer MCP" guidance
+- [x] `deps.*` namespace, workflow aliases, [Schema Guide](schema-guide.md)
+
 ---
 
-## v1.0.0
-
-The 1.0 milestone represents a stable, feature-complete core — reliable for daily use by both humans and AI agents.
+## Next
 
 ### Stored Command Chains / Macros
 Store reusable sequences of key references that `run` resolves and executes as a chain.
 
 - [ ] Syntax for key references in stored values (e.g., space-separated keys or a dedicated marker) ([#16](https://github.com/seabearDEV/codexCLI/issues/16))
 - [ ] Recursion depth limits and interaction with `--dry`, `--confirm`, interpolation
-
-### Advanced Search
-Make `find` more powerful for large knowledge bases.
-
-- [ ] Regex search patterns (`ccli find --regex "prod.*ip"`) ([#9](https://github.com/seabearDEV/codexCLI/issues/9))
-- [ ] Field-specific search: key-only or value-only filtering
-
-### Staleness Detection
-Entries go stale as code evolves. Help agents and humans know when to trust stored data.
-
-- [ ] Add optional `_meta` section to data.json tracking last-modified timestamps per key
-- [ ] `codex_context` includes age indicator for old entries (e.g., `[30d]` prefix)
-- [ ] `ccli get --stale <days>` shows entries not updated in N days
-- [ ] MCP tool: `codex_stale` returns entries older than a threshold
-
-### Schema Validation
-Help users and agents follow the recommended schema.
-
-- [ ] `ccli lint` warns about entries outside recognized namespaces
-- [ ] Configurable schema rules in `.codexcli.json` (optional `_schema` section)
 
 ---
 

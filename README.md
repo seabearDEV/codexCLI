@@ -32,6 +32,7 @@ A command-line knowledge base with built-in AI agent integration via MCP.
   - [Debugging](#debugging)
 - [Command Reference](#command-reference)
 - [MCP Server (AI Agent Integration)](#mcp-server-ai-agent-integration)
+- [Documentation](#documentation)
 - [Development](#development)
 - [License](#license)
 
@@ -544,6 +545,8 @@ ccli init --remove
 
 #### Recommended Schema
 
+> **Deep dive:** See the [Schema Guide](docs/schema-guide.md) for the full rationale behind the file structure, what makes a good entry, and a walkthrough of the codexCLI project's own `.codexcli.json` as a reference implementation.
+
 When using CodexCLI as a project knowledge base (especially with AI agents via MCP), we recommend organizing entries under these namespaces:
 
 | Namespace | Purpose | Examples |
@@ -895,6 +898,14 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":
 ```
 
 A successful response will include `"serverInfo":{"name":"codexcli"}` in the JSON output.
+
+## Documentation
+
+| Document | Description |
+|---|---|
+| [Schema Guide](docs/schema-guide.md) | How to structure `.codexcli.json` — namespaces, file anatomy, good vs bad entries, reference examples |
+| [Roadmap](docs/ROADMAP.md) | Completed features, upcoming milestones, long-term vision |
+| [Go Rewrite Plan](docs/go-rewrite-plan.md) | Architecture plan for the Go port |
 
 ## Development
 

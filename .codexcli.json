@@ -28,6 +28,12 @@
     "conventions.persistence": 1775359536319,
     "conventions.tests": 1775347268052,
     "conventions.types": 1775347265850,
+    "deps.chalk": 1775361267185,
+    "deps.commander": 1775361265842,
+    "deps.esbuild": 1775361268959,
+    "deps.mcp-sdk": 1775361264498,
+    "deps.vitest": 1775361270072,
+    "deps.zod": 1775361268065,
     "files.audit": 1775356700889,
     "files.completions": 1775356698632,
     "files.config": 1775356704687,
@@ -43,14 +49,20 @@
     "files.telemetry": 1775356701809,
     "files.types": 1775356704269,
     "project.description": 1775347231858,
-    "project.goals": 1775358686592,
+    "project.goals": 1775361263177,
     "project.name": 1775347230199,
     "project.vision": 1775347234508
   },
   "aliases": {
     "chk": "commands.check",
     "cln": "commands.clean",
-    "rel": "commands.release"
+    "dev": "context.devWorkflow",
+    "goals": "project.goals",
+    "mcp": "arch.mcp",
+    "persist": "conventions.persistence",
+    "rel": "commands.release",
+    "store": "arch.store",
+    "tests": "conventions.tests"
   },
   "confirm": {
     "commands.release": true
@@ -60,7 +72,7 @@
       "name": "codexcli",
       "description": "Persistent, structured knowledge store for software projects. CLI + MCP server. Agents bootstrap full project context in one call instead of re-exploring the codebase.",
       "vision": "Eliminate repetitive codebase exploration by AI agents. Every session starts with full context. Every insight gets stored for the next session. Token savings compound over time.",
-      "goals": "1) Decrease token usage for efficient sessions. 2) Use codexCLI MCP to simplify project creation/maintenance (dogfooding). 3) Make .codexcli.json useful for both devs and GenAI agents. 4) Increase usefulness across multiple GenAI agents (Claude, Copilot, ChatGPT, etc)."
+      "goals": "1) Token efficiency — fewer tokens per session. 2) Dogfooding — use codexCLI MCP for own project maintenance. 3) Dual-audience .codexcli.json — useful for devs AND GenAI agents. 4) Agent-agnostic — work across Claude, Copilot, ChatGPT, Cursor, etc."
     },
     "commands": {
       "release": "git push origin main && VERSION=$(node -p \"require('./package.json').version\") && git tag \"v$VERSION\" && git push origin \"v$VERSION\" && echo \"🚀 Released v$VERSION\"",
@@ -113,6 +125,14 @@
       "llmInstructions": "src/llm-instructions.ts — DEFAULT_LLM_INSTRUCTIONS, getCustomInstructions(), getEffectiveInstructions()",
       "types": "src/types.ts — shared interfaces: DataStore, Scope, AliasMap, ConfirmMap, StoreMeta",
       "config": "src/config.ts — user config (config.json), separate from data store, preferences like pager/color"
+    },
+    "deps": {
+      "mcp-sdk": "@modelcontextprotocol/sdk — MCP protocol implementation. Provides Server class, tool registration, stdio transport. Pinned to ^1.26.0.",
+      "commander": "commander ^13 — CLI framework. Handles arg parsing, subcommands, help generation. Every command has a short alias registered via Commander.",
+      "chalk": "chalk ^4 (CJS) — terminal colors. Pinned to v4 for CommonJS compatibility; v5+ is ESM-only.",
+      "zod": "zod ^4 — runtime schema validation. Used for MCP tool input validation and config parsing.",
+      "esbuild": "esbuild ^0.25 — bundler for SEA builds. Produces single-file bundle that gets injected into Node binary via postject.",
+      "vitest": "vitest ^4 — test runner. Globals enabled, coverage via @vitest/coverage-v8. CODEX_DATA_DIR isolates test data."
     }
   }
 }
