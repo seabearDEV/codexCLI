@@ -1,9 +1,12 @@
+import os from 'os';
+import path from 'path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    env: { CODEX_DATA_DIR: path.join(os.tmpdir(), 'codexcli-vitest') },
     root: './src',
     include: ['**/__tests__/**/*.ts', '**/*.{test,spec}.ts'],
     coverage: {
