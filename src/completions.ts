@@ -25,6 +25,8 @@ function getMaxCompletionItems(): number {
 }
 
 // Argument types for dynamic completion
+// dataKey: entries+aliases  dataKeyOnly: entries only  dataKeyPrefix: truncated to next dot segment
+// dataKeyWithNamespaces: entries+aliases+namespace prefixes  configKey/exportType/resetType: static lists
 type ArgType = 'dataKey' | 'dataKeyOnly' | 'dataKeyPrefix' | 'dataKeyWithNamespaces' | 'configKey' | 'exportType' | 'resetType' | null;
 
 interface CommandDef {

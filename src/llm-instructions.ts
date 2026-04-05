@@ -33,7 +33,11 @@ TOOL TIPS:
 - codex_audit — query the audit log of data mutations (before/after diffs, agent identity)
 
 EFFECTIVE USAGE:
-- Always call codex_context as your FIRST tool call to bootstrap session knowledge. Use tier:"essential" for quick tasks, omit for standard context, or tier:"full" for architecture work.
+- Always call codex_context as your FIRST tool call to bootstrap session knowledge.
+- Pick the right tier for the task:
+  - tier:"essential" — answering questions, small fixes, single-file edits
+  - omit (standard) — multi-file changes, bug fixes, new features
+  - tier:"full" — refactoring subsystems, changing architecture, onboarding to the codebase
 - Write back: when you learn something non-obvious, store it before the session ends.
 - All mutations are audited — codex_audit shows what changed, when, and by whom.`;
 

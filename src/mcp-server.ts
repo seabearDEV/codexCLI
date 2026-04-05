@@ -169,7 +169,7 @@ server.tool = ((...args: any[]) => {
 // --- codex_set ---
 server.tool(
   "codex_set",
-  "Set an entry in the CodexCLI data store",
+  "Store project knowledge as a key-value entry (dot notation, e.g. arch.api). Use to persist non-obvious insights across sessions.",
   { key: z.string().describe("Dot-notation key (e.g. server.prod.ip)"), value: z.string().describe("Value to store"), alias: z.string().optional().describe("Create an alias for this key"), encrypt: z.boolean().optional().describe("Encrypt the value with the provided password"), password: z.string().optional().describe("Password for encryption (required when encrypt is true)"), scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
   async ({ key, value, alias, encrypt, password, scope: scopeParam }) => {
     try {
@@ -198,7 +198,7 @@ server.tool(
 // --- codex_get ---
 server.tool(
   "codex_get",
-  "Retrieve entries from the CodexCLI data store",
+  "Retrieve stored project knowledge by dot-notation key, or list all entries. Check here before exploring code.",
   {
     key: z.string().optional().describe("Dot-notation key to retrieve (omit for all entries)"),
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
@@ -337,7 +337,7 @@ server.tool(
 // --- codex_remove ---
 server.tool(
   "codex_remove",
-  "Remove an entry from the CodexCLI data store",
+  "Remove a stored entry by dot-notation key. Use when knowledge is outdated or incorrect.",
   {
     key: z.string().describe("Dot-notation key to remove"),
     is_alias: z.boolean().optional().describe("If true, remove the alias only (keep the entry)"),
@@ -515,7 +515,7 @@ server.tool(
 // --- codex_search ---
 server.tool(
   "codex_search",
-  "Search entries in the CodexCLI data store",
+  "Search stored project knowledge by keyword. Use to find relevant context before reading code.",
   {
     searchTerm: z.string().describe("Term to search for (case-insensitive substring, or regex if regex=true)"),
     regex: z.boolean().optional().describe("Treat searchTerm as a regular expression"),
@@ -643,7 +643,7 @@ server.tool(
 // --- codex_run ---
 server.tool(
   "codex_run",
-  "Execute a stored command from the data store",
+  "Execute a stored shell command by key (e.g. commands.build). Supports interpolation and confirmation prompts.",
   {
     key: z.string().describe("Dot-notation key (or alias) whose value is a shell command"),
     dry: z.boolean().optional().describe("If true, return the command without executing it"),
@@ -1085,9 +1085,10 @@ server.tool(
         }
       }
 
+      const entryCount = Object.keys(filtered).length;
       if (effectiveTier !== 'full') {
         lines.push('');
-        lines.push(`[tier: ${effectiveTier} — pass tier:"full" for complete context]`);
+        lines.push(`[tier: ${effectiveTier} (${entryCount} entries) — pass tier:"full" for complete context]`);
       }
 
       return textResponse(lines.join("\n"));
