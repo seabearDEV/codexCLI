@@ -25,6 +25,7 @@
     "conventions.atomicWrites": 1775347269392,
     "conventions.debug": 1775347270745,
     "conventions.output": 1775347266674,
+    "conventions.persistence": 1775359536319,
     "conventions.tests": 1775347268052,
     "conventions.types": 1775347265850,
     "files.audit": 1775356700889,
@@ -86,7 +87,8 @@
       "output": "All user-facing text uses getBinaryName() — never hardcode ccli",
       "tests": "Vitest with globals. Unit tests mock fs/store. Integration tests use temp dirs via CODEX_DATA_DIR.",
       "atomicWrites": "All file writes use saveJsonSorted -> withFileLock -> atomicWriteFileSync (tmp file + rename)",
-      "debug": "Always use process.env.DEBUG === 'true' (strict equality). Never use truthy check."
+      "debug": "Always use process.env.DEBUG === 'true' (strict equality). Never use truthy check.",
+      "persistence": ".codexcli.json = project knowledge (any agent needs it). CLAUDE.md = Claude behavior directives (how to use codex, not what it contains). MEMORY.md = personal user preferences only (commit style, interaction prefs). Rule: if another agent would benefit, it goes in .codexcli.json."
     },
     "context": {
       "migration": "Auto-migrates old 3-file format to unified data.json on first access. Old files renamed to .backup.",
