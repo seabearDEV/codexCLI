@@ -64,6 +64,17 @@ CodexCLI is a structured, persistent knowledge base for software projects — ac
 - [x] Agent-agnostic optimizations: enriched tool descriptions, deduped entries, "prefer MCP" guidance
 - [x] `deps.*` namespace, workflow aliases, [Schema Guide](schema-guide.md)
 
+### v1.5.x — v1.6.x
+- [x] Enriched audit/telemetry: duration, hit/miss, redundant detection, responseSize, per-agent stats
+- [x] Two-step MCP confirmation: `confirm_token` flow for `codex_run` with `--confirm` entries
+- [x] Import flat-key expansion: `expandFlatKeys()` auto-converts dot-notation keys to nested structure
+- [x] Inline staleness warnings: `[untracked]` / `[Nd]` tags on `codex_get` and `codex_context` output, CLI yellow warning
+- [x] `getStalenessTag()` shared helper with 30-day threshold, untracked entries treated as most suspect
+- [x] Namespace-weighted token savings: exploration cost multipliers per namespace, bootstrap estimation, per-namespace breakdown in `codex_stats --detailed`
+- [x] [Token Savings documentation](token-savings.md): full methodology transparency with Mermaid diagrams
+- [x] LLM instructions expanded: all 19 MCP tools documented in 6 groups, FRESHNESS guidance added
+- [x] `codex_stale` sorts untracked entries first, uses consistent "untracked" wording across CLI and MCP
+
 ---
 
 ## Next

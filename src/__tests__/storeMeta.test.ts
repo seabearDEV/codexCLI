@@ -17,7 +17,7 @@ vi.mock('../utils/paths', () => ({
   clearProjectFileCache: () => {},
 }));
 
-import { loadMeta, touchMeta, removeMeta, loadEntries, saveEntries, clearStoreCaches } from '../store';
+import { loadMeta, touchMeta, removeMeta, loadEntries, saveEntries, clearStoreCaches, getStalenessTag, STALE_DAYS } from '../store';
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-meta-'));
@@ -107,5 +107,32 @@ describe('store meta operations', () => {
 
     const raw = fs.readFileSync(dataPath, 'utf8');
     expect(raw).not.toContain('_meta');
+  });
+});
+
+describe('getStalenessTag', () => {
+  it('returns empty string for fresh entries', () => {
+    expect(getStalenessTag('k', { k: Date.now() })).toBe('');
+  });
+
+  it('returns age tag for stale entries', () => {
+    const old = Date.now() - 45 * 86400000;
+    expect(getStalenessTag('k', { k: old })).toBe(' [45d]');
+  });
+
+  it('returns [untracked] for missing entries', () => {
+    expect(getStalenessTag('k', {})).toBe(' [untracked]');
+  });
+
+  it('returns empty for entry exactly at threshold', () => {
+    const atThreshold = Date.now() - STALE_DAYS * 86400000;
+    // At exactly the threshold, ts < cutoff is false (equal), so fresh
+    expect(getStalenessTag('k', { k: atThreshold })).toBe('');
+  });
+
+  it('returns tag for entry one day past threshold', () => {
+    const pastThreshold = Date.now() - (STALE_DAYS + 1) * 86400000;
+    const tag = getStalenessTag('k', { k: pastThreshold });
+    expect(tag).toMatch(/^ \[\d+d\]$/);
   });
 });

@@ -204,6 +204,14 @@ vi.mock('../store', () => ({
   removeMeta: vi.fn(),
   loadMeta: vi.fn(() => ({ ...mockMetaData })),
   loadMetaMerged: vi.fn(() => ({ ...mockMetaData })),
+  STALE_DAYS: 30,
+  STALE_MS: 30 * 86400000,
+  getStalenessTag: vi.fn((key: string, meta: Record<string, number>) => {
+    const ts = meta[key];
+    if (ts === undefined) return ' [untracked]';
+    if (ts < Date.now() - 30 * 86400000) return ` [${Math.floor((Date.now() - ts) / 86400000)}d]`;
+    return '';
+  }),
 }));
 
 vi.mock('../formatting', () => ({
@@ -232,6 +240,8 @@ vi.mock('../utils/telemetry', () => ({
     period: '30d', totalCalls: 0, mcpSessions: 0, mcpCalls: 0, cliCalls: 0,
     bootstrapRate: 0, writeBackRate: 0, reads: 0, writes: 0, execs: 0,
     readWriteRatio: '0:0', namespaceCoverage: {}, topTools: [], scopeBreakdown: { project: 0, global: 0, unscoped: 0 },
+    estimatedTokensSaved: 0, estimatedTokensSavedBootstrap: 0,
+    estimatedExplorationTokensSaved: 0, estimatedRedundantWriteTokensSaved: 0, estimatedTotalTokensSaved: 0, explorationBreakdown: {},
   })),
   classifyOp: vi.fn((tool: string) => {
     if (['codex_set', 'codex_remove', 'codex_copy', 'codex_rename', 'codex_import', 'codex_reset', 'codex_alias_set', 'codex_alias_remove', 'codex_config_set', 'codex_init'].includes(tool)) return 'write';
@@ -324,6 +334,7 @@ describe('MCP Server Tools', () => {
 
     it('returns a leaf value', async () => {
       Object.assign(mockData, { db: { host: 'localhost' } });
+      Object.assign(mockMetaData, { 'db.host': Date.now() });
       const result = await toolHandlers['codex_get']({ key: 'db.host', format: undefined });
       expect(result.content[0].text).toBe('db.host: localhost');
     });
@@ -350,8 +361,24 @@ describe('MCP Server Tools', () => {
     it('shows [encrypted] for encrypted leaf value', async () => {
       const encrypted = encryptValue('secret', 'pass');
       Object.assign(mockData, { api: { key: encrypted } });
+      Object.assign(mockMetaData, { 'api.key': Date.now() });
       const result = await toolHandlers['codex_get']({ key: 'api.key', format: undefined });
       expect(result.content[0].text).toBe('api.key: [encrypted]');
+    });
+
+    it('shows [untracked] for leaf value with no meta', async () => {
+      Object.assign(mockData, { db: { host: 'localhost' } });
+      // mockMetaData is empty — no timestamp for db.host
+      const result = await toolHandlers['codex_get']({ key: 'db.host', format: undefined });
+      expect(result.content[0].text).toBe('db.host: localhost [untracked]');
+    });
+
+    it('shows age tag for stale leaf value', async () => {
+      Object.assign(mockData, { db: { host: 'localhost' } });
+      const oldTs = Date.now() - 45 * 86400000;
+      Object.assign(mockMetaData, { 'db.host': oldTs });
+      const result = await toolHandlers['codex_get']({ key: 'db.host', format: undefined });
+      expect(result.content[0].text).toMatch(/^db\.host: localhost \[\d+d\]$/);
     });
 
     it('shows [encrypted] for encrypted values in flat listing', async () => {
@@ -912,6 +939,33 @@ describe('MCP Server Tools', () => {
       expect(text).not.toContain('[tier:');
     });
 
+    it('shows [untracked] for entries with no meta in context', async () => {
+      Object.assign(mockData, { project: { name: 'test' } });
+      // mockMetaData is empty — no timestamp
+      const result = await toolHandlers['codex_context']({ tier: 'full' });
+      const text = result.content[0].text;
+      expect(text).toContain('project.name: test [untracked]');
+    });
+
+    it('shows age tag for stale entries in context', async () => {
+      Object.assign(mockData, { project: { name: 'test' } });
+      const oldTs = Date.now() - 45 * 86400000;
+      Object.assign(mockMetaData, { 'project.name': oldTs });
+      const result = await toolHandlers['codex_context']({ tier: 'full' });
+      const text = result.content[0].text;
+      expect(text).toMatch(/project\.name: test \[\d+d\]/);
+    });
+
+    it('no tag for fresh entries in context', async () => {
+      Object.assign(mockData, { project: { name: 'test' } });
+      Object.assign(mockMetaData, { 'project.name': Date.now() });
+      const result = await toolHandlers['codex_context']({ tier: 'full' });
+      const text = result.content[0].text;
+      expect(text).toContain('project.name: test');
+      expect(text).not.toContain('[untracked]');
+      expect(text).not.toMatch(/project\.name: test \[\d+d\]/);
+    });
+
     it('includes custom namespaces in standard tier', async () => {
       Object.assign(mockData, {
         myteam: { workflow: 'agile' },
@@ -1049,12 +1103,12 @@ describe('MCP Server Tools', () => {
       expect(result.content[0].text).toContain('project.b');
     });
 
-    it('marks entries with no timestamp as never tracked', async () => {
+    it('marks entries with no timestamp as untracked', async () => {
       Object.assign(mockData, { untracked: 'value' });
       // mockMetaData is empty (no timestamps)
 
       const result = await toolHandlers['codex_stale']({ days: 0 });
-      expect(result.content[0].text).toContain('never tracked');
+      expect(result.content[0].text).toContain('untracked');
     });
 
     it('handles scoped (global) request', async () => {

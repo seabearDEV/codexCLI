@@ -96,6 +96,58 @@ export function removeNestedValue(obj: CodexData, path: string): boolean {
 }
 
 /**
+ * Expands flat dot-notation keys into nested objects.
+ * Keys that contain dots (e.g. {"a.b": "val"}) are expanded to {a: {b: "val"}}.
+ * Keys without dots are left as-is. Uses deepMerge to combine expanded keys.
+ */
+export function expandFlatKeys(obj: Record<string, unknown>): Record<string, unknown> {
+  const hasFlatKeys = Object.keys(obj).some(k => k.includes('.') && typeof obj[k] !== 'object');
+  if (!hasFlatKeys) return obj;
+
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (!key.includes('.') || (typeof value === 'object' && value !== null)) {
+      // Normal nested key or already an object — keep as-is
+      if (key in result && typeof result[key] === 'object' && typeof value === 'object' && value !== null) {
+        result[key] = mergeObjects(result[key] as Record<string, unknown>, value as Record<string, unknown>);
+      } else {
+        result[key] = value;
+      }
+    } else {
+      // Flat dot-notation key with scalar value — expand
+      const parts = key.split('.');
+      let current = result;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const part = parts[i];
+        if (!isSafeKey(part)) break;
+        if (!current[part] || typeof current[part] !== 'object') {
+          current[part] = {};
+        }
+        current = current[part] as Record<string, unknown>;
+      }
+      const lastPart = parts[parts.length - 1];
+      if (isSafeKey(lastPart)) {
+        current[lastPart] = value;
+      }
+    }
+  }
+  return result;
+}
+
+function mergeObjects(target: Record<string, unknown>, source: Record<string, unknown>): Record<string, unknown> {
+  const output: Record<string, unknown> = { ...target };
+  for (const key of Object.keys(source)) {
+    if (!isSafeKey(key)) continue;
+    if (typeof source[key] === 'object' && source[key] !== null && typeof output[key] === 'object' && output[key] !== null) {
+      output[key] = mergeObjects(output[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
+    } else {
+      output[key] = source[key];
+    }
+  }
+  return output;
+}
+
+/**
  * Flattens nested objects into a flat map with dot-notation keys
  * Example: { user: { name: "John" } } → { "user.name": "John" }
  */

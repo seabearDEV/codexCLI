@@ -39,6 +39,23 @@ function extractNamespace(key?: string): string {
 }
 
 /**
+ * Estimated tokens an agent would spend exploring the codebase to find
+ * the same information stored under each namespace. Conservative values.
+ */
+export const EXPLORATION_COST: Record<string, number> = {
+  files: 2000,        // glob + grep + read (~3 tool calls)
+  arch: 3000,         // multiple reads + reasoning (~5 calls)
+  context: 3000,      // multiple reads + reasoning
+  commands: 1000,     // grep + read package.json (~2 calls)
+  conventions: 1500,  // reading multiple files for patterns
+  project: 500,       // reading README/package.json
+  deps: 800,          // reading package.json + docs
+};
+const DEFAULT_EXPLORATION_COST = 1000;
+const BOOTSTRAP_PER_ENTRY_COST = 200;
+const REDUNDANT_WRITE_COST = 150;
+
+/**
  * Classify an MCP tool call as read, write, exec, or meta.
  */
 export function classifyOp(tool: string): TelemetryEntry['op'] {
@@ -194,6 +211,11 @@ export interface TelemetryStats {
   // Token savings
   estimatedTokensSaved: number;
   estimatedTokensSavedBootstrap: number;
+  // Exploration-weighted token savings
+  estimatedExplorationTokensSaved: number;
+  estimatedRedundantWriteTokensSaved: number;
+  estimatedTotalTokensSaved: number;
+  explorationBreakdown: Record<string, { hits: number; tokensSaved: number }>;
   // Agent breakdown
   agentBreakdown: Record<string, { calls: number; reads: number; writes: number }>;
   // Trend comparison (vs previous period)
@@ -338,6 +360,36 @@ export function computeStats(periodDays = 0): TelemetryStats {
       .reduce((sum, e) => sum + e.responseSize!, 0) / 4
   );
 
+  // Exploration-weighted token savings (namespace-aware)
+  const explorationBreakdown: Record<string, { hits: number; tokensSaved: number }> = {};
+  let estimatedExplorationTokensSaved = 0;
+
+  const readHits = entries.filter(e => e.op === 'read' && e.hit === true);
+  for (const e of readHits) {
+    if (e.tool === 'codex_context') {
+      // Bootstrap: approximate entry count from response size, each avoids ~1 lookup
+      const deliveryCost = (e.responseSize ?? 0) / 4;
+      const approxEntries = Math.round((e.responseSize ?? 0) / 80);
+      const explorationCost = Math.max(deliveryCost, approxEntries * BOOTSTRAP_PER_ENTRY_COST);
+      const rounded = Math.round(explorationCost);
+      const bsKey = 'bootstrap';
+      if (!explorationBreakdown[bsKey]) explorationBreakdown[bsKey] = { hits: 0, tokensSaved: 0 };
+      explorationBreakdown[bsKey].hits++;
+      explorationBreakdown[bsKey].tokensSaved += rounded;
+      estimatedExplorationTokensSaved += rounded;
+    } else {
+      const ns = e.ns === '*' ? 'other' : e.ns;
+      const cost = EXPLORATION_COST[ns] ?? DEFAULT_EXPLORATION_COST;
+      if (!explorationBreakdown[ns]) explorationBreakdown[ns] = { hits: 0, tokensSaved: 0 };
+      explorationBreakdown[ns].hits++;
+      explorationBreakdown[ns].tokensSaved += cost;
+      estimatedExplorationTokensSaved += cost;
+    }
+  }
+
+  const estimatedRedundantWriteTokensSaved = redundantWrites * REDUNDANT_WRITE_COST;
+  const estimatedTotalTokensSaved = estimatedExplorationTokensSaved + estimatedRedundantWriteTokensSaved;
+
   // Agent breakdown
   const agentBreakdown: Record<string, { calls: number; reads: number; writes: number }> = {};
   for (const e of entries) {
@@ -406,6 +458,10 @@ export function computeStats(periodDays = 0): TelemetryStats {
     projectBreakdown,
     estimatedTokensSaved,
     estimatedTokensSavedBootstrap,
+    estimatedExplorationTokensSaved,
+    estimatedRedundantWriteTokensSaved,
+    estimatedTotalTokensSaved,
+    explorationBreakdown,
     agentBreakdown,
     trend,
   };

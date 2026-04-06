@@ -311,6 +311,24 @@ export function loadMetaMerged(): Record<string, number> {
   return { ...(global.load()._meta ?? {}), ...(project.load()._meta ?? {}) };
 }
 
+// ── Staleness helpers ─────────────────────────────────────────────────
+
+export const STALE_DAYS = 30;
+export const STALE_MS = STALE_DAYS * 86400000;
+
+/**
+ * Returns a staleness tag for an entry key based on its _meta timestamp.
+ * - Fresh (within STALE_DAYS): returns ''
+ * - Stale (older than STALE_DAYS): returns ' [Nd]'
+ * - Untracked (no timestamp): returns ' [untracked]'
+ */
+export function getStalenessTag(key: string, meta: Record<string, number>): string {
+  const ts = meta[key];
+  if (ts === undefined) return ' [untracked]';
+  if (ts < Date.now() - STALE_MS) return ` [${Math.floor((Date.now() - ts) / 86400000)}d]`;
+  return '';
+}
+
 // ── Migration ──────────────────────────────────────────────────────────
 
 function migrateToUnifiedFile(): { data: UnifiedData; mtime: number } | null {

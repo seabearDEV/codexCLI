@@ -13,6 +13,7 @@ import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Sc
 import { CodexData } from "./types";
 import {
   flattenObject,
+  expandFlatKeys,
   setNestedValue,
 } from "./utils/objectPath";
 import {
@@ -440,7 +441,10 @@ server.tool(
         } else {
           display = value;
         }
-        return textResponse(`${resolvedKey}: ${display}`);
+        const { loadMeta, loadMetaMerged, getStalenessTag } = await import("./store");
+        const getMeta = lookupScope === 'auto' ? loadMetaMerged() : loadMeta(lookupScope);
+        const staleTag = getStalenessTag(resolvedKey, getMeta);
+        return textResponse(`${resolvedKey}: ${display}${staleTag}`);
       }
 
       // Object subtree
@@ -1036,7 +1040,8 @@ server.tool(
         };
 
         if (type === "entries" || type === "all") {
-          const importObj = type === "all" ? (obj.entries as Record<string, unknown> || {}) : obj;
+          const importObjRaw = type === "all" ? (obj.entries as Record<string, unknown> || {}) : obj;
+          const importObj = expandFlatKeys(importObjRaw);
           const currentFlat = flattenObject(loadData(scope));
           const importFlat = flattenObject(importObj);
           lines.push(`Entries (${merge ? "merge" : "replace"}):`);
@@ -1084,7 +1089,7 @@ server.tool(
           );
         }
 
-        const dataObj = dataVal as Record<string, unknown>;
+        const dataObj = expandFlatKeys(dataVal as Record<string, unknown>);
         const aliasesObj = aliasesVal as Record<string, unknown>;
 
         if (Object.values(aliasesObj).some(v => typeof v !== "string")) {
@@ -1106,8 +1111,9 @@ server.tool(
           saveConfirmKeys({}, scope);
         }
       } else if (type === "entries") {
+        const expanded = expandFlatKeys(obj);
         const current = merge ? loadData(scope) : {};
-        const newData = merge ? deepMerge(current, obj) : obj;
+        const newData = merge ? deepMerge(current, expanded) : expanded;
         saveData(newData as CodexData, scope);
       } else if (type === "confirm") {
         const currentConfirm = merge ? loadConfirmKeys(scope) : {};
@@ -1215,20 +1221,14 @@ server.tool(
       }
 
       // Load meta for age indicators
-      const { loadMeta, loadMetaMerged } = await import("./store");
+      const { loadMeta, loadMetaMerged, getStalenessTag } = await import("./store");
       const meta = effectiveScope === 'auto' ? loadMetaMerged() : loadMeta(effectiveScope);
-      const STALE_DAYS = 30;
-      const staleCutoff = Date.now() - STALE_DAYS * 86400000;
 
       const lines: string[] = [];
 
       if (Object.keys(filtered).length > 0) {
         for (const [k, v] of Object.entries(filtered)) {
-          const ts = meta[k];
-          let ageTag = '';
-          if (ts !== undefined && ts < staleCutoff) {
-            ageTag = ` [${Math.floor((Date.now() - ts) / 86400000)}d]`;
-          }
+          const ageTag = getStalenessTag(k, meta);
           lines.push(`${k}: ${isEncrypted(v) ? '[encrypted]' : v}${ageTag}`);
         }
       }
@@ -1271,19 +1271,24 @@ server.tool(
       const flat = getEntriesFlat(scope);
       const cutoff = Date.now() - threshold * 86400000;
 
-      const stale: string[] = [];
+      const stale: { key: string; ts: number | undefined }[] = [];
       for (const key of Object.keys(flat)) {
         const ts = meta[key];
         if (ts === undefined || ts < cutoff) {
-          const age = ts ? `${Math.floor((Date.now() - ts) / 86400000)}d ago` : 'never tracked';
-          stale.push(`${key}  (${age})`);
+          stale.push({ key, ts });
         }
       }
+      // Sort: untracked first (most suspect), then oldest-first
+      stale.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
 
       if (stale.length === 0) {
         return textResponse(`No entries older than ${threshold} days.`);
       }
-      return textResponse(`${stale.length} entries not updated in ${threshold}+ days:\n${stale.join('\n')}`);
+      const lines = stale.map(({ key, ts }) => {
+        const age = ts ? `${Math.floor((Date.now() - ts) / 86400000)}d ago` : 'untracked';
+        return `${key}  (${age})`;
+      });
+      return textResponse(`${stale.length} entries not updated in ${threshold}+ days:\n${lines.join('\n')}`);
     } catch (err) {
       return errorResponse(`Error checking staleness: ${String(err)}`);
     }
@@ -1366,28 +1371,40 @@ server.tool(
         }
       }
 
-      // Token efficiency
+      // Token savings
       const hasEfficiency = stats.hitRate !== undefined || stats.redundantRate !== undefined || stats.totalResponseBytes > 0 || stats.avgDurationMs !== undefined;
       if (hasEfficiency) {
         lines.push('');
-        lines.push('Token efficiency:');
+        lines.push('Token savings:');
         if (stats.hitRate !== undefined)
-          lines.push(`  Hit rate:          ${(stats.hitRate * 100).toFixed(0)}% (${stats.hits} hits, ${stats.misses} misses)`);
+          lines.push(`  Lookup hit rate:   ${(stats.hitRate * 100).toFixed(0)}% of reads found stored data (${stats.hits} hits, ${stats.misses} misses)`);
         if (stats.redundantRate !== undefined && stats.writes > 0)
-          lines.push(`  Redundant writes:  ${(stats.redundantRate * 100).toFixed(0)}% (${stats.redundantWrites} of ${stats.writes})`);
+          lines.push(`  Duplicate writes:  ${(stats.redundantRate * 100).toFixed(0)}% of writes were already up to date (${stats.redundantWrites} of ${stats.writes})`);
         if (stats.totalResponseBytes > 0) {
           const kb = stats.totalResponseBytes / 1024;
-          lines.push(`  Response bytes:    ${kb >= 1 ? `${kb.toFixed(1)}KB` : `${stats.totalResponseBytes}B`} total${stats.avgResponseBytes !== undefined ? `, ${Math.round(stats.avgResponseBytes)}B avg` : ''}`);
+          lines.push(`  Data served:       ${kb >= 1 ? `${kb.toFixed(1)}KB` : `${stats.totalResponseBytes}B`} returned from store${stats.avgResponseBytes !== undefined ? `, ${Math.round(stats.avgResponseBytes)}B avg` : ''}`);
         }
         if (stats.avgDurationMs !== undefined)
-          lines.push(`  Avg latency:       ${Math.round(stats.avgDurationMs)}ms`);
-        if (stats.estimatedTokensSaved > 0) {
-          const fmt = stats.estimatedTokensSaved >= 1000 ? `${(stats.estimatedTokensSaved / 1000).toFixed(1)}K` : String(stats.estimatedTokensSaved);
-          lines.push(`  Est. tokens saved: ~${fmt} via cache hits`);
-          if (stats.estimatedTokensSavedBootstrap > 0) {
-            const bFmt = stats.estimatedTokensSavedBootstrap >= 1000 ? `${(stats.estimatedTokensSavedBootstrap / 1000).toFixed(1)}K` : String(stats.estimatedTokensSavedBootstrap);
-            lines.push(`    via bootstrap:   ~${bFmt}`);
+          lines.push(`  Avg latency:       ${Math.round(stats.avgDurationMs)}ms per call`);
+        if (stats.estimatedTotalTokensSaved > 0) {
+          const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+          lines.push(`  Est. tokens saved: ~${fmtNum(stats.estimatedTotalTokensSaved)} (agent tool calls avoided by using stored knowledge)`);
+          lines.push(`    Cached data:     ~${fmtNum(stats.estimatedTokensSaved)} tokens (raw bytes served ÷ 4)`);
+          if (detailed) {
+            lines.push('    By namespace:');
+            const breakdown = Object.entries(stats.explorationBreakdown)
+              .sort(([,a], [,b]) => b.tokensSaved - a.tokensSaved);
+            for (const [ns, { hits, tokensSaved }] of breakdown) {
+              const perHit = hits > 0 ? Math.round(tokensSaved / hits) : 0;
+              lines.push(`      ${ns.padEnd(15)} ~${fmtNum(tokensSaved)} (${hits} lookup${hits !== 1 ? 's' : ''} × ${fmtNum(perHit)} tokens each)`);
+            }
+            if (stats.estimatedRedundantWriteTokensSaved > 0) {
+              lines.push(`    Duplicate writes avoided: ~${fmtNum(stats.estimatedRedundantWriteTokensSaved)} (${stats.redundantWrites} write${stats.redundantWrites !== 1 ? 's' : ''} already up to date)`);
+            }
           }
+        } else if (stats.estimatedTokensSaved > 0) {
+          const fmt = stats.estimatedTokensSaved >= 1000 ? `${(stats.estimatedTokensSaved / 1000).toFixed(1)}K` : String(stats.estimatedTokensSaved);
+          lines.push(`  Est. tokens saved: ~${fmt} (cached data served to agents)`);
         }
       }
 

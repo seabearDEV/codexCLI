@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { loadData, handleError, getValue, setValue, removeValue, Scope } from '../storage';
 import { flattenObject, setNestedValue } from '../utils/objectPath';
-import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from '../store';
+import { findProjectFile, loadEntries, saveEntriesAndTouchMeta, loadMeta, loadMetaMerged, getStalenessTag } from '../store';
 import { CodexValue } from '../types';
 import { displayTree } from '../formatting';
 import { color } from '../formatting';
@@ -515,6 +515,13 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   }
 
   displayEntries({ [key]: displayValue }, aliasMap);
+
+  // Staleness warning for CLI users
+  const meta = options.global ? loadMeta('global') : loadMetaMerged();
+  const staleTag = getStalenessTag(key, meta);
+  if (staleTag) {
+    printWarning(`Entry not updated recently${staleTag}`);
+  }
 }
 
 export async function editEntry(key: string, options: { decrypt?: boolean, global?: boolean } = {}): Promise<void> {

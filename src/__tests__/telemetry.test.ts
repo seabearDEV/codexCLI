@@ -389,6 +389,65 @@ describe('computeStats', () => {
     expect(stats.estimatedTokensSavedBootstrap).toBe(500);
   });
 
+  it('computes exploration tokens saved by namespace', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'files', hit: true, responseSize: 200 },
+      { ts: now - 90, tool: 'codex_get', session: 's1', op: 'read', ns: 'files', hit: true, responseSize: 200 },
+      { ts: now - 80, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch', hit: true, responseSize: 300 },
+      { ts: now - 70, tool: 'codex_get', session: 's1', op: 'read', ns: 'commands', hit: true, responseSize: 100 },
+      { ts: now - 60, tool: 'codex_get', session: 's1', op: 'read', ns: 'commands', hit: false, responseSize: 50 },
+    ]);
+    const stats = computeStats();
+    // files: 2 hits × 2000 = 4000, arch: 1 × 3000 = 3000, commands: 1 × 1000 = 1000
+    expect(stats.explorationBreakdown['files']).toEqual({ hits: 2, tokensSaved: 4000 });
+    expect(stats.explorationBreakdown['arch']).toEqual({ hits: 1, tokensSaved: 3000 });
+    expect(stats.explorationBreakdown['commands']).toEqual({ hits: 1, tokensSaved: 1000 });
+    expect(stats.estimatedExplorationTokensSaved).toBe(8000);
+  });
+
+  it('computes bootstrap exploration cost from response size', () => {
+    const now = Date.now();
+    // 8000 bytes ≈ 100 entries at ~80 bytes each → 100 × 200 = 20000 tokens
+    // delivery floor: 8000 / 4 = 2000 → max(2000, 20000) = 20000
+    writeEntries([
+      { ts: now - 100, tool: 'codex_context', session: 's1', op: 'read', ns: '*', hit: true, responseSize: 8000 },
+    ]);
+    const stats = computeStats();
+    expect(stats.explorationBreakdown['bootstrap']).toEqual({ hits: 1, tokensSaved: 20000 });
+  });
+
+  it('uses default exploration cost for unknown namespaces', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'custom', hit: true, responseSize: 100 },
+    ]);
+    const stats = computeStats();
+    expect(stats.explorationBreakdown['custom']).toEqual({ hits: 1, tokensSaved: 1000 });
+  });
+
+  it('computes redundant write token savings', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_set', session: 's1', op: 'write', ns: 'a', redundant: true },
+      { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'b', redundant: true },
+      { ts: now - 80, tool: 'codex_set', session: 's1', op: 'write', ns: 'c', redundant: false },
+    ]);
+    const stats = computeStats();
+    expect(stats.estimatedRedundantWriteTokensSaved).toBe(300); // 2 × 150
+  });
+
+  it('computes total as exploration + redundant', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'files', hit: true, responseSize: 200 },
+      { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'a', redundant: true },
+    ]);
+    const stats = computeStats();
+    // exploration: 1 files hit × 2000 = 2000, redundant: 1 × 150 = 150
+    expect(stats.estimatedTotalTokensSaved).toBe(2150);
+  });
+
   it('breaks down calls by agent', () => {
     const now = Date.now();
     writeEntries([

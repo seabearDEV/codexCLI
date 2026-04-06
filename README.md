@@ -58,10 +58,10 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **Auto-Backup**: Automatic timestamped backups with configurable rotation (`max_backups` setting)
 - **File Locking**: Advisory locking prevents data corruption from concurrent access
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
-- **Staleness Detection**: Track when entries were last updated, find stale knowledge (`ccli stale`)
+- **Staleness Detection**: Track when entries were last updated, find stale knowledge (`ccli stale`), inline `[untracked]` / `[Nd]` warnings on `get` and `context` output
 - **Schema Validation**: Check entries against recommended namespaces (`ccli lint`), customizable via `_schema.namespaces`
 - **MCP Server**: 19 tools for any MCP-compatible AI agent (Claude Code, Copilot, ChatGPT, etc.) via the Model Context Protocol
-- **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs, hit/miss tracking, and per-entry metrics (`ccli audit --detailed`). Includes token savings estimates and per-agent breakdown.
+- **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs, hit/miss tracking, and per-entry metrics (`ccli audit --detailed`). Includes [namespace-weighted token savings estimates](docs/token-savings.md) and per-agent breakdown.
 
 ## Installation
 
@@ -633,6 +633,13 @@ ccli stale --json
 
 Timestamps are tracked automatically when entries are set, copied, or renamed.
 
+Staleness is also surfaced inline — `ccli get` and `codex_context` (MCP) append tags to stale or untracked entries:
+
+- `[untracked]` — entry has no update timestamp (predates staleness tracking). Most suspect.
+- `[47d]` — entry hasn't been updated in 47 days. Verify before trusting version numbers, URLs, or commands.
+
+The CLI `get` command prints a yellow warning for stale/untracked entries. Fresh entries show no tag.
+
 ### Schema Validation
 
 Check entries against the recommended namespace schema to keep your knowledge base organized.
@@ -847,7 +854,7 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | Tool | Description |
 |---|---|
 | `codex_set` | Store project knowledge as a key-value entry (dot notation, optional alias, optional encryption) |
-| `codex_get` | Retrieve stored knowledge by dot-notation key, or list all entries (optional decrypt) |
+| `codex_get` | Retrieve stored knowledge by dot-notation key, or list all entries (staleness tags on stale/untracked entries, optional decrypt) |
 | `codex_remove` | Remove a stored entry or alias by key |
 | `codex_copy` | Copy an entry to a new key (optional force to overwrite) |
 | `codex_rename` | Rename an entry key or alias (re-points aliases, migrates confirm metadata) |
@@ -861,9 +868,9 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | `codex_export` | Export data and/or aliases as JSON text |
 | `codex_import` | Import data and/or aliases from a JSON string (merge, replace, or preview) |
 | `codex_reset` | Reset data and/or aliases to empty state |
-| `codex_context` | Compact summary of stored project knowledge (use at session start; supports tiers: essential, standard, full) |
+| `codex_context` | Compact summary of stored project knowledge (use at session start; supports tiers: essential, standard, full; staleness tags on stale/untracked entries) |
 | `codex_stale` | Find entries not updated recently (threshold in days, default 30) |
-| `codex_stats` | View usage telemetry and effectiveness metrics (MCP sessions, CLI calls, scope breakdown) |
+| `codex_stats` | View usage telemetry and [token savings](docs/token-savings.md) (hit rate, exploration cost avoided, per-namespace breakdown, trends) |
 | `codex_audit` | Query the audit log of data mutations (before/after diffs, agent identity, scope, success/fail) |
 
 All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli.json` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.
@@ -905,8 +912,8 @@ A successful response will include `"serverInfo":{"name":"codexcli"}` in the JSO
 | Document | Description |
 |---|---|
 | [Schema Guide](docs/schema-guide.md) | How to structure `.codexcli.json` — namespaces, file anatomy, good vs bad entries, reference examples |
+| [Token Savings](docs/token-savings.md) | How CodexCLI measures AI agent efficiency — every metric explained, estimation methodology, limitations |
 | [Roadmap](docs/ROADMAP.md) | Completed features, upcoming milestones, long-term vision |
-| [Go Rewrite Plan](docs/go-rewrite-plan.md) | Architecture plan for the Go port |
 
 ## Development
 

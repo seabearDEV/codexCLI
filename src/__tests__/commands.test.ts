@@ -85,6 +85,14 @@ vi.mock('../store', () => {
     removeMeta:         vi.fn(),
     loadMeta:           vi.fn(() => ({})),
     loadMetaMerged:     vi.fn(() => ({})),
+    STALE_DAYS:         30,
+    STALE_MS:           30 * 86400000,
+    getStalenessTag:    vi.fn((key: string, meta: Record<string, number>) => {
+      const ts = meta[key];
+      if (ts === undefined) return ' [untracked]';
+      if (ts < Date.now() - 30 * 86400000) return ` [${Math.floor((Date.now() - ts) / 86400000)}d]`;
+      return '';
+    }),
   };
 });
 

@@ -23,14 +23,43 @@ SCOPE:
 - Use scope: "global" to target the user's personal global store (~/.codexcli/data.json).
 - codex_get with no key shows project entries by default. Pass all: true to see both scopes.
 
-TOOL TIPS:
+TOOLS (19 total):
+
+Core read/write:
 - codex_context — compact summary of entries (best for session start). Accepts tier: "essential" (minimal), "standard" (default, excludes arch), "full" (everything)
-- codex_get — retrieve specific keys or browse namespaces (use depth: 1 to scan top-level)
-- codex_set — store a key-value pair (use dot notation, keep values concise)
-- codex_search — find entries by keyword
-- codex_run — execute a stored shell command. If the command requires confirmation, the response will include a one-time confirm_token. Show the command to the user, get approval, then call codex_run again with that confirm_token to execute.
-- codex_stats — view usage metrics and token efficiency (bootstrap rate, hit rate, token savings, per-agent breakdown, trends). Pass detailed: true for namespace activity and top tools.
+- codex_get — retrieve specific keys or browse namespaces (use depth: 1 to scan top-level). Shows staleness tags on stale/untracked entries.
+- codex_set — store a key-value pair (use dot notation, keep values concise). Supports encryption via encrypt/password params.
+- codex_search — find entries by keyword. Supports regex, keys-only, values-only filtering.
+- codex_remove — delete an entry by key. Also removes associated aliases.
+
+Aliases:
+- codex_alias_set — create a shortcut name for a dot-notation path (e.g. "chk" -> "commands.check")
+- codex_alias_remove — remove an alias
+- codex_alias_list — list all defined aliases
+
+Execution:
+- codex_run — execute a stored shell command. Supports dry: true for preview, chain: true for &&-chaining multiple keys. If the command requires confirmation, the response will include a one-time confirm_token. Show the command to the user, get approval, then call codex_run again with that confirm_token to execute.
+
+Data management:
+- codex_copy — copy an entry to a new key
+- codex_rename — rename an entry key or alias
+- codex_export — export entries, aliases, or confirm keys as JSON
+- codex_import — import entries/aliases/confirm from JSON. Supports merge: true and preview: true.
+- codex_reset — clear entries, aliases, confirm keys, audit, or telemetry logs
+
+Configuration:
+- codex_config_get — read config settings (colors, theme, max_backups)
+- codex_config_set — update a config setting
+
+Observability:
+- codex_stats — view usage metrics and token savings (hit rate, exploration cost avoided, per-namespace breakdown, trends). Pass detailed: true for full breakdown.
 - codex_audit — query the audit log of data mutations and reads (before/after diffs, agent identity, hit/miss tracking). Pass detailed: true for per-entry latency, response sizes, and redundancy flags.
+- codex_stale — find entries not updated recently. Run after codex_context when starting a new task to audit freshness.
+
+FRESHNESS:
+- Entries tagged [untracked] have no update timestamp — treat as the MOST suspect.
+- Entries tagged [Nd] haven't been updated in N days — verify before trusting version numbers, URLs, or commands.
+- Run codex_stale after codex_context to audit knowledge freshness when starting a new task.
 
 PREFER MCP TOOLS:
 - Always interact with the data store via MCP tools (codex_get, codex_set, codex_search, etc.) rather than reading .codexcli.json directly.

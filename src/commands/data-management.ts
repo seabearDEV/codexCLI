@@ -7,7 +7,7 @@ import { CodexData, ExportOptions, ImportOptions, ResetOptions } from '../types'
 import path from 'path';
 import { validateDataType, validateResetType, confirmOrAbort, getInvalidDataTypeMessage, getInvalidResetTypeMessage, printSuccess, printError, printWarning } from './helpers';
 import { deepMerge } from '../utils/deepMerge';
-import { flattenObject } from '../utils/objectPath';
+import { flattenObject, expandFlatKeys } from '../utils/objectPath';
 import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
@@ -117,11 +117,12 @@ export async function importData(type: string, file: string, options: ImportOpti
     }
 
     if (type === 'entries' || type === 'all') {
+      const expanded = expandFlatKeys(validData);
       const currentData = options.merge ? loadData(scope) : {};
 
       const newData = options.merge
-        ? deepMerge(currentData, validData)
-        : validData;
+        ? deepMerge(currentData, expanded)
+        : expanded;
 
       saveData(newData as CodexData, scope);
       printSuccess(`Entries ${options.merge ? 'merged' : 'imported'} successfully`);
@@ -246,7 +247,7 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
 
   if (type === 'entries' || type === 'all') {
     const currentFlat = flattenObject(loadData());
-    const importFlat = flattenObject(validData);
+    const importFlat = flattenObject(expandFlatKeys(validData));
     const lines = computeDiff(currentFlat, importFlat, merge);
     console.log(color.bold(`Entries (${merge ? 'merge' : 'replace'}):`));
     if (lines.length > 0) {

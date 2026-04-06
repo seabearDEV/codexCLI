@@ -367,9 +367,11 @@ codexCLI
       console.log(color.green(`No entries older than ${threshold} days.`));
       return;
     }
+    // Sort: untracked first (most suspect), then oldest-first
+    stale.sort((a, b) => (a.lastUpdated ?? 0) - (b.lastUpdated ?? 0));
     console.log(color.bold(`\n${stale.length} entries not updated in ${threshold}+ days:\n`));
     for (const { key, age } of stale) {
-      const ageStr = age < 0 ? 'never tracked' : `${age}d ago`;
+      const ageStr = age < 0 ? 'untracked' : `${age}d ago`;
       const ageColor = age < 0 ? color.gray : age > 90 ? color.red : color.yellow;
       console.log(`  ${color.white(key.padEnd(40))} ${ageColor(ageStr)}`);
     }
@@ -593,32 +595,44 @@ codexCLI
       }
     }
 
-    // Token efficiency
+    // Token savings
     const hasEfficiency = stats.hitRate !== undefined || stats.redundantRate !== undefined || stats.totalResponseBytes > 0 || stats.avgDurationMs !== undefined;
     if (hasEfficiency) {
-      console.log(color.bold('\nToken efficiency:'));
+      console.log(color.bold('\nToken savings:'));
       if (stats.hitRate !== undefined) {
         const hitColor = stats.hitRate >= 0.8 ? color.green : stats.hitRate >= 0.5 ? color.yellow : color.red;
-        console.log(`  Hit rate:          ${hitColor(`${(stats.hitRate * 100).toFixed(0)}%`)} (${stats.hits} hits, ${stats.misses} misses)`);
+        console.log(`  Lookup hit rate:   ${hitColor(`${(stats.hitRate * 100).toFixed(0)}%`)} of reads found stored data (${stats.hits} hits, ${stats.misses} misses)`);
       }
       if (stats.redundantRate !== undefined && stats.writes > 0) {
         const redColor = stats.redundantRate <= 0.1 ? color.green : stats.redundantRate <= 0.3 ? color.yellow : color.red;
-        console.log(`  Redundant writes:  ${redColor(`${(stats.redundantRate * 100).toFixed(0)}%`)} (${stats.redundantWrites} of ${stats.writes})`);
+        console.log(`  Duplicate writes:  ${redColor(`${(stats.redundantRate * 100).toFixed(0)}%`)} of writes were already up to date (${stats.redundantWrites} of ${stats.writes})`);
       }
       if (stats.totalResponseBytes > 0) {
         const kb = stats.totalResponseBytes / 1024;
         const bytesStr = kb >= 1 ? `${kb.toFixed(1)}KB` : `${stats.totalResponseBytes}B`;
-        console.log(`  Response bytes:    ${color.white(bytesStr)} total${stats.avgResponseBytes !== undefined ? `, ${Math.round(stats.avgResponseBytes)}B avg` : ''}`);
+        console.log(`  Data served:       ${color.white(bytesStr)} returned from store${stats.avgResponseBytes !== undefined ? `, ${Math.round(stats.avgResponseBytes)}B avg` : ''}`);
       }
       if (stats.avgDurationMs !== undefined)
-        console.log(`  Avg latency:       ${color.white(`${Math.round(stats.avgDurationMs)}ms`)}`);
-      if (stats.estimatedTokensSaved > 0) {
-        const fmt = stats.estimatedTokensSaved >= 1000 ? `${(stats.estimatedTokensSaved / 1000).toFixed(1)}K` : String(stats.estimatedTokensSaved);
-        console.log(`  Est. tokens saved: ${color.green(`~${fmt}`)} via cache hits`);
-        if (stats.estimatedTokensSavedBootstrap > 0) {
-          const bFmt = stats.estimatedTokensSavedBootstrap >= 1000 ? `${(stats.estimatedTokensSavedBootstrap / 1000).toFixed(1)}K` : String(stats.estimatedTokensSavedBootstrap);
-          console.log(`    via bootstrap:   ${color.white(`~${bFmt}`)}`);
+        console.log(`  Avg latency:       ${color.white(`${Math.round(stats.avgDurationMs)}ms`)} per call`);
+      if (stats.estimatedTotalTokensSaved > 0) {
+        const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
+        console.log(`  Est. tokens saved: ${color.green(`~${fmtNum(stats.estimatedTotalTokensSaved)}`)} (agent tool calls avoided by using stored knowledge)`);
+        console.log(`    Cached data:     ${color.white(`~${fmtNum(stats.estimatedTokensSaved)}`)} tokens (raw bytes served ÷ 4)`);
+        if (options.detailed) {
+          console.log('    By namespace:');
+          const breakdown = Object.entries(stats.explorationBreakdown)
+            .sort(([,a], [,b]) => b.tokensSaved - a.tokensSaved);
+          for (const [ns, { hits, tokensSaved }] of breakdown) {
+            const perHit = hits > 0 ? Math.round(tokensSaved / hits) : 0;
+            console.log(`      ${color.gray(`${ns.padEnd(15)} ~${fmtNum(tokensSaved)} (${hits} lookup${hits !== 1 ? 's' : ''} × ${fmtNum(perHit)} tokens each)`)}`);
+          }
+          if (stats.estimatedRedundantWriteTokensSaved > 0) {
+            console.log(`    ${color.gray(`Duplicate writes avoided: ~${fmtNum(stats.estimatedRedundantWriteTokensSaved)} (${stats.redundantWrites} write${stats.redundantWrites !== 1 ? 's' : ''} already up to date)`)}`);
+          }
         }
+      } else if (stats.estimatedTokensSaved > 0) {
+        const fmt = stats.estimatedTokensSaved >= 1000 ? `${(stats.estimatedTokensSaved / 1000).toFixed(1)}K` : String(stats.estimatedTokensSaved);
+        console.log(`  Est. tokens saved: ${color.green(`~${fmt}`)} (cached data served to agents)`);
       }
     }
 
