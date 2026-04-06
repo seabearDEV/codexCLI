@@ -14,6 +14,7 @@ export interface AuditCommandOptions {
   hits?: boolean;
   misses?: boolean;
   redundant?: boolean;
+  detailed?: boolean;
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -48,6 +49,8 @@ function formatBytes(bytes: number): string {
 
 function metricsLine(entry: AuditEntry): string {
   const tags: string[] = [];
+  if (entry.duration !== undefined) tags.push(`${entry.duration}ms`);
+  if (entry.aliasResolved) tags.push(`alias\u2192${entry.aliasResolved}`);
   if (entry.responseSize !== undefined) tags.push(`res=${formatBytes(entry.responseSize)}`);
   if (entry.requestSize !== undefined) tags.push(`req=${formatBytes(entry.requestSize)}`);
   if (entry.hit !== undefined) tags.push(entry.hit ? 'hit' : 'miss');
@@ -133,7 +136,7 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
     if (entry.error) {
       console.log(`${pad}${color.red('error: ' + truncate(entry.error, diffMax))}`);
     }
-    const metrics = metricsLine(entry);
+    const metrics = options.detailed ? metricsLine(entry) : '';
     if (metrics) {
       console.log(`${pad}${color.gray(metrics)}`);
     }
@@ -143,7 +146,7 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
 
   // Trailing newline if last entry didn't already add one via diff/metrics
   const last = entries[entries.length - 1];
-  const lastHasDetail = last.before !== undefined || last.after !== undefined || last.error || metricsLine(last);
+  const lastHasDetail = last.before !== undefined || last.after !== undefined || last.error || (options.detailed && metricsLine(last));
   if (!lastHasDetail) {
     console.log('');
   }

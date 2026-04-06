@@ -489,8 +489,9 @@ codexCLI
   .command('stats')
   .description('View usage telemetry and effectiveness trends')
   .option('-p, --period <period>', 'Time period: 7d, 30d, 90d, all', '30d')
+  .option('-d, --detailed', 'Include namespace activity, project breakdown, and top tools')
   .option('--json', 'Output raw JSON')
-  .action(async (options: { period: string; json?: boolean }) => {
+  .action(async (options: { period: string; detailed?: boolean; json?: boolean }) => {
     const { computeStats } = await import('./utils/telemetry');
     const { parsePeriodDays } = await import('./utils');
     const stats = computeStats(parsePeriodDays(options.period));
@@ -535,21 +536,88 @@ codexCLI
       console.log(`  Scope:           ${color.white(parts.join(', '))}`);
     }
 
-    if (Object.keys(stats.namespaceCoverage).length > 0) {
-      console.log(color.bold('\nNamespace activity:'));
-      const sorted = Object.entries(stats.namespaceCoverage)
-        .sort(([, a], [, b]) => (b.reads + b.writes) - (a.reads + a.writes));
-      for (const [ns, data] of sorted) {
-        const age = data.lastWrite ? `${Math.floor((Date.now() - data.lastWrite) / 86400000)}d ago` : 'never';
-        const ageColor = data.lastWrite && (Date.now() - data.lastWrite) < 7 * 86400000 ? color.green : color.gray;
-        console.log(`  ${color.white(ns.padEnd(20))} ${String(data.reads).padStart(3)} reads  ${String(data.writes).padStart(3)} writes  last write: ${ageColor(age)}`);
+    // Session metrics
+    if (stats.avgSessionCalls !== undefined || stats.avgSessionDurationMs !== undefined) {
+      console.log(color.bold('\nSession metrics:'));
+      if (stats.avgSessionCalls !== undefined)
+        console.log(`  Avg calls/session: ${color.white(stats.avgSessionCalls.toFixed(1))}`);
+      if (stats.avgSessionDurationMs !== undefined) {
+        const secs = stats.avgSessionDurationMs / 1000;
+        const label = secs < 60 ? `${secs.toFixed(1)}s` : `${(secs / 60).toFixed(1)}m`;
+        console.log(`  Avg session duration: ${color.white(label)}`);
       }
     }
 
-    if (stats.topTools.length > 0) {
-      console.log(color.bold('\nTop tools:'));
-      for (const { tool, count } of stats.topTools) {
-        console.log(`  ${color.white(tool.padEnd(24))} ${count} calls`);
+    // Token efficiency
+    const hasEfficiency = stats.hitRate !== undefined || stats.redundantRate !== undefined || stats.totalResponseBytes > 0 || stats.avgDurationMs !== undefined;
+    if (hasEfficiency) {
+      console.log(color.bold('\nToken efficiency:'));
+      if (stats.hitRate !== undefined) {
+        const hitColor = stats.hitRate >= 0.8 ? color.green : stats.hitRate >= 0.5 ? color.yellow : color.red;
+        console.log(`  Hit rate:          ${hitColor(`${(stats.hitRate * 100).toFixed(0)}%`)} (${stats.hits} hits, ${stats.misses} misses)`);
+      }
+      if (stats.redundantRate !== undefined && stats.writes > 0) {
+        const redColor = stats.redundantRate <= 0.1 ? color.green : stats.redundantRate <= 0.3 ? color.yellow : color.red;
+        console.log(`  Redundant writes:  ${redColor(`${(stats.redundantRate * 100).toFixed(0)}%`)} (${stats.redundantWrites} of ${stats.writes})`);
+      }
+      if (stats.totalResponseBytes > 0) {
+        const kb = stats.totalResponseBytes / 1024;
+        const bytesStr = kb >= 1 ? `${kb.toFixed(1)}KB` : `${stats.totalResponseBytes}B`;
+        console.log(`  Response bytes:    ${color.white(bytesStr)} total${stats.avgResponseBytes !== undefined ? `, ${Math.round(stats.avgResponseBytes)}B avg` : ''}`);
+      }
+      if (stats.avgDurationMs !== undefined)
+        console.log(`  Avg latency:       ${color.white(`${Math.round(stats.avgDurationMs)}ms`)}`);
+    }
+
+    // Trend comparison
+    if (stats.trend) {
+      const t = stats.trend;
+      const fmtDelta = (v: number | undefined, suffix = '%') => {
+        if (v === undefined) return undefined;
+        const sign = v >= 0 ? '+' : '';
+        return `${sign}${v.toFixed(0)}${suffix}`;
+      };
+      const trendParts: string[] = [];
+      const cd = fmtDelta(t.callsDelta);
+      if (cd) trendParts.push(`calls ${cd}`);
+      const sd = fmtDelta(t.sessionsDelta);
+      if (sd) trendParts.push(`sessions ${sd}`);
+      const hd = fmtDelta(t.hitRateDelta, 'pp');
+      if (hd) trendParts.push(`hit rate ${hd}`);
+      const dd = fmtDelta(t.avgDurationDelta);
+      if (dd) trendParts.push(`latency ${dd}`);
+      if (trendParts.length > 0)
+        console.log(color.gray(`\nTrend (vs prev ${stats.period}): ${trendParts.join(', ')}`));
+    }
+
+    // Detailed sections (--detailed)
+    if (options.detailed) {
+      if (Object.keys(stats.namespaceCoverage).length > 0) {
+        console.log(color.bold('\nNamespace activity:'));
+        const sorted = Object.entries(stats.namespaceCoverage)
+          .sort(([, a], [, b]) => (b.reads + b.writes) - (a.reads + a.writes));
+        for (const [ns, data] of sorted) {
+          const age = data.lastWrite ? `${Math.floor((Date.now() - data.lastWrite) / 86400000)}d ago` : 'never';
+          const ageColor = data.lastWrite && (Date.now() - data.lastWrite) < 7 * 86400000 ? color.green : color.gray;
+          console.log(`  ${color.white(ns.padEnd(20))} ${String(data.reads).padStart(3)} reads  ${String(data.writes).padStart(3)} writes  last write: ${ageColor(age)}`);
+        }
+      }
+
+      const projects = Object.entries(stats.projectBreakdown);
+      if (projects.length > 0) {
+        console.log(color.bold('\nProject activity:'));
+        const sortedProjects = projects.sort(([, a], [, b]) => b - a);
+        for (const [proj, count] of sortedProjects) {
+          const label = proj.split('/').slice(-2).join('/');
+          console.log(`  ${color.white(label.padEnd(30))} ${count} calls`);
+        }
+      }
+
+      if (stats.topTools.length > 0) {
+        console.log(color.bold('\nTop tools:'));
+        for (const { tool, count } of stats.topTools) {
+          console.log(`  ${color.white(tool.padEnd(24))} ${count} calls`);
+        }
       }
     }
     console.log('');
@@ -567,9 +635,10 @@ codexCLI
   .option('--hits', 'Show only reads that returned data')
   .option('--misses', 'Show only reads that found nothing')
   .option('--redundant', 'Show only writes where value didn\'t change')
+  .option('-d, --detailed', 'Show per-entry metrics (duration, sizes, hit/miss)')
   .option('-j, --json', 'Output as JSON')
   .option('-n, --limit <n>', 'Max entries to show (default: 50)', parseInt)
-  .action(async (key: string | undefined, options: { period: string; writes?: boolean; mcp?: boolean; cli?: boolean; project?: string; hits?: boolean; misses?: boolean; redundant?: boolean; json?: boolean; limit?: number }) => {
+  .action(async (key: string | undefined, options: { period: string; writes?: boolean; mcp?: boolean; cli?: boolean; project?: string; hits?: boolean; misses?: boolean; redundant?: boolean; detailed?: boolean; json?: boolean; limit?: number }) => {
     const { showAuditLog } = await import('./commands/audit');
     await withPager(() => showAuditLog(key, options));
   });

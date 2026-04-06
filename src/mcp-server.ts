@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { execSync } from "child_process";
 import fs from "fs";
+import path from "path";
 
 import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Scope } from "./storage";
 import { CodexData } from "./types";
@@ -35,7 +36,7 @@ import { version } from "../package.json";
 import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
-import { logToolCall, computeStats, classifyOp, getTelemetryPath } from "./utils/telemetry";
+import { logToolCall, computeStats, classifyOp, getTelemetryPath, TelemetryExtras } from "./utils/telemetry";
 import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams, getAuditPath } from "./utils/audit";
 import { getEffectiveInstructions } from "./llm-instructions";
 import { parsePeriodDays } from "./utils";
@@ -129,14 +130,22 @@ server.tool = ((...args: any[]) => {
   const name = args[0] as string;
   const origHandler = args[args.length - 1] as (params: Record<string, unknown>, extra: unknown) => Promise<unknown>;
   args[args.length - 1] = async (params: Record<string, unknown>, extra: unknown) => {
+    const startTime = Date.now();
     const key = extractKey(name, params);
 
     const scope = toScope(params.scope as string | undefined);
-    const resolvedScope = scope === 'auto' ? undefined : scope as 'project' | 'global' | undefined;
+    const resolvedScope: 'project' | 'global' | undefined =
+      scope === 'auto'
+        ? (findProjectFile() ? 'project' : 'global')
+        : scope as 'project' | 'global' | undefined;
 
-    // Telemetry (lightweight, existing behavior)
-    if (!SKIP_AUDIT.has(name)) {
-      void logToolCall(name, key, 'mcp', resolvedScope);
+    // Resolve alias for audit trail
+    let aliasResolved: string | undefined;
+    if (key) {
+      try {
+        const resolved = resolveKey(key, scope);
+        if (resolved !== key) aliasResolved = resolved;
+      } catch { /* ignore — alias resolution is best-effort */ }
     }
 
     const shouldAudit = !SKIP_AUDIT.has(name);
@@ -147,8 +156,20 @@ server.tool = ((...args: any[]) => {
 
     // Capture before-value for writes
     let before: string | undefined;
+    let copySourceValue: string | undefined;
     if (isWrite && !BULK_OPS.has(name)) {
       before = captureValue(name, key, scope);
+      if (name === 'codex_copy') {
+        // Pre-capture source value for the after diff (avoids race with concurrent writes)
+        const sourceKey = params.source as string | undefined;
+        if (sourceKey) {
+          try {
+            const resolved = resolveKey(sourceKey, scope);
+            const val = getValue(resolved, scope);
+            copySourceValue = val !== undefined ? sanitizeValue(typeof val === 'object' ? JSON.stringify(val) : String(val)) : undefined;
+          } catch { /* ignore */ }
+        }
+      }
     } else if (isWrite && BULK_OPS.has(name)) {
       try {
         const count = Object.keys(getEntriesFlat(scope)).length;
@@ -172,10 +193,28 @@ server.tool = ((...args: any[]) => {
       errorMsg = String(err);
       throw err;
     } finally {
-      // Capture after-value for writes
+      const duration = Date.now() - startTime;
+
+      // Capture after-value for writes.
+      // We derive `after` from params/before rather than re-reading the store,
+      // because concurrent requests can race and corrupt the read.
       let after: string | undefined;
       if (isWrite && success && !BULK_OPS.has(name)) {
-        after = captureValue(name, key, scope);
+        if (name === 'codex_set' || name === 'codex_config_set') {
+          after = sanitizeValue(params.value as string | undefined);
+        } else if (name === 'codex_copy') {
+          after = copySourceValue;
+        } else if (name === 'codex_rename') {
+          // Rename preserves the value
+          after = before;
+        } else if (name === 'codex_remove' || name === 'codex_alias_remove') {
+          after = undefined; // Entry was deleted
+        } else if (name === 'codex_alias_set') {
+          after = params.path as string | undefined;
+        } else {
+          // Fallback: re-read (only for unexpected tool names)
+          after = captureValue(name, key, scope);
+        }
       } else if (isWrite && BULK_OPS.has(name) && success) {
         try {
           const count = Object.keys(getEntriesFlat(scope)).length;
@@ -190,7 +229,23 @@ server.tool = ((...args: any[]) => {
       const hit = op === 'read' ? determineHit(result, success) : undefined;
       const tier = name === 'codex_context' ? (params.tier as string ?? 'standard') : undefined;
       const entryCount = op === 'read' && success ? extractEntryCount(responseText) : undefined;
-      const redundant = isWrite && before !== undefined && after !== undefined && before === after ? true : undefined;
+      // Redundant = value didn't change on a true mutation. Exclude rename (key move, not value change),
+      // run --dry (read-only), and import --preview (read-only) from redundant detection.
+      const isReadOnlyWrite = (name === 'codex_rename') ||
+        (name === 'codex_run' && params.dry === true) ||
+        (name === 'codex_import' && params.preview === true);
+      const redundant = isWrite && !isReadOnlyWrite && before !== undefined && after !== undefined && before === after ? true : undefined;
+
+      // Telemetry (enriched, moved here so we have duration + metrics)
+      const projectFile = findProjectFile();
+      const telemetryExtras: TelemetryExtras = {
+        duration,
+        hit,
+        redundant,
+        responseSize,
+        project: projectFile ? path.dirname(projectFile) : undefined,
+      };
+      void logToolCall(name, key, 'mcp', resolvedScope, telemetryExtras);
 
       void logAudit({
         src: 'mcp',
@@ -203,6 +258,8 @@ server.tool = ((...args: any[]) => {
         after: isWrite ? after : undefined,
         error: errorMsg,
         params: sanitizeParams(params),
+        duration,
+        aliasResolved,
         responseSize,
         requestSize,
         hit,
@@ -1192,8 +1249,9 @@ server.tool(
   "View MCP usage telemetry and trending metrics for AI agent effectiveness",
   {
     period: z.enum(["7d", "30d", "90d", "all"]).optional().describe("Time period to analyze (default: 30d)"),
+    detailed: z.boolean().optional().describe("Include namespace activity, project breakdown, and top tools (default: false)"),
   },
-  async ({ period }) => {
+  async ({ period, detailed }) => {
     try {
       const stats = computeStats(parsePeriodDays(period));
 
@@ -1223,7 +1281,7 @@ server.tool(
         lines.push(`Scope:           ${parts.join(', ')}`);
       }
 
-      if (Object.keys(stats.namespaceCoverage).length > 0) {
+      if (detailed && Object.keys(stats.namespaceCoverage).length > 0) {
         lines.push('');
         lines.push('Namespace activity:');
         const sorted = Object.entries(stats.namespaceCoverage)
@@ -1234,11 +1292,78 @@ server.tool(
         }
       }
 
-      if (stats.topTools.length > 0) {
+      // Project breakdown
+      if (detailed) {
+        const projects = Object.entries(stats.projectBreakdown);
+        if (projects.length > 0) {
+          lines.push('');
+          lines.push('Project activity:');
+          const sortedProjects = projects.sort(([, a], [, b]) => b - a);
+          for (const [proj, count] of sortedProjects) {
+            const label = proj.split('/').slice(-2).join('/');  // last 2 path segments
+            lines.push(`  ${label.padEnd(30)} ${count} calls`);
+          }
+        }
+      }
+
+      // Session metrics
+      if (stats.avgSessionCalls !== undefined || stats.avgSessionDurationMs !== undefined) {
+        lines.push('');
+        lines.push('Session metrics:');
+        if (stats.avgSessionCalls !== undefined)
+          lines.push(`  Avg calls/session: ${stats.avgSessionCalls.toFixed(1)}`);
+        if (stats.avgSessionDurationMs !== undefined) {
+          const secs = stats.avgSessionDurationMs / 1000;
+          const label = secs < 60 ? `${secs.toFixed(1)}s` : `${(secs / 60).toFixed(1)}m`;
+          lines.push(`  Avg session duration: ${label}`);
+        }
+      }
+
+      // Token efficiency
+      const hasEfficiency = stats.hitRate !== undefined || stats.redundantRate !== undefined || stats.totalResponseBytes > 0 || stats.avgDurationMs !== undefined;
+      if (hasEfficiency) {
+        lines.push('');
+        lines.push('Token efficiency:');
+        if (stats.hitRate !== undefined)
+          lines.push(`  Hit rate:          ${(stats.hitRate * 100).toFixed(0)}% (${stats.hits} hits, ${stats.misses} misses)`);
+        if (stats.redundantRate !== undefined && stats.writes > 0)
+          lines.push(`  Redundant writes:  ${(stats.redundantRate * 100).toFixed(0)}% (${stats.redundantWrites} of ${stats.writes})`);
+        if (stats.totalResponseBytes > 0) {
+          const kb = stats.totalResponseBytes / 1024;
+          lines.push(`  Response bytes:    ${kb >= 1 ? `${kb.toFixed(1)}KB` : `${stats.totalResponseBytes}B`} total${stats.avgResponseBytes !== undefined ? `, ${Math.round(stats.avgResponseBytes)}B avg` : ''}`);
+        }
+        if (stats.avgDurationMs !== undefined)
+          lines.push(`  Avg latency:       ${Math.round(stats.avgDurationMs)}ms`);
+      }
+
+      if (detailed && stats.topTools.length > 0) {
         lines.push('');
         lines.push('Top tools:');
         for (const { tool, count } of stats.topTools) {
           lines.push(`  ${tool.padEnd(24)} ${count} calls`);
+        }
+      }
+
+      // Trend comparison
+      if (stats.trend) {
+        const t = stats.trend;
+        const fmtDelta = (v: number | undefined, suffix = '%') => {
+          if (v === undefined) return undefined;
+          const sign = v >= 0 ? '+' : '';
+          return `${sign}${v.toFixed(0)}${suffix}`;
+        };
+        const trendParts: string[] = [];
+        const cd = fmtDelta(t.callsDelta);
+        if (cd) trendParts.push(`calls ${cd}`);
+        const sd = fmtDelta(t.sessionsDelta);
+        if (sd) trendParts.push(`sessions ${sd}`);
+        const hd = fmtDelta(t.hitRateDelta, 'pp');
+        if (hd) trendParts.push(`hit rate ${hd}`);
+        const dd = fmtDelta(t.avgDurationDelta);
+        if (dd) trendParts.push(`latency ${dd}`);
+        if (trendParts.length > 0) {
+          lines.push('');
+          lines.push(`Trend (vs prev ${stats.period}): ${trendParts.join(', ')}`);
         }
       }
 
@@ -1262,9 +1387,10 @@ server.tool(
     hits_only: z.boolean().optional().describe("Show only read operations that returned data (hits)"),
     misses_only: z.boolean().optional().describe("Show only read operations that found nothing (misses)"),
     redundant_only: z.boolean().optional().describe("Show only writes where value didn't change"),
+    detailed: z.boolean().optional().describe("Show per-entry metrics (duration, sizes, hit/miss) (default: false)"),
     limit: z.number().int().min(1).max(500).optional().describe("Max entries to return (default: 50)"),
   },
-  async ({ key, period, writes_only, src, project, hits_only, misses_only, redundant_only, limit }) => {
+  async ({ key, period, writes_only, src, project, hits_only, misses_only, redundant_only, detailed, limit }) => {
     try {
       const entries = queryAuditLog({ key, periodDays: parsePeriodDays(period), writesOnly: writes_only, src, project, hitsOnly: hits_only, missesOnly: misses_only, redundantOnly: redundant_only, limit: limit ?? 50 });
 
@@ -1288,15 +1414,19 @@ server.tool(
         if (e.after !== undefined) lines.push(`  + ${e.after}`);
         if (e.error) lines.push(`  error: ${e.error}`);
 
-        // Token-efficiency metrics
-        const tags: string[] = [];
-        if (e.responseSize !== undefined) tags.push(`res=${e.responseSize}B`);
-        if (e.requestSize !== undefined) tags.push(`req=${e.requestSize}B`);
-        if (e.hit !== undefined) tags.push(e.hit ? 'hit' : 'miss');
-        if (e.tier !== undefined) tags.push(`tier=${e.tier}`);
-        if (e.entryCount !== undefined) tags.push(`n=${e.entryCount}`);
-        if (e.redundant) tags.push('redundant');
-        if (tags.length > 0) lines.push(`  [${tags.join(', ')}]`);
+        // Metrics tags (detailed only)
+        if (detailed) {
+          const tags: string[] = [];
+          if (e.duration !== undefined) tags.push(`${e.duration}ms`);
+          if (e.aliasResolved) tags.push(`alias->${e.aliasResolved}`);
+          if (e.responseSize !== undefined) tags.push(`res=${e.responseSize}B`);
+          if (e.requestSize !== undefined) tags.push(`req=${e.requestSize}B`);
+          if (e.hit !== undefined) tags.push(e.hit ? 'hit' : 'miss');
+          if (e.tier !== undefined) tags.push(`tier=${e.tier}`);
+          if (e.entryCount !== undefined) tags.push(`n=${e.entryCount}`);
+          if (e.redundant) tags.push('redundant');
+          if (tags.length > 0) lines.push(`  [${tags.join(', ')}]`);
+        }
       }
 
       return textResponse(lines.join('\n'));

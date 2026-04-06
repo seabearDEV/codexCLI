@@ -11,6 +11,11 @@ export interface TelemetryEntry {
   ns: string;
   src?: 'mcp' | 'cli';
   scope?: 'project' | 'global' | undefined;
+  project?: string | undefined;
+  duration?: number | undefined;
+  hit?: boolean | undefined;
+  redundant?: boolean | undefined;
+  responseSize?: number | undefined;
 }
 
 // One session ID per MCP server process
@@ -68,7 +73,15 @@ export function classifyOp(tool: string): TelemetryEntry['op'] {
  * Returns a promise for testing; callers that want fire-and-forget can ignore it.
  * Errors are silently ignored — telemetry must never break the MCP server.
  */
-export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global'  ): Promise<void> {
+export interface TelemetryExtras {
+  project?: string | undefined;
+  duration?: number | undefined;
+  hit?: boolean | undefined;
+  redundant?: boolean | undefined;
+  responseSize?: number | undefined;
+}
+
+export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global', extras?: TelemetryExtras): Promise<void> {
   const entry: TelemetryEntry = {
     ts: Date.now(),
     tool,
@@ -77,6 +90,7 @@ export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 
     ns: extractNamespace(key),
     src: source,
     scope,
+    ...extras,
   };
   return new Promise<void>((resolve) => {
     fs.appendFile(getTelemetryPath(), JSON.stringify(entry) + '\n', { mode: 0o600 }, () => resolve());
@@ -149,6 +163,33 @@ export interface TelemetryStats {
   namespaceCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }>;
   topTools: { tool: string; count: number }[];
   scopeBreakdown: { project: number; global: number; unscoped: number };
+  // New metrics
+  hitRate: number | undefined;
+  hits: number;
+  misses: number;
+  redundantRate: number | undefined;
+  redundantWrites: number;
+  avgSessionCalls: number | undefined;
+  avgSessionDurationMs: number | undefined;
+  totalResponseBytes: number;
+  avgResponseBytes: number | undefined;
+  avgDurationMs: number | undefined;
+  projectBreakdown: Record<string, number>;
+  // Trend comparison (vs previous period)
+  trend: TelemetryTrend | undefined;
+}
+
+export interface TelemetryTrend {
+  callsDelta: number | undefined;       // percentage change
+  sessionsDelta: number | undefined;
+  hitRateDelta: number | undefined;     // absolute change in percentage points
+  avgDurationDelta: number | undefined; // percentage change
+}
+
+/** Compute percentage change: (current - previous) / previous * 100 */
+function pctChange(current: number, previous: number): number | undefined {
+  if (previous === 0) return current > 0 ? 100 : undefined;
+  return ((current - previous) / previous) * 100;
 }
 
 /**
@@ -217,8 +258,81 @@ export function computeStats(periodDays = 0): TelemetryStats {
     else scopeBreakdown.unscoped++;
   }
 
+  // Project breakdown
+  const projectBreakdown: Record<string, number> = {};
+  for (const e of entries) {
+    if (e.project) {
+      projectBreakdown[e.project] = (projectBreakdown[e.project] ?? 0) + 1;
+    }
+  }
+
+  // Hit/miss rate (reads with hit field set)
+  const readsWithHit = entries.filter(e => e.op === 'read' && e.hit !== undefined);
+  const hits = readsWithHit.filter(e => e.hit === true).length;
+  const misses = readsWithHit.filter(e => e.hit === false).length;
+  const hitRate = readsWithHit.length > 0 ? hits / readsWithHit.length : undefined;
+
+  // Redundant write rate
+  const writesWithRedundant = entries.filter(e => e.op === 'write' && e.redundant !== undefined);
+  const redundantWrites = writesWithRedundant.filter(e => e.redundant === true).length;
+  const redundantRate = writes > 0 ? redundantWrites / writes : undefined;
+
+  // Avg session calls
+  const avgSessionCalls = mcpSessionData.size > 0 ? mcpEntries.length / mcpSessionData.size : undefined;
+
+  // Avg session duration (ms between first and last call per session)
+  const sessionDurations: number[] = [];
+  for (const [, calls] of mcpSessionData) {
+    if (calls.length < 2) continue;
+    const sorted = [...calls].sort((a, b) => a.ts - b.ts);
+    sessionDurations.push(sorted[sorted.length - 1].ts - sorted[0].ts);
+  }
+  const avgSessionDurationMs = sessionDurations.length > 0
+    ? sessionDurations.reduce((a, b) => a + b, 0) / sessionDurations.length
+    : undefined;
+
+  // Token-efficiency: total and avg response bytes
+  const responseSizes = entries.filter(e => e.responseSize !== undefined).map(e => e.responseSize!);
+  const totalResponseBytes = responseSizes.reduce((a, b) => a + b, 0);
+  const avgResponseBytes = responseSizes.length > 0 ? totalResponseBytes / responseSizes.length : undefined;
+
+  // Avg duration
+  const durations = entries.filter(e => e.duration !== undefined).map(e => e.duration!);
+  const avgDurationMs = durations.length > 0
+    ? durations.reduce((a, b) => a + b, 0) / durations.length
+    : undefined;
+
   const mcpSessions = mcpSessionData.size;
   const period = periodDays > 0 ? `${periodDays}d` : 'all';
+
+  // Trend comparison: compute stats for the previous period of the same length
+  let trend: TelemetryTrend | undefined;
+  if (periodDays > 0 && cutoff > 0) {
+    const prevCutoff = cutoff - periodDays * 86400000;
+    const prevEntries = all.filter(e => e.ts >= prevCutoff && e.ts < cutoff);
+    if (prevEntries.length > 0) {
+      const prevMcpEntries = prevEntries.filter(e => e.src !== 'cli');
+      const prevSessions = new Set(prevMcpEntries.map(e => e.session)).size;
+      const prevReadsWithHit = prevEntries.filter(e => e.op === 'read' && e.hit !== undefined);
+      const prevHits = prevReadsWithHit.filter(e => e.hit === true).length;
+      const prevHitRate = prevReadsWithHit.length > 0 ? prevHits / prevReadsWithHit.length : undefined;
+      const prevDurations = prevEntries.filter(e => e.duration !== undefined).map(e => e.duration!);
+      const prevAvgDuration = prevDurations.length > 0
+        ? prevDurations.reduce((a, b) => a + b, 0) / prevDurations.length
+        : undefined;
+
+      trend = {
+        callsDelta: pctChange(entries.length, prevEntries.length),
+        sessionsDelta: pctChange(mcpSessions, prevSessions),
+        hitRateDelta: hitRate !== undefined && prevHitRate !== undefined
+          ? (hitRate - prevHitRate) * 100  // absolute pp change
+          : undefined,
+        avgDurationDelta: avgDurationMs !== undefined && prevAvgDuration !== undefined
+          ? pctChange(avgDurationMs, prevAvgDuration)
+          : undefined,
+      };
+    }
+  }
 
   return {
     period,
@@ -235,5 +349,17 @@ export function computeStats(periodDays = 0): TelemetryStats {
     namespaceCoverage: nsCoverage,
     topTools,
     scopeBreakdown,
+    hitRate,
+    hits,
+    misses,
+    redundantRate,
+    redundantWrites,
+    avgSessionCalls,
+    avgSessionDurationMs,
+    totalResponseBytes,
+    avgResponseBytes,
+    avgDurationMs,
+    projectBreakdown,
+    trend,
   };
 }

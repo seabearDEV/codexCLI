@@ -20,6 +20,8 @@ export interface AuditEntry {
   error?: string | undefined;
   params?: Record<string, unknown> | undefined;
   agent?: string | undefined;
+  duration?: number | undefined;
+  aliasResolved?: string | undefined;
   // Token-efficiency metrics
   responseSize?: number | undefined;
   requestSize?: number | undefined;
