@@ -28,7 +28,7 @@ TOOL TIPS:
 - codex_get — retrieve specific keys or browse namespaces (use depth: 1 to scan top-level)
 - codex_set — store a key-value pair (use dot notation, keep values concise)
 - codex_search — find entries by keyword
-- codex_run — execute a stored shell command (respects confirm metadata)
+- codex_run — execute a stored shell command. If the command requires confirmation, the response will include a one-time confirm_token. Show the command to the user, get approval, then call codex_run again with that confirm_token to execute.
 - codex_stats — view your usage metrics (bootstrap rate, write-back rate, scope breakdown, trends)
 - codex_audit — query the audit log of data mutations (before/after diffs, agent identity)
 

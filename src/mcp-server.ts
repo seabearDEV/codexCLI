@@ -54,6 +54,27 @@ function errorResponse(text: string) {
 
 ensureDataDirectoryExists();
 
+// --- Confirmation token store for two-step codex_run ---
+// Tokens are one-time-use and expire after 5 minutes.
+import crypto from 'crypto';
+const CONFIRM_TOKEN_TTL = 5 * 60 * 1000;
+const pendingConfirmations = new Map<string, { key: string; command: string; expires: number }>();
+
+function createConfirmToken(key: string, command: string): string {
+  const token = crypto.randomBytes(8).toString('hex');
+  pendingConfirmations.set(token, { key, command, expires: Date.now() + CONFIRM_TOKEN_TTL });
+  return token;
+}
+
+function consumeConfirmToken(token: string, key: string): string | null {
+  const entry = pendingConfirmations.get(token);
+  if (!entry) return null;
+  pendingConfirmations.delete(token);
+  if (Date.now() > entry.expires) return null;
+  if (entry.key !== key) return null;
+  return entry.command;
+}
+
 const llmInstructions = getEffectiveInstructions();
 
 const server = new McpServer(
@@ -757,11 +778,12 @@ server.tool(
     key: z.string().describe("Dot-notation key (or alias) whose value is a shell command"),
     dry: z.boolean().optional().describe("If true, return the command without executing it"),
     force: z.boolean().optional().describe("If true, skip the confirm check for entries marked --confirm"),
+    confirm_token: z.string().optional().describe("One-time token from a previous confirmation prompt — pass this to execute a confirmed command"),
     chain: z.boolean().optional().describe("If true, treat stored value as space-separated key references to resolve and &&-chain"),
     capture: z.boolean().optional().describe("Capture output (MCP always captures; included for API consistency)"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ key, dry, force, chain, scope: scopeParam }) => {
+  async ({ key, dry, force, confirm_token, chain, scope: scopeParam }) => {
     const scope = toScope(scopeParam);
     const resolvedKey = resolveKey(key, scope);
     const value = getValue(resolvedKey, scope);
@@ -788,7 +810,23 @@ server.tool(
         if (typeof cv !== 'string') return errorResponse(`Chain key '${ck}' is not a string command.`);
         if (isEncrypted(cv)) return errorResponse(`Chain key '${ck}' is encrypted.`);
         if (hasConfirm(rk) && !force && !dry) {
-          return errorResponse(`Chain key '${ck}' requires confirmation. Pass force: true.`);
+          // Two-step confirmation: if token provided, validate; otherwise issue one
+          if (confirm_token) {
+            const validated = consumeConfirmToken(confirm_token, key);
+            if (!validated) return errorResponse(`Invalid or expired confirm_token for '${key}'.`);
+          } else {
+            // Build the full chain command for the confirmation prompt
+            const previewCmds = [...commands];
+            try { previewCmds.push(interpolate(cv)); } catch { previewCmds.push(cv); }
+            for (let j = chainKeys.indexOf(ck) + 1; j < chainKeys.length; j++) {
+              const pk = resolveKey(chainKeys[j], scope);
+              const pv = getValue(pk, scope);
+              if (pv && typeof pv === 'string') try { previewCmds.push(interpolate(pv)); } catch { previewCmds.push(pv); }
+            }
+            const fullCmd = previewCmds.join(' && ');
+            const token = createConfirmToken(key, fullCmd);
+            return textResponse(`⚠ This command requires confirmation before execution:\n$ ${fullCmd}\n\nTo execute, call codex_run again with confirm_token: "${token}"`);
+          }
         }
         try { commands.push(interpolate(cv)); } catch (err) {
           return errorResponse(`Interpolation error in '${ck}': ${err instanceof Error ? err.message : String(err)}`);
@@ -812,13 +850,6 @@ server.tool(
       return errorResponse(`Value at '${key}' is encrypted. Decryption is not supported via MCP.`);
     }
 
-    // Respect confirm metadata: refuse unless --force or --dry
-    if (hasConfirm(resolvedKey) && !force && !dry) {
-      return errorResponse(
-        `Entry '${key}' requires confirmation (--confirm). Pass force: true to execute.`
-      );
-    }
-
     let command = value;
     try {
       command = interpolate(value);
@@ -828,6 +859,22 @@ server.tool(
 
     if (dry) {
       return textResponse(`$ ${command}`);
+    }
+
+    // Respect confirm metadata: two-step confirmation for MCP callers
+    if (hasConfirm(resolvedKey) && !force) {
+      if (confirm_token) {
+        const validated = consumeConfirmToken(confirm_token, key);
+        if (!validated) {
+          return errorResponse(`Invalid or expired confirm_token for '${key}'.`);
+        }
+        // Token valid — fall through to execution
+      } else {
+        const token = createConfirmToken(key, command);
+        return textResponse(
+          `⚠ This command requires confirmation before execution:\n$ ${command}\n\nTo execute, call codex_run again with confirm_token: "${token}"`
+        );
+      }
     }
 
     try {
