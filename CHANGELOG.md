@@ -4,6 +4,86 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.0] - 2026-04-06
+
+### Added
+
+- **CLI audit enrichment** — CLI entries now include `duration`, `responseSize`, `hit`/`miss`, `redundant`, and `entryCount` metrics. `cclid audit --detailed` shows per-entry metrics for both CLI and MCP entries.
+- **CLI read audit entries** — `get`, `find`/`search`, and `stale` commands now create audit entries with hit/miss tracking and entry counts.
+- **Token savings estimate** — `codex_stats` and `cclid stats` now show estimated tokens saved via cache hits and bootstrap context reuse (~4 bytes/token).
+- **Per-agent breakdown** — `CODEX_AGENT_NAME` is tracked in telemetry. `--detailed` stats show per-agent call/read/write counts.
+- **Sync CLI logging** — `logAudit` and `logToolCall` accept `sync` flag for reliable CLI writes that survive process exit.
+- **11 new computeStats tests** — hit rate, redundant rate, session duration, response bytes, trends, token savings, agent breakdown, edge cases.
+- **2 new sync write tests** — verify `appendFileSync` path for CLI audit and telemetry.
+- **`searchEntries` returns match counts** — enables hit/miss and entryCount tracking for search audit entries.
+
+### Fixed
+
+- **CLI audit/telemetry lost on process exit** — CLI used async `appendFile` but the process exited before callbacks fired. Now uses `appendFileSync` for all CLI calls.
+- **Batch `set --global` wrote to wrong scope** — batch mode did not forward `options.global` to `setEntry`. Entries went to project scope instead of global.
+- **Redundant writes marked as failures** — `success` check required `before !== after`, so same-value writes appeared as failures. Now uses `exitCode`-based success with separate `redundant` flag.
+- **Batch set missing `redundant` flag** — only single-key set tracked redundancy. Batch path now detects and flags redundant writes.
+
+## [1.5.1] - 2026-04-06
+
+### Added
+
+- **Two-step MCP confirmation** — `codex_run` for `--confirm` entries returns a one-time `confirm_token` (5min TTL) on first call. Pass token back to execute. `force:true` and `dry:true` bypass.
+- **Redundant write detection** — MCP audit entries now flag writes where before/after values are identical.
+
+## [1.5.0] - 2026-04-06
+
+### Added
+
+- **Enriched audit/telemetry metrics** — `duration`, `responseSize`, `requestSize`, `hit`/`miss`, `tier`, `entryCount`, `redundant` fields in MCP audit entries.
+- **`--detailed` flag** — `codex_audit` and `cclid audit` show per-entry metrics when `--detailed` is passed.
+- **Token-efficiency section in stats** — hit rate, redundant write rate, response bytes, avg latency.
+- **`--hits`, `--misses`, `--redundant` audit filters** — query audit log by cache effectiveness.
+
+### Fixed
+
+- **Telemetry race condition** — concurrent MCP calls could interleave JSONL writes. Added pending-write tracking.
+
+## [1.4.2] - 2026-04-06
+
+### Fixed
+
+- **Regex injection in search** — code scanning alert resolved for user-supplied regex patterns.
+- **SECURITY.md** — added vulnerability reporting policy.
+- **Schema guide** — documented recommended namespaces and prefer-MCP guidance.
+
+## [1.4.1] - 2026-04-06
+
+### Changed
+
+- **Agent-agnostic optimizations** — enriched MCP tool descriptions, tier guidance, deduped arch/files entries.
+- **Test isolation** — `CODEX_DATA_DIR` redirects audit/telemetry to temp dir during tests.
+- **`conventions.persistence`** — clear lanes for `.codexcli.json`, `CLAUDE.md`, `MEMORY.md`.
+
+## [1.4.0] - 2026-04-06
+
+### Added
+
+- **Tiered `codex_context`** — `essential`, `standard` (default, excludes `arch.*`), `full` tiers to control context size.
+- **`files.*` namespace** — key file paths and their roles stored in project data.
+- **CLAUDE.md overhaul** — bootstrap instructions, prefer-MCP guidance, write-back reminders.
+
+### Changed
+
+- **Data cleanup** — removed duplicate arch/files entries, enriched tool descriptions.
+
+## [1.3.0] - 2026-04-05
+
+### Added
+
+- **Audit UI redesign** — `cclid audit` with before/after diffs, collapsed dates, color-coded status.
+- **Source filters** — `--mcp` and `--cli` flags to filter audit entries by source.
+- **Log reset support** — `cclid data reset logs` to clear audit and telemetry logs.
+
+### Fixed
+
+- **DRY cleanup** — extracted `parsePeriodDays`, shared log paths, unified audit filtering.
+
 ## [1.2.1] - 2026-04-04
 
 ### Fixed

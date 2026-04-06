@@ -45,6 +45,8 @@ export interface AuditQueryOptions {
 
 const sessionId = crypto.randomBytes(4).toString('hex');
 
+const pendingWrites: Promise<void>[] = [];
+
 export function getAuditPath(): string {
   return path.join(getDataDirectory(), 'audit.jsonl');
 }
@@ -74,7 +76,7 @@ export function sanitizeParams(params: Record<string, unknown>): Record<string, 
   return result;
 }
 
-export function logAudit(partial: Omit<AuditEntry, 'ts' | 'session' | 'agent' | 'project'>): Promise<void> {
+export function logAudit(partial: Omit<AuditEntry, 'ts' | 'session' | 'agent' | 'project'>, sync = false): Promise<void> {
   const projectFile = findProjectFile();
   const entry: AuditEntry = {
     ...partial,
@@ -83,9 +85,21 @@ export function logAudit(partial: Omit<AuditEntry, 'ts' | 'session' | 'agent' | 
     project: projectFile ? path.dirname(projectFile) : undefined,
     agent: process.env.CODEX_AGENT_NAME ?? undefined,
   };
-  return new Promise<void>((resolve) => {
-    fs.appendFile(getAuditPath(), JSON.stringify(entry) + '\n', { mode: 0o600 }, () => resolve());
+  const line = JSON.stringify(entry) + '\n';
+  if (sync) {
+    try { fs.appendFileSync(getAuditPath(), line, { mode: 0o600 }); } catch { /* best-effort */ }
+    return Promise.resolve();
+  }
+  const p = new Promise<void>((resolve) => {
+    fs.appendFile(getAuditPath(), line, { mode: 0o600 }, () => resolve());
   });
+  pendingWrites.push(p);
+  return p;
+}
+
+export async function flushAudit(): Promise<void> {
+  await Promise.all(pendingWrites);
+  pendingWrites.length = 0;
 }
 
 function pushAuditLine(entries: AuditEntry[], line: string): void {

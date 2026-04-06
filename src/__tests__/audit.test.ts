@@ -151,6 +151,15 @@ describe('logAudit', () => {
     const entries = loadAuditLog();
     expect(entries).toHaveLength(2);
   });
+
+  it('writes synchronously when sync=true', () => {
+    logAudit({ src: 'cli', tool: 'codex_set', op: 'write', success: true }, true);
+    // File should exist immediately (sync write)
+    const entries = loadAuditLog();
+    expect(entries.length).toBe(1);
+    expect(entries[0].tool).toBe('codex_set');
+    expect(entries[0].src).toBe('cli');
+  });
 });
 
 describe('loadAuditLog', () => {

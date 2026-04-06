@@ -108,6 +108,15 @@ describe('logToolCall', () => {
     const entries = loadTelemetry();
     expect(entries[0].ns).toBe('toplevel');
   });
+
+  it('writes synchronously when sync=true', () => {
+    logToolCall('codex_set', 'sync.test', 'cli', 'global', undefined, true);
+    // File should exist immediately (sync write)
+    const entries = loadTelemetry();
+    expect(entries.length).toBe(1);
+    expect(entries[0].tool).toBe('codex_set');
+    expect(entries[0].src).toBe('cli');
+  });
 });
 
 describe('loadTelemetry', () => {
@@ -266,5 +275,142 @@ describe('computeStats', () => {
     ]);
     const stats = computeStats();
     expect(stats.topTools[0]).toEqual({ tool: 'codex_get', count: 2 });
+  });
+
+  it('computes hit rate from entries with hit field', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a', hit: true },
+      { ts: now - 90, tool: 'codex_get', session: 's1', op: 'read', ns: 'b', hit: true },
+      { ts: now - 80, tool: 'codex_get', session: 's1', op: 'read', ns: 'c', hit: false },
+      { ts: now - 70, tool: 'codex_get', session: 's1', op: 'read', ns: 'd' }, // no hit field — excluded
+    ]);
+    const stats = computeStats();
+    expect(stats.hits).toBe(2);
+    expect(stats.misses).toBe(1);
+    expect(stats.hitRate).toBeCloseTo(2 / 3);
+  });
+
+  it('computes redundant write rate', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_set', session: 's1', op: 'write', ns: 'a', redundant: true },
+      { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'b' },
+      { ts: now - 80, tool: 'codex_set', session: 's1', op: 'write', ns: 'c' },
+    ]);
+    const stats = computeStats();
+    expect(stats.redundantWrites).toBe(1);
+    expect(stats.redundantRate).toBeCloseTo(1 / 3);
+  });
+
+  it('computes avg session duration from multi-call sessions', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 10000, tool: 'codex_context', session: 's1', op: 'read', ns: '*' },
+      { ts: now - 5000, tool: 'codex_get', session: 's1', op: 'read', ns: 'a' },
+      { ts: now - 1000, tool: 'codex_set', session: 's2', op: 'write', ns: 'b' },
+    ]);
+    const stats = computeStats();
+    // s1: 10000-5000 = 5000ms, s2: single call — skipped
+    expect(stats.avgSessionDurationMs).toBe(5000);
+  });
+
+  it('computes total and avg response bytes', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a', responseSize: 100 },
+      { ts: now - 90, tool: 'codex_get', session: 's1', op: 'read', ns: 'b', responseSize: 200 },
+      { ts: now - 80, tool: 'codex_set', session: 's1', op: 'write', ns: 'c' }, // no responseSize
+    ]);
+    const stats = computeStats();
+    expect(stats.totalResponseBytes).toBe(300);
+    expect(stats.avgResponseBytes).toBe(150);
+  });
+
+  it('computes avg duration from entries with duration field', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a', duration: 10 },
+      { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'b', duration: 20 },
+    ]);
+    const stats = computeStats();
+    expect(stats.avgDurationMs).toBe(15);
+  });
+
+  it('computes trend when previous period has data', () => {
+    const now = Date.now();
+    const DAY = 86400000;
+    writeEntries([
+      // Previous period (8-15 days ago)
+      { ts: now - 10 * DAY, tool: 'codex_get', session: 'p1', op: 'read', ns: 'a' },
+      { ts: now - 9 * DAY, tool: 'codex_set', session: 'p1', op: 'write', ns: 'b' },
+      // Current period (within 7 days)
+      { ts: now - 3 * DAY, tool: 'codex_get', session: 's1', op: 'read', ns: 'a' },
+      { ts: now - 2 * DAY, tool: 'codex_set', session: 's1', op: 'write', ns: 'b' },
+      { ts: now - 1 * DAY, tool: 'codex_get', session: 's2', op: 'read', ns: 'c' },
+    ]);
+    const stats = computeStats(7);
+    expect(stats.trend).toBeDefined();
+    expect(stats.trend!.callsDelta).toBeCloseTo(50); // 3 vs 2 = +50%
+  });
+
+  it('returns no trend for all-time period', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a' },
+    ]);
+    const stats = computeStats(0); // all-time
+    expect(stats.trend).toBeUndefined();
+  });
+
+  it('counts calls per project', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a', project: '/repo/one' },
+      { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'b', project: '/repo/one' },
+      { ts: now - 80, tool: 'codex_get', session: 's1', op: 'read', ns: 'c', project: '/repo/two' },
+    ]);
+    const stats = computeStats();
+    expect(stats.projectBreakdown['/repo/one']).toBe(2);
+    expect(stats.projectBreakdown['/repo/two']).toBe(1);
+  });
+
+  it('estimates tokens saved from cache hits', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a', hit: true, responseSize: 400 },
+      { ts: now - 90, tool: 'codex_context', session: 's1', op: 'read', ns: '*', hit: true, responseSize: 2000 },
+      { ts: now - 80, tool: 'codex_get', session: 's1', op: 'read', ns: 'b', hit: false, responseSize: 100 },
+    ]);
+    const stats = computeStats();
+    // hits: 400 + 2000 = 2400 bytes / 4 = 600 tokens
+    expect(stats.estimatedTokensSaved).toBe(600);
+    // bootstrap: 2000 / 4 = 500 tokens
+    expect(stats.estimatedTokensSavedBootstrap).toBe(500);
+  });
+
+  it('breaks down calls by agent', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a', agent: 'claude' },
+      { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'b', agent: 'claude' },
+      { ts: now - 80, tool: 'codex_get', session: 's1', op: 'read', ns: 'c', agent: 'cursor' },
+      { ts: now - 70, tool: 'codex_set', session: 's1', op: 'write', ns: 'd' }, // no agent — excluded
+    ]);
+    const stats = computeStats();
+    expect(stats.agentBreakdown['claude']).toEqual({ calls: 2, reads: 1, writes: 1 });
+    expect(stats.agentBreakdown['cursor']).toEqual({ calls: 1, reads: 1, writes: 0 });
+    expect(stats.agentBreakdown['(unknown)']).toBeUndefined(); // no-agent entries excluded
+  });
+
+  it('handles zero MCP sessions without divide-by-zero', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'a', src: 'cli' },
+    ]);
+    const stats = computeStats();
+    expect(stats.mcpSessions).toBe(0);
+    expect(stats.bootstrapRate).toBe(0);
+    expect(stats.writeBackRate).toBe(0);
   });
 });

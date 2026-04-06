@@ -60,8 +60,8 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
 - **Staleness Detection**: Track when entries were last updated, find stale knowledge (`ccli stale`)
 - **Schema Validation**: Check entries against recommended namespaces (`ccli lint`), customizable via `_schema.namespaces`
-- **MCP Server**: 20 tools for any MCP-compatible AI agent (Claude Code, Copilot, ChatGPT, etc.) via the Model Context Protocol
-- **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs (`ccli audit`)
+- **MCP Server**: 19 tools for any MCP-compatible AI agent (Claude Code, Copilot, ChatGPT, etc.) via the Model Context Protocol
+- **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs, hit/miss tracking, and per-entry metrics (`ccli audit --detailed`). Includes token savings estimates and per-agent breakdown.
 
 ## Installation
 
@@ -753,7 +753,8 @@ ccli --debug get server.production
 | `rename` | `rn` | `<old> <new>` | Rename an entry key or alias |
 | `config` | | `<subcommand>` | View or change configuration settings |
 | `init` | | | Create project-scoped `.codexcli.json` (`--scaffold` to auto-populate) |
-| `stats` | | | View MCP usage telemetry and trends (`--period`, `--json`) |
+| `stats` | | | View MCP usage telemetry and trends (`--period`, `--detailed`, `--json`) |
+| `audit` | | `[key]` | Query audit log with before/after diffs (`--detailed`, `--cli`, `--mcp`, `--hits`, `--misses`, `--redundant`) |
 | `stale` | | `[days]` | Show entries not updated in N days (default 30) |
 | `lint` | | | Check entries against namespace schema (`--json`) |
 | `data` | | `<subcommand>` | Manage stored data (export, import, reset) |

@@ -16,10 +16,13 @@ export interface TelemetryEntry {
   hit?: boolean | undefined;
   redundant?: boolean | undefined;
   responseSize?: number | undefined;
+  agent?: string | undefined;
 }
 
 // One session ID per MCP server process
 const sessionId = crypto.randomBytes(4).toString('hex');
+
+const pendingWrites: Promise<void>[] = [];
 
 export function getTelemetryPath(): string {
   return path.join(getDataDirectory(), 'telemetry.jsonl');
@@ -81,7 +84,7 @@ export interface TelemetryExtras {
   responseSize?: number | undefined;
 }
 
-export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global', extras?: TelemetryExtras): Promise<void> {
+export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global', extras?: TelemetryExtras, sync = false): Promise<void> {
   const entry: TelemetryEntry = {
     ts: Date.now(),
     tool,
@@ -90,11 +93,24 @@ export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 
     ns: extractNamespace(key),
     src: source,
     scope,
+    agent: process.env.CODEX_AGENT_NAME ?? undefined,
     ...extras,
   };
-  return new Promise<void>((resolve) => {
-    fs.appendFile(getTelemetryPath(), JSON.stringify(entry) + '\n', { mode: 0o600 }, () => resolve());
+  const line = JSON.stringify(entry) + '\n';
+  if (sync) {
+    try { fs.appendFileSync(getTelemetryPath(), line, { mode: 0o600 }); } catch { /* best-effort */ }
+    return Promise.resolve();
+  }
+  const p = new Promise<void>((resolve) => {
+    fs.appendFile(getTelemetryPath(), line, { mode: 0o600 }, () => resolve());
   });
+  pendingWrites.push(p);
+  return p;
+}
+
+export async function flushTelemetry(): Promise<void> {
+  await Promise.all(pendingWrites);
+  pendingWrites.length = 0;
 }
 
 function pushTelemetryLine(entries: TelemetryEntry[], line: string): void {
@@ -175,6 +191,11 @@ export interface TelemetryStats {
   avgResponseBytes: number | undefined;
   avgDurationMs: number | undefined;
   projectBreakdown: Record<string, number>;
+  // Token savings
+  estimatedTokensSaved: number;
+  estimatedTokensSavedBootstrap: number;
+  // Agent breakdown
+  agentBreakdown: Record<string, { calls: number; reads: number; writes: number }>;
   // Trend comparison (vs previous period)
   trend: TelemetryTrend | undefined;
 }
@@ -305,6 +326,29 @@ export function computeStats(periodDays = 0): TelemetryStats {
   const mcpSessions = mcpSessionData.size;
   const period = periodDays > 0 ? `${periodDays}d` : 'all';
 
+  // Token savings estimate: response bytes from cache hits / ~4 bytes per token
+  const estimatedTokensSaved = Math.round(
+    entries
+      .filter(e => e.op === 'read' && e.hit === true && e.responseSize !== undefined)
+      .reduce((sum, e) => sum + e.responseSize!, 0) / 4
+  );
+  const estimatedTokensSavedBootstrap = Math.round(
+    entries
+      .filter(e => e.tool === 'codex_context' && e.hit === true && e.responseSize !== undefined)
+      .reduce((sum, e) => sum + e.responseSize!, 0) / 4
+  );
+
+  // Agent breakdown
+  const agentBreakdown: Record<string, { calls: number; reads: number; writes: number }> = {};
+  for (const e of entries) {
+    const agent = e.agent;
+    if (!agent) continue;
+    if (!agentBreakdown[agent]) agentBreakdown[agent] = { calls: 0, reads: 0, writes: 0 };
+    agentBreakdown[agent].calls++;
+    if (e.op === 'read') agentBreakdown[agent].reads++;
+    if (e.op === 'write') agentBreakdown[agent].writes++;
+  }
+
   // Trend comparison: compute stats for the previous period of the same length
   let trend: TelemetryTrend | undefined;
   if (periodDays > 0 && cutoff > 0) {
@@ -360,6 +404,9 @@ export function computeStats(periodDays = 0): TelemetryStats {
     avgResponseBytes,
     avgDurationMs,
     projectBreakdown,
+    estimatedTokensSaved,
+    estimatedTokensSavedBootstrap,
+    agentBreakdown,
     trend,
   };
 }

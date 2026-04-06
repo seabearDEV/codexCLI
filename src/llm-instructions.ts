@@ -29,8 +29,8 @@ TOOL TIPS:
 - codex_set — store a key-value pair (use dot notation, keep values concise)
 - codex_search — find entries by keyword
 - codex_run — execute a stored shell command. If the command requires confirmation, the response will include a one-time confirm_token. Show the command to the user, get approval, then call codex_run again with that confirm_token to execute.
-- codex_stats — view your usage metrics (bootstrap rate, write-back rate, scope breakdown, trends)
-- codex_audit — query the audit log of data mutations (before/after diffs, agent identity)
+- codex_stats — view usage metrics and token efficiency (bootstrap rate, hit rate, token savings, per-agent breakdown, trends). Pass detailed: true for namespace activity and top tools.
+- codex_audit — query the audit log of data mutations and reads (before/after diffs, agent identity, hit/miss tracking). Pass detailed: true for per-entry latency, response sizes, and redundancy flags.
 
 PREFER MCP TOOLS:
 - Always interact with the data store via MCP tools (codex_get, codex_set, codex_search, etc.) rather than reading .codexcli.json directly.

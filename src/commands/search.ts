@@ -98,13 +98,13 @@ function displaySearchResults(
   }
 }
 
-export function searchEntries(searchTerm: string, options: SearchOptions = {}): void {
+export function searchEntries(searchTerm: string, options: SearchOptions = {}): { dataCount: number; aliasCount: number } {
   debug('searchEntries called', { searchTerm, options });
 
   if (options.keys && options.values) {
     console.error('Error: --keys and --values are mutually exclusive.');
     process.exitCode = 1;
-    return;
+    return { dataCount: 0, aliasCount: 0 };
   }
 
   const scope = options.global ? 'global' as const : undefined;
@@ -112,7 +112,7 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
 
   if (Object.keys(flattenedData).length === 0 && !options.aliases) {
     console.log('No entries to search in.');
-    return;
+    return { dataCount: 0, aliasCount: 0 };
   }
 
   let match: MatchFn;
@@ -121,28 +121,31 @@ export function searchEntries(searchTerm: string, options: SearchOptions = {}): 
   } catch (err) {
     console.error(`Invalid regex: ${err instanceof Error ? err.message : String(err)}`);
     process.exitCode = 1;
-    return;
+    return { dataCount: 0, aliasCount: 0 };
   }
 
   const aliases = loadAliases(scope);
   const dataMatches = options.aliases ? {} : searchDataEntries(flattenedData, match, options.keys, options.values);
   const aliasMatches = options.entries ? {} : searchAliasEntries(aliases, match);
 
-  const totalMatches = Object.keys(dataMatches).length + Object.keys(aliasMatches).length;
+  const dataCount = Object.keys(dataMatches).length;
+  const aliasCount = Object.keys(aliasMatches).length;
+  const totalMatches = dataCount + aliasCount;
 
   if (options.json) {
     const result: { entries?: Record<string, string>, aliases?: Record<string, string> } = {};
     if (!options.aliases) result.entries = dataMatches;
     if (!options.entries) result.aliases = aliasMatches;
     console.log(JSON.stringify(result, null, 2));
-    return;
+    return { dataCount, aliasCount };
   }
 
   if (totalMatches === 0) {
     console.log(`No matches found for '${searchTerm}'.`);
-    return;
+    return { dataCount, aliasCount };
   }
 
   console.log(`Found ${totalMatches} matches for '${searchTerm}':`);
   displaySearchResults(dataMatches, aliasMatches, aliases, options, searchTerm);
+  return { dataCount, aliasCount };
 }

@@ -1381,6 +1381,23 @@ server.tool(
         }
         if (stats.avgDurationMs !== undefined)
           lines.push(`  Avg latency:       ${Math.round(stats.avgDurationMs)}ms`);
+        if (stats.estimatedTokensSaved > 0) {
+          const fmt = stats.estimatedTokensSaved >= 1000 ? `${(stats.estimatedTokensSaved / 1000).toFixed(1)}K` : String(stats.estimatedTokensSaved);
+          lines.push(`  Est. tokens saved: ~${fmt} via cache hits`);
+          if (stats.estimatedTokensSavedBootstrap > 0) {
+            const bFmt = stats.estimatedTokensSavedBootstrap >= 1000 ? `${(stats.estimatedTokensSavedBootstrap / 1000).toFixed(1)}K` : String(stats.estimatedTokensSavedBootstrap);
+            lines.push(`    via bootstrap:   ~${bFmt}`);
+          }
+        }
+      }
+
+      const agents = Object.entries(stats.agentBreakdown);
+      if (detailed && agents.length > 0) {
+        lines.push('');
+        lines.push('Agent activity:');
+        for (const [agent, data] of agents.sort(([,a],[,b]) => b.calls - a.calls)) {
+          lines.push(`  ${agent.padEnd(24)} ${data.calls} calls (${data.reads}R ${data.writes}W)`);
+        }
       }
 
       if (detailed && stats.topTools.length > 0) {
