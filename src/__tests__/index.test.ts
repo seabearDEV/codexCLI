@@ -26,6 +26,7 @@ const mockColor = {
   cyan: identity,
   green: identity,
   red: identity,
+  yellow: identity,
 };
 
 const mockGetCompletions = vi.fn().mockReturnValue(['comp1', 'comp2']);
@@ -54,6 +55,14 @@ function setupMocks() {
   vi.doMock('../alias', () => ({
     removeAlias: mockRemoveAlias,
     resolveKey: mockResolveKey,
+    loadAliases: vi.fn(() => ({})),
+    setAlias: vi.fn(),
+    renameAlias: vi.fn(() => true),
+  }));
+  vi.doMock('../confirm', () => ({
+    setConfirm: vi.fn(),
+    removeConfirm: vi.fn(),
+    loadConfirmKeys: vi.fn(() => ({})),
   }));
   vi.doMock('../formatting', () => ({
     showHelp: mockShowHelp,

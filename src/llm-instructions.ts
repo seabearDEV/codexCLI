@@ -73,7 +73,18 @@ EFFECTIVE USAGE:
   - omit (standard) — multi-file changes, bug fixes, new features
   - tier:"full" — refactoring subsystems, changing architecture, onboarding to the codebase
 - Write back: when you learn something non-obvious, store it before the session ends.
-- All mutations are audited — codex_audit shows what changed, when, and by whom.`;
+- All mutations are audited — codex_audit shows what changed, when, and by whom.
+
+FIRST SESSION (fresh project):
+- After calling codex_context, check if the response lacks arch.* entries or contains context.initialized = "scaffold".
+- If so, this is a freshly initialized project. Before starting the user's task:
+  1. Read key source files (entry points, config, core modules) to understand the architecture.
+  2. Populate arch.* entries with architecture decisions, patterns, and key subsystem descriptions.
+  3. Populate context.* entries with non-obvious gotchas, edge cases, and historical decisions you discover.
+  4. Enrich files.* entries with descriptions of what each key file does (not just its path).
+  5. Update context.initialized to "complete" when done.
+- This deep analysis runs once. Subsequent sessions benefit from the populated knowledge base.
+- Keep entries concise (1-2 sentences). Store insights, not code.`;
 
 /**
  * Get the custom LLM instructions from the data store, if any.

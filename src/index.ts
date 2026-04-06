@@ -2,7 +2,9 @@
 
 import { Command } from 'commander';
 import * as commands from './commands';
-import { removeAlias, resolveKey, loadAliases } from './alias';
+import { removeAlias, resolveKey, loadAliases, setAlias, renameAlias } from './alias';
+import { setConfirm, removeConfirm, loadConfirmKeys } from './confirm';
+import { color } from './formatting';
 import { showHelp, showExamples } from './formatting';
 import { askPassword, askConfirmation, printError } from './commands/helpers';
 import { version } from '../package.json';
@@ -12,9 +14,7 @@ import { getDataDirectory } from './utils/paths';
 import { getBinaryName } from './utils/binaryName';
 import fs from 'fs';
 import { DEFAULT_LLM_INSTRUCTIONS, getEffectiveInstructions } from './llm-instructions';
-import { logToolCall } from './utils/telemetry';
-import { logAudit, sanitizeValue, sanitizeParams } from './utils/audit';
-import { getValue } from './storage';
+import { withCliInstrumentation } from './utils/instrumentation';
 
 // Early-exit handler for shell tab-completion (must run before Commander parses args)
 const completionFlagIndex = process.argv.indexOf('--get-completions');
@@ -25,16 +25,6 @@ if (completionFlagIndex !== -1) {
     console.log(`${r.value}\t${r.description}\t${r.group}`)
   );
   process.exit(0);
-}
-
-// Helper for CLI audit logging: capture a value for before/after comparison
-function captureCliValue(key: string, global?: boolean): string | undefined {
-  try {
-    const scope = global ? 'global' as const : undefined;
-    const val = getValue(key, scope);
-    if (val === undefined) return undefined;
-    return sanitizeValue(typeof val === 'object' ? JSON.stringify(val) : String(val));
-  } catch { return undefined; }
 }
 
 // Initialize the CLI
@@ -68,7 +58,6 @@ codexCLI
   .option('--no-confirm', 'Remove confirmation requirement from this entry')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
     const scope = options.global ? 'global' as const : undefined;
     // Batch mode: `set a=1 b=2 c=3`
     if (key.includes('=')) {
@@ -88,16 +77,11 @@ codexCLI
           return;
         }
         const rk = resolveKey(k);
-        const prevExitCode = process.exitCode;
-        const before = captureCliValue(rk, options.global);
-        await commands.setEntry(rk, v, options.force, undefined, undefined, undefined, options.global);
-        const after = captureCliValue(rk, options.global);
-        const success = process.exitCode === prevExitCode;
-        const redundant = success && before !== undefined && before === after;
-        const duration = Date.now() - t0;
-        logAudit({ src: 'cli', tool: 'codex_set', op: 'write', key: rk, scope: scope ?? 'auto', success, before, after, redundant, duration, responseSize: after ? Buffer.byteLength(after, 'utf8') : undefined, params: sanitizeParams({ key: rk, value: v }) }, true);
+        await withCliInstrumentation(
+          { tool: 'codex_set', key: rk, rawKey: k, scope, writeValue: v, params: { key: rk, value: v } },
+          () => commands.setEntry(rk, v, options.force, undefined, undefined, undefined, options.global)
+        );
       }
-      logToolCall('codex_set', key, 'cli', scope, { duration: Date.now() - t0, redundant: undefined }, true);
       return;
     }
 
@@ -145,15 +129,10 @@ codexCLI
       value = valueArray.join(' ');
     }
     const resolvedKey = resolveKey(key);
-    const prevExitCode = process.exitCode;
-    const before = captureCliValue(resolvedKey, options.global);
-    await commands.setEntry(resolvedKey, value, options.force, options.encrypt, options.alias, options.confirm, options.global);
-    const after = captureCliValue(resolvedKey, options.global);
-    const success = process.exitCode === prevExitCode;
-    const redundant = success && before !== undefined && before === after;
-    const duration = Date.now() - t0;
-    logToolCall('codex_set', resolvedKey, 'cli', scope, { duration, redundant: redundant || undefined, responseSize: after ? Buffer.byteLength(after, 'utf8') : undefined }, true);
-    logAudit({ src: 'cli', tool: 'codex_set', op: 'write', key: resolvedKey, scope: scope ?? 'auto', success, before, after, redundant, duration, responseSize: after ? Buffer.byteLength(after, 'utf8') : undefined, params: sanitizeParams({ key: resolvedKey, value: value ?? '' }) }, true);
+    await withCliInstrumentation(
+      { tool: 'codex_set', key: resolvedKey, rawKey: key, scope, writeValue: value, params: { key: resolvedKey, value: value ?? '' } },
+      () => commands.setEntry(resolvedKey, value, options.force, options.encrypt, options.alias, options.confirm, options.global)
+    );
     if (options.clear) {
       process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
     }
@@ -176,19 +155,13 @@ codexCLI
   .option('-G, --global', 'Target global data store')
   .option('-A, --all', 'Show entries from all scopes (project + global)')
   .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
-    const t0 = Date.now();
+    if (options.aliases) console.error(color.yellow('Deprecation: use `alias list` instead of `get -a`.'));
     const scope = options.global ? 'global' as const : undefined;
-    if (key) {
-      key = resolveKey(key);
-    }
-    const prevExitCode = process.exitCode;
-    await withPager(() => commands.getEntry(key, options));
-    const duration = Date.now() - t0;
-    const hit = process.exitCode === prevExitCode;
-    const responseValue = key ? captureCliValue(key, options.global) : undefined;
-    const responseSize = responseValue ? Buffer.byteLength(responseValue, 'utf8') : undefined;
-    logToolCall('codex_get', key, 'cli', scope, { duration, hit, responseSize }, true);
-    logAudit({ src: 'cli', tool: 'codex_get', op: 'read', key, scope: scope ?? 'auto', success: hit, hit, duration, responseSize, entryCount: key ? (hit ? 1 : 0) : undefined, params: sanitizeParams({ key: key ?? '' }) }, true);
+    const resolvedKey = key ? resolveKey(key) : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_get', key: resolvedKey, rawKey: key, scope, params: { key: key ?? '' } },
+      () => withPager(() => commands.getEntry(resolvedKey ?? key, options))
+    );
   });
 
 // Run command
@@ -204,9 +177,10 @@ codexCLI
   .option('--chain', 'Treat stored value as space-separated key references to resolve and chain')
   .option('-G, --global', 'Target global data store')
   .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, chain?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
-    await commands.runCommand(keys, options);
-    logToolCall('codex_run', keys[0], 'cli', options.global ? 'global' : undefined, { duration: Date.now() - t0 }, true);
+    await withCliInstrumentation(
+      { tool: 'codex_run', key: keys[0], scope: options.global ? 'global' : undefined, params: { keys } },
+      () => commands.runCommand(keys, options)
+    );
   });
 
 // Copy command
@@ -217,14 +191,12 @@ codexCLI
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-G, --global', 'Target global data store')
   .action(async (source: string, dest: string, options: { force?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
     const scope = options.global ? 'global' as const : undefined;
-    const before = captureCliValue(dest, options.global);
-    await commands.copyEntry(resolveKey(source), dest, options.force, options.global);
-    const after = captureCliValue(dest, options.global);
-    const duration = Date.now() - t0;
-    logToolCall('codex_copy', dest, 'cli', scope, { duration }, true);
-    logAudit({ src: 'cli', tool: 'codex_copy', op: 'write', key: dest, scope: scope ?? 'auto', success: true, before, after, duration, params: { source, dest } }, true);
+    const resolvedSource = resolveKey(source);
+    await withCliInstrumentation(
+      { tool: 'codex_copy', key: dest, rawKey: source, scope, copySourceKey: resolvedSource, params: { source: resolvedSource, dest } },
+      () => commands.copyEntry(resolvedSource, dest, options.force, options.global)
+    );
   });
 
 // Find command
@@ -241,15 +213,13 @@ codexCLI
   .option('-v, --values', 'Search values only (skip key matching)')
   .option('-G, --global', 'Target global data store')
   .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, regex?: boolean, keys?: boolean, values?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
     const scope = options.global ? 'global' as const : undefined;
-    let searchResult: { dataCount: number; aliasCount: number } | undefined;
-    await withPager(() => { searchResult = commands.searchEntries(term, options); });
-    const duration = Date.now() - t0;
-    const entryCount = searchResult ? searchResult.dataCount + searchResult.aliasCount : 0;
-    const hit = entryCount > 0;
-    logToolCall('codex_search', term, 'cli', scope, { duration, hit }, true);
-    logAudit({ src: 'cli', tool: 'codex_search', op: 'read', key: term, scope: scope ?? 'auto', success: true, hit, entryCount, duration, params: sanitizeParams({ searchTerm: term }) }, true);
+    await withPager(async () => {
+      await withCliInstrumentation(
+        { tool: 'codex_search', key: term, scope, params: { searchTerm: term } },
+        () => commands.searchEntries(term, options)
+      );
+    });
   });
 
 // Edit command
@@ -260,9 +230,11 @@ codexCLI
   .option('-d, --decrypt', 'Decrypt an encrypted value before editing')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, options: { decrypt?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
-    await commands.editEntry(resolveKey(key), options);
-    logToolCall('codex_set', key, 'cli', options.global ? 'global' : undefined, { duration: Date.now() - t0 }, true);
+    const resolvedKey = resolveKey(key);
+    await withCliInstrumentation(
+      { tool: 'codex_set', key: resolvedKey, rawKey: key, scope: options.global ? 'global' as const : undefined, params: { key: resolvedKey } },
+      () => commands.editEntry(resolvedKey, options)
+    );
   });
 
 // Rename command
@@ -273,20 +245,20 @@ codexCLI
   .option('-a, --alias', 'Rename an alias instead of an entry key')
   .option('--set-alias <name>', 'Set an alias on the renamed key')
   .option('-G, --global', 'Target global data store')
-  .action((oldName: string, newName: string, options: { alias?: boolean, setAlias?: string, global?: boolean }) => {
-    const t0 = Date.now();
+  .action(async (oldName: string, newName: string, options: { alias?: boolean, setAlias?: string, global?: boolean }) => {
+    if (options.alias) console.error(color.yellow('Deprecation: use `alias rename <old> <new>` instead of `rename -a`.'));
     const scope = options.global ? 'global' as const : undefined;
     const resolvedOld = options.alias ? oldName : resolveKey(oldName);
-    const before = captureCliValue(resolvedOld, options.global);
-    if (options.alias) {
-      commands.renameEntry(oldName, newName, true, undefined, options.global);
-    } else {
-      commands.renameEntry(resolvedOld, newName, false, options.setAlias, options.global);
-    }
-    const after = captureCliValue(newName, options.global);
-    const duration = Date.now() - t0;
-    logToolCall('codex_rename', oldName, 'cli', scope, { duration }, true);
-    logAudit({ src: 'cli', tool: 'codex_rename', op: 'write', key: resolvedOld, scope: scope ?? 'auto', success: true, before, after, duration, params: { oldKey: resolvedOld, newKey: newName } }, true);
+    await withCliInstrumentation(
+      { tool: 'codex_rename', key: resolvedOld, rawKey: oldName, scope, params: { oldKey: resolvedOld, newKey: newName } },
+      () => {
+        if (options.alias) {
+          commands.renameEntry(oldName, newName, true, undefined, options.global);
+        } else {
+          commands.renameEntry(resolvedOld, newName, false, options.setAlias, options.global);
+        }
+      }
+    );
   });
 
 // Remove command
@@ -298,37 +270,215 @@ codexCLI
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, options: { alias?: boolean, force?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
+    if (options.alias) console.error(color.yellow('Deprecation: use `alias remove <name>` instead of `remove -a`.'));
     const tool = options.alias ? 'codex_alias_remove' : 'codex_remove';
     const scope = options.global ? 'global' as const : undefined;
     const resolvedKey = options.alias ? key : resolveKey(key);
-    if (options.alias) {
-      const aliases = loadAliases(scope);
-      const before = aliases[key];
-      const removed = removeAlias(key, scope);
-      const duration = Date.now() - t0;
-      if (removed) {
-        console.log(`Alias '${key}' removed successfully.`);
-        logToolCall(tool, key, 'cli', scope, { duration }, true);
-        logAudit({ src: 'cli', tool, op: 'write', key: resolvedKey, scope: scope ?? 'auto', success: true, before, after: undefined, duration, params: { key: resolvedKey } }, true);
-      } else {
-        console.error(`Alias '${key}' not found.`);
-        process.exitCode = 1;
-        logToolCall(tool, key, 'cli', scope, { duration }, true);
-        logAudit({ src: 'cli', tool, op: 'write', key: resolvedKey, scope: scope ?? 'auto', success: false, error: 'Alias not found', duration, params: { key: resolvedKey } }, true);
+    await withCliInstrumentation(
+      { tool, key: resolvedKey, rawKey: key, scope, params: { key: resolvedKey } },
+      async () => {
+        if (options.alias) {
+          const removed = removeAlias(key, scope);
+          if (removed) {
+            console.log(`Alias '${key}' removed successfully.`);
+          } else {
+            console.error(`Alias '${key}' not found.`);
+            process.exitCode = 1;
+          }
+        } else {
+          await commands.removeEntry(resolvedKey, options.force, options.global);
+        }
       }
-    } else {
-      const targetScope = options.global ? 'global' as const : 'project' as const;
-      const beforeInTargetScope = getValue(resolvedKey, targetScope);
-      const before = captureCliValue(resolvedKey, options.global);
-      await commands.removeEntry(resolvedKey, options.force, options.global);
-      const afterInTargetScope = getValue(resolvedKey, targetScope);
-      const after = captureCliValue(resolvedKey, options.global);
-      const removed = beforeInTargetScope !== undefined && afterInTargetScope === undefined;
-      const duration = Date.now() - t0;
-      logToolCall(tool, key, 'cli', scope, { duration }, true);
-      logAudit({ src: 'cli', tool, op: 'write', key: resolvedKey, scope: scope ?? 'auto', success: removed, before, after, duration, params: { key: resolvedKey } }, true);
-    }
+    );
+  });
+
+// ── Alias subcommand group ────────────────────────────────────────────
+
+const aliasCommand = codexCLI
+  .command('alias')
+  .description('Manage key aliases');
+
+aliasCommand
+  .command('set <name> <path>')
+  .description('Create an alias for a key')
+  .option('-G, --global', 'Target global data store')
+  .action(async (name: string, targetPath: string, options: { global?: boolean }) => {
+    const scope = options.global ? 'global' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_alias_set', key: name, scope, params: { alias: name, path: targetPath } },
+      () => setAlias(name, targetPath, scope)
+    );
+  });
+
+aliasCommand
+  .command('remove <name>')
+  .description('Remove an alias')
+  .option('-G, --global', 'Target global data store')
+  .action(async (name: string, options: { global?: boolean }) => {
+    const scope = options.global ? 'global' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_alias_remove', key: name, scope, params: { alias: name } },
+      () => {
+        const removed = removeAlias(name, scope);
+        if (removed) {
+          console.log(`Alias '${name}' removed.`);
+        } else {
+          console.error(`Alias '${name}' not found.`);
+          process.exitCode = 1;
+        }
+      }
+    );
+  });
+
+aliasCommand
+  .command('list')
+  .description('List all aliases')
+  .option('-G, --global', 'Target global data store')
+  .option('-A, --all', 'Show aliases from all scopes')
+  .action(async (options: { global?: boolean, all?: boolean }) => {
+    const scope = options.global ? 'global' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_alias_list', scope, params: {} },
+      () => {
+        const aliases = loadAliases(scope);
+        if (Object.keys(aliases).length === 0) {
+          console.log('No aliases defined.');
+        } else {
+          for (const [name, target] of Object.entries(aliases)) {
+            console.log(`${color.green(name)} ${color.gray('->')} ${color.yellow(target)}`);
+          }
+        }
+      }
+    );
+  });
+
+aliasCommand
+  .command('rename <old> <new>')
+  .description('Rename an alias')
+  .option('-G, --global', 'Target global data store')
+  .action(async (oldName: string, newName: string, options: { global?: boolean }) => {
+    const scope = options.global ? 'global' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_alias_set', key: oldName, scope, params: { old: oldName, new: newName } },
+      () => {
+        const result = renameAlias(oldName, newName, scope);
+        if (result) {
+          console.log(`Alias '${oldName}' renamed to '${newName}'.`);
+        } else {
+          const aliases = loadAliases(scope);
+          if (!(oldName in aliases)) {
+            console.error(`Alias '${oldName}' not found.`);
+          } else {
+            console.error(`Alias '${newName}' already exists.`);
+          }
+          process.exitCode = 1;
+        }
+      }
+    );
+  });
+
+// ── Confirm subcommand group ─────────────────────────────────────────
+
+const confirmCommand = codexCLI
+  .command('confirm')
+  .description('Manage run confirmation requirements');
+
+confirmCommand
+  .command('set <key>')
+  .description('Require confirmation before running this key')
+  .option('-G, --global', 'Target global data store')
+  .action(async (key: string, options: { global?: boolean }) => {
+    const resolvedKey = resolveKey(key);
+    const scope = options.global ? 'global' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_confirm_set', key: resolvedKey, scope, params: { key: resolvedKey } },
+      () => { setConfirm(resolvedKey, scope); console.log(`Entry '${resolvedKey}' now requires confirmation to run.`); }
+    );
+  });
+
+confirmCommand
+  .command('remove <key>')
+  .description('Remove confirmation requirement')
+  .option('-G, --global', 'Target global data store')
+  .action(async (key: string, options: { global?: boolean }) => {
+    const resolvedKey = resolveKey(key);
+    const scope = options.global ? 'global' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_confirm_remove', key: resolvedKey, scope, params: { key: resolvedKey } },
+      () => { removeConfirm(resolvedKey, scope); console.log(`Confirmation removed from '${resolvedKey}'.`); }
+    );
+  });
+
+confirmCommand
+  .command('list')
+  .description('List keys requiring confirmation')
+  .option('-G, --global', 'Target global data store')
+  .action(async (options: { global?: boolean }) => {
+    const scope = options.global ? 'global' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_confirm_list', scope, params: {} },
+      () => {
+        const keys = loadConfirmKeys(scope);
+        if (Object.keys(keys).length === 0) {
+          console.log('No keys require confirmation.');
+        } else {
+          for (const key of Object.keys(keys)) {
+            console.log(`  ${color.yellow(key)}`);
+          }
+        }
+      }
+    );
+  });
+
+// ── Context command ──────────────────────────────────────────────────
+
+codexCLI
+  .command('context')
+  .description('Show a compact summary of stored project knowledge')
+  .option('-t, --tier <tier>', 'Context tier: essential, standard, full', 'standard')
+  .option('-G, --global', 'Target global data store')
+  .option('-r, --raw', 'Output plain text without colors')
+  .option('-j, --json', 'Output as JSON')
+  .action(async (options: { tier?: string, global?: boolean, raw?: boolean, json?: boolean }) => {
+    const scope = options.global ? 'global' as const : undefined;
+    await withPager(() => withCliInstrumentation(
+      { tool: 'codex_context', scope, params: { tier: options.tier } },
+      () => commands.showContext(options)
+    ));
+  });
+
+// ── Info command (top-level) ─────────────────────────────────────────
+
+codexCLI
+  .command('info')
+  .description('Show version, stats, and storage paths')
+  .action(() => {
+    commands.showInfo();
+  });
+
+// ── Search (hidden alias for find) ───────────────────────────────────
+
+async function handleSearch(term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, regex?: boolean, keys?: boolean, values?: boolean, global?: boolean }): Promise<void> {
+  const scope = options.global ? 'global' as const : undefined;
+  await withCliInstrumentation(
+    { tool: 'codex_search', key: term, scope, params: { searchTerm: term } },
+    () => commands.searchEntries(term, options)
+  );
+}
+
+codexCLI
+  .command('search <term>', { hidden: true })
+  .description('Find entries by key or value (alias for find)')
+  .option('-e, --entries', 'Search only in data entries')
+  .option('-a, --aliases', 'Search only in aliases')
+  .option('-t, --tree', 'Display results in a hierarchical tree structure')
+  .option('-j, --json', 'Output as JSON (for scripting)')
+  .option('-x, --regex', 'Treat search term as a regular expression')
+  .option('-k, --keys', 'Search keys only (skip value matching)')
+  .option('-v, --values', 'Search values only (skip key matching)')
+  .option('-G, --global', 'Target global data store')
+  .action(async (term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, regex?: boolean, keys?: boolean, values?: boolean, global?: boolean }) => {
+    await withPager(() => handleSearch(term, options));
   });
 
 // Stale entries command
@@ -338,47 +488,48 @@ codexCLI
   .option('-j, --json', 'Output as JSON')
   .option('-G, --global', 'Target global data store')
   .action(async (days: string | undefined, options: { json?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
-    const { loadMeta, loadMetaMerged } = await import('./store');
-    const { getEntriesFlat } = await import('./storage');
-    const { color } = await import('./formatting');
-    const threshold = parseInt(days ?? '30', 10);
-    if (isNaN(threshold) || threshold < 0) {
-      console.error(color.red('Error: days must be a non-negative integer.'));
-      process.exitCode = 1;
-      return;
-    }
     const scope = options.global ? 'global' as const : undefined;
-    const meta = scope ? loadMeta(scope) : loadMetaMerged();
-    const flat = getEntriesFlat(scope);
-    const cutoff = Date.now() - threshold * 86400000;
-    const stale: { key: string; age: number; lastUpdated: number | undefined }[] = [];
-    for (const key of Object.keys(flat)) {
-      const ts = meta[key];
-      if (ts === undefined || ts < cutoff) {
-        stale.push({ key, age: ts ? Math.floor((Date.now() - ts) / 86400000) : -1, lastUpdated: ts });
+    await withCliInstrumentation(
+      { tool: 'codex_stale', scope, params: { days: days ?? '30' } },
+      async () => {
+        const { loadMeta, loadMetaMerged } = await import('./store');
+        const { getEntriesFlat } = await import('./storage');
+        const { color } = await import('./formatting');
+        const threshold = parseInt(days ?? '30', 10);
+        if (isNaN(threshold) || threshold < 0) {
+          console.error(color.red('Error: days must be a non-negative integer.'));
+          process.exitCode = 1;
+          return;
+        }
+        const meta = scope ? loadMeta(scope) : loadMetaMerged();
+        const flat = getEntriesFlat(scope);
+        const cutoff = Date.now() - threshold * 86400000;
+        const stale: { key: string; age: number; lastUpdated: number | undefined }[] = [];
+        for (const key of Object.keys(flat)) {
+          const ts = meta[key];
+          if (ts === undefined || ts < cutoff) {
+            stale.push({ key, age: ts ? Math.floor((Date.now() - ts) / 86400000) : -1, lastUpdated: ts });
+          }
+        }
+        if (options.json) {
+          console.log(JSON.stringify(stale, null, 2));
+          return;
+        }
+        if (stale.length === 0) {
+          console.log(color.green(`No entries older than ${threshold} days.`));
+          return;
+        }
+        // Sort: untracked first (most suspect), then oldest-first
+        stale.sort((a, b) => (a.lastUpdated ?? 0) - (b.lastUpdated ?? 0));
+        console.log(color.bold(`\n${stale.length} entries not updated in ${threshold}+ days:\n`));
+        for (const { key, age } of stale) {
+          const ageStr = age < 0 ? 'untracked' : `${age}d ago`;
+          const ageColor = age < 0 ? color.gray : age > 90 ? color.red : color.yellow;
+          console.log(`  ${color.white(key.padEnd(40))} ${ageColor(ageStr)}`);
+        }
+        console.log('');
       }
-    }
-    if (options.json) {
-      console.log(JSON.stringify(stale, null, 2));
-      return;
-    }
-    if (stale.length === 0) {
-      console.log(color.green(`No entries older than ${threshold} days.`));
-      return;
-    }
-    // Sort: untracked first (most suspect), then oldest-first
-    stale.sort((a, b) => (a.lastUpdated ?? 0) - (b.lastUpdated ?? 0));
-    console.log(color.bold(`\n${stale.length} entries not updated in ${threshold}+ days:\n`));
-    for (const { key, age } of stale) {
-      const ageStr = age < 0 ? 'untracked' : `${age}d ago`;
-      const ageColor = age < 0 ? color.gray : age > 90 ? color.red : color.yellow;
-      console.log(`  ${color.white(key.padEnd(40))} ${ageColor(ageStr)}`);
-    }
-    console.log('');
-    const duration = Date.now() - t0;
-    logToolCall('codex_stale', undefined, 'cli', scope, { duration, hit: stale.length > 0 }, true);
-    logAudit({ src: 'cli', tool: 'codex_stale', op: 'read', scope: scope ?? 'auto', success: true, hit: stale.length > 0, entryCount: stale.length, duration, params: sanitizeParams({ days: days ?? '30' }) }, true);
+    );
   });
 
 // Lint command
@@ -387,10 +538,11 @@ codexCLI
   .description('Check entries against the recommended namespace schema')
   .option('-j, --json', 'Output as JSON')
   .option('-G, --global', 'Target global data store')
-  .action((options: { json?: boolean, global?: boolean }) => {
-    const t0 = Date.now();
-    commands.lintEntries(options);
-    logToolCall('codex_lint', undefined, 'cli', options.global ? 'global' : undefined, { duration: Date.now() - t0 }, true);
+  .action(async (options: { json?: boolean, global?: boolean }) => {
+    await withCliInstrumentation(
+      { tool: 'codex_lint', scope: options.global ? 'global' : undefined, params: {} },
+      () => commands.lintEntries(options)
+    );
   });
 
 // Configuration commands
@@ -404,19 +556,21 @@ const configCommand = codexCLI
 configCommand
   .command('set <key> <value>')
   .description('Set a configuration value')
-  .action((key: string, value: string) => {
-    const t0 = Date.now();
-    commands.configSet(key, value);
-    logToolCall('codex_config_set', key, 'cli', 'global', { duration: Date.now() - t0 }, true);
+  .action(async (key: string, value: string) => {
+    await withCliInstrumentation(
+      { tool: 'codex_config_set', key, scope: 'global', writeValue: value, params: { key, value } },
+      () => commands.configSet(key, value)
+    );
   });
 
 configCommand
   .command('get [key]')
   .description('Get configuration values')
   .action(async (key?: string) => {
-    const t0 = Date.now();
-    await withPager(() => commands.handleConfig(key));
-    logToolCall('codex_config_get', key, 'cli', 'global', { duration: Date.now() - t0 }, true);
+    await withCliInstrumentation(
+      { tool: 'codex_config_get', key, scope: 'global', params: { key } },
+      () => commands.handleConfig(key)
+    );
   });
 
 // Config subcommands: info, examples, completions
@@ -480,9 +634,11 @@ dataCommand
   .option('-G, --global', 'Export from global data store only')
   .option('-P, --project', 'Export from project data store only')
   .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean, global?: boolean, project?: boolean }) => {
-    const t0 = Date.now();
-    await withPager(() => commands.exportData(type, options));
-    logToolCall('codex_export', undefined, 'cli', options.global ? 'global' : options.project ? 'project' : undefined, { duration: Date.now() - t0 }, true);
+    const scope = options.global ? 'global' as const : options.project ? 'project' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_export', scope, params: { type } },
+      () => withPager(() => commands.exportData(type, options))
+    );
   });
 
 dataCommand
@@ -494,9 +650,11 @@ dataCommand
   .option('-G, --global', 'Import into global data store')
   .option('-P, --project', 'Import into project data store')
   .action(async (type: string, file: string, options: { format?: string, merge?: boolean, force?: boolean, preview?: boolean, global?: boolean, project?: boolean }) => {
-    const t0 = Date.now();
-    await commands.importData(type, file, options);
-    logToolCall('codex_import', undefined, 'cli', options.global ? 'global' : options.project ? 'project' : undefined, { duration: Date.now() - t0 }, true);
+    const scope = options.global ? 'global' as const : options.project ? 'project' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_import', scope, params: { type, file } },
+      () => commands.importData(type, file, options)
+    );
   });
 
 dataCommand
@@ -506,9 +664,11 @@ dataCommand
   .option('-G, --global', 'Reset global data store only')
   .option('-P, --project', 'Reset project data store only')
   .action(async (type: string, options: { force?: boolean, global?: boolean, project?: boolean }) => {
-    const t0 = Date.now();
-    await commands.resetData(type, options);
-    logToolCall('codex_reset', undefined, 'cli', options.global ? 'global' : options.project ? 'project' : undefined, { duration: Date.now() - t0 }, true);
+    const scope = options.global ? 'global' as const : options.project ? 'project' as const : undefined;
+    await withCliInstrumentation(
+      { tool: 'codex_reset', scope, params: { type } },
+      () => commands.resetData(type, options)
+    );
   });
 
 dataCommand
@@ -516,19 +676,26 @@ dataCommand
   .description('Create or remove a project-scoped .codexcli.json')
   .option('--remove', 'Remove the project file')
   .action((options: { remove?: boolean }) => {
+    console.error(color.yellow('Deprecation: use `init` instead of `data projectfile`.'));
     commands.handleProjectFile(options);
   });
 
 // Init command: create/remove project-scoped data file
 codexCLI
   .command('init')
-  .description('Create a project-scoped .codexcli.json in the current directory')
+  .description('Initialize project with .codexcli.json, codebase scan, and CLAUDE.md')
   .option('--remove', 'Remove the project file')
-  .option('--scaffold', 'Auto-populate from project files (package.json, go.mod, etc.)')
-  .action((options: { remove?: boolean; scaffold?: boolean }) => {
-    const t0 = Date.now();
-    commands.handleProjectFile(options);
-    logToolCall('codex_init', undefined, 'cli', 'project', { duration: Date.now() - t0 }, true);
+  .option('--scaffold', 'Auto-populate from project files (kept for backward compat)')
+  .option('--no-scan', 'Skip codebase analysis')
+  .option('--no-claude', 'Skip CLAUDE.md generation')
+  .option('--force', 'Overwrite existing CLAUDE.md')
+  .option('--dry-run', 'Preview without writing')
+  .action(async (options: { remove?: boolean; scaffold?: boolean; scan?: boolean; claude?: boolean; force?: boolean; dryRun?: boolean }) => {
+    if (options.scaffold) console.error(color.yellow('Deprecation: --scaffold is now a no-op. Scanning is the default. Use --no-scan to skip.'));
+    await withCliInstrumentation(
+      { tool: 'codex_init', scope: 'project', params: {} },
+      () => commands.handleProjectFile(options)
+    );
   });
 
 // Stats command: telemetry and usage trends

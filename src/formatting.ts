@@ -123,12 +123,16 @@ export function showHelp(): void {
   cmd('set',      's',  '<key> [value]',      'Set an entry (value optional with -a)');
   cmd('get',      'g',  '[key]',              'List keys or retrieve entries (-v for values)');
   cmd('run',      'r',  '<keys...>',          'Execute stored command(s) (: compose, && chain)');
-  cmd('find',     'f',  '<term>',             'Find entries by key or value');
+  cmd('find',     'f',  '<term>',             'Find entries by key or value (also: search)');
   cmd('edit',     'e',  '<key>',              'Open an entry in $EDITOR for editing');
   cmd('copy',     'cp', '<source> <dest>',    'Copy an entry to a new key');
   cmd('rename',   'rn', '<old> <new>',         'Rename an entry key or alias');
   cmd('remove',   'rm', '<key>',              'Remove an entry and its alias');
-  cmd('init',     '',   '',                   'Create project-scoped .codexcli.json');
+  cmd('context',  '',   '[--tier <tier>]',    'Show compact knowledge summary');
+  cmd('info',     '',   '',                   'Show version, stats, and storage paths');
+  cmd('alias',    '',   '<subcommand>',       'Manage key aliases');
+  cmd('confirm',  '',   '<subcommand>',       'Manage run confirmation requirements');
+  cmd('init',     '',   '',                   'Initialize project (.codexcli.json + CLAUDE.md)');
   cmd('stale',    '',   '[days]',             'Show entries not updated in N days');
   cmd('lint',     '',   '',                   'Check entries against namespace schema');
   cmd('stats',    '',   '',                   'View usage telemetry and trends');
@@ -137,6 +141,8 @@ export function showHelp(): void {
   cmd('data',     '',   '<subcommand>',       'Manage stored data (export, import, reset)');
   console.log();
   console.log('SUBCOMMANDS:');
+  console.log(`  ${color.green('alias')}        set <name> <path>, remove <name>, list, rename <old> <new>`);
+  console.log(`  ${color.green('confirm')}      set <key>, remove <key>, list`);
   console.log(`  ${color.green('config')}       set, get, info, examples, completions <bash|zsh|install>`);
   console.log(`  ${color.green('data')}         export <type>, import <type> <file>, reset <type>`);
   console.log();

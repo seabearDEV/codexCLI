@@ -166,9 +166,15 @@ const CLI_TREE: Record<string, CommandDef> = {
   get: getDef, g: getDef,
   run: runDef, r: runDef,
   init: {
-    flags: { '--remove': 'Remove the project file', '--scaffold': 'Auto-populate from project files' },
+    flags: {
+      '--remove': 'Remove the project file',
+      '--no-scan': 'Skip codebase analysis',
+      '--no-claude': 'Skip CLAUDE.md generation',
+      '--force': 'Overwrite existing CLAUDE.md',
+      '--dry-run': 'Preview without writing',
+    },
     argType: null,
-    description: 'Create project-scoped data file',
+    description: 'Initialize project (.codexcli.json + CLAUDE.md)',
   },
   stale: {
     flags: { '--json': 'Output as JSON', '-j': 'Output as JSON', '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] },
@@ -180,11 +186,47 @@ const CLI_TREE: Record<string, CommandDef> = {
     argType: null,
     description: 'Check namespace schema',
   },
-  find: findDef, f: findDef,
+  find: findDef, f: findDef, search: findDef,
   copy: copyDef, cp: copyDef,
   edit: editDef, e: editDef,
   rename: renameDef, rn: renameDef,
   remove: removeDef, rm: removeDef,
+  alias: {
+    flags: {},
+    argType: null,
+    description: 'Manage key aliases',
+    subcommands: {
+      set: { flags: { '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] }, argType: 'dataKey', description: 'Create an alias' },
+      remove: { flags: { '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] }, argType: 'dataKey', description: 'Remove an alias' },
+      list: { flags: { '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] }, argType: null, description: 'List aliases' },
+      rename: { flags: { '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] }, argType: 'dataKey', description: 'Rename an alias' },
+    },
+  },
+  confirm: {
+    flags: {},
+    argType: null,
+    description: 'Manage run confirmations',
+    subcommands: {
+      set: { flags: { '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] }, argType: 'dataKey', description: 'Require confirmation' },
+      remove: { flags: { '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] }, argType: 'dataKey', description: 'Remove confirmation' },
+      list: { flags: { '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'] }, argType: null, description: 'List confirmed keys' },
+    },
+  },
+  context: {
+    flags: {
+      '--tier': 'Context tier (essential, standard, full)', '-t': 'Context tier',
+      '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
+      '--json': 'Output as JSON', '-j': 'Output as JSON',
+      '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
+    },
+    argType: null,
+    description: 'Show project knowledge summary',
+  },
+  info: {
+    flags: {},
+    argType: null,
+    description: 'Show version and stats',
+  },
   config: {
     flags: {},
     argType: null,

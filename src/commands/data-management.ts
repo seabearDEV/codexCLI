@@ -15,6 +15,8 @@ import { findProjectFile, clearProjectFileCache } from '../store';
 import { saveJsonSorted } from '../utils/saveJsonSorted';
 import { getAuditPath } from '../utils/audit';
 import { getTelemetryPath } from '../utils/telemetry';
+import { scanCodebase, ScaffoldEntry } from './scan';
+import { generateClaudeMd } from './claude-md';
 
 function resolveScope(options: { global?: boolean | undefined, project?: boolean | undefined }): Scope | undefined {
   if (options.global) return 'global';
@@ -299,7 +301,16 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
   console.log(color.gray('\nThis is a preview. No data was modified.'));
 }
 
-export function handleProjectFile(options: { remove?: boolean; scaffold?: boolean }): void {
+const PERSISTENCE_VALUE = '.codexcli.json = project knowledge (any agent). CLAUDE.md = Claude behavioral directives. MEMORY.md = personal user preferences. Rule: if another agent would benefit, it belongs in .codexcli.json.';
+
+export function handleProjectFile(options: {
+  remove?: boolean;
+  scaffold?: boolean;
+  scan?: boolean;
+  claude?: boolean;
+  force?: boolean;
+  dryRun?: boolean;
+}): void {
   if (options.remove) {
     const projectFile = findProjectFile();
     if (!projectFile) {
@@ -312,95 +323,72 @@ export function handleProjectFile(options: { remove?: boolean; scaffold?: boolea
     return;
   }
 
-  const target = path.join(process.cwd(), '.codexcli.json');
+  const cwd = process.cwd();
+  const target = path.join(cwd, '.codexcli.json');
   const existed = fs.existsSync(target);
 
+  // Create .codexcli.json if it doesn't exist
   if (!existed) {
-    saveJsonSorted(target, { entries: {}, aliases: {}, confirm: {} });
-    clearProjectFileCache();
+    if (!options.dryRun) {
+      saveJsonSorted(target, { entries: {}, aliases: {}, confirm: {} });
+      clearProjectFileCache();
+    }
     printSuccess(`Created: ${target}`);
   }
 
-  if (options.scaffold) {
-    scaffoldProject();
-  } else if (existed) {
-    printWarning('.codexcli.json already exists in current directory. Use --scaffold to auto-populate from project files.');
-  }
-}
-
-interface ScaffoldEntry {
-  key: string;
-  value: string;
-}
-
-function scaffoldProject(): void {
-  const cwd = process.cwd();
-  const discovered: ScaffoldEntry[] = [];
-
-  // --- Node.js (package.json) ---
-  const pkgPath = path.join(cwd, 'package.json');
-  if (fs.existsSync(pkgPath)) {
-    try {
-      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8')) as Record<string, unknown>;
-      if (typeof pkg.name === 'string') discovered.push({ key: 'project.name', value: pkg.name });
-      if (typeof pkg.description === 'string') discovered.push({ key: 'project.description', value: pkg.description });
-
-      // Stack detection
-      const deps = { ...(pkg.dependencies as Record<string, string> | undefined), ...(pkg.devDependencies as Record<string, string> | undefined) };
-      const stack = ['Node.js'];
-      if ('typescript' in deps) stack.push('TypeScript');
-      if ('react' in deps) stack.push('React');
-      if ('vue' in deps) stack.push('Vue');
-      if ('next' in deps) stack.push('Next.js');
-      if ('express' in deps) stack.push('Express');
-      discovered.push({ key: 'project.stack', value: stack.join(', ') });
-
-      // Scripts → commands
-      const scripts = pkg.scripts as Record<string, string> | undefined;
-      if (scripts) {
-        const scriptMap: Record<string, string> = {
-          build: 'commands.build', test: 'commands.test', lint: 'commands.lint',
-          dev: 'commands.dev', start: 'commands.start', deploy: 'commands.deploy',
-        };
-        for (const [script, cmdKey] of Object.entries(scriptMap)) {
-          if (scripts[script]) discovered.push({ key: cmdKey, value: `npm run ${script}` });
+  // Scan codebase and populate entries (unless --no-scan)
+  const shouldScan = options.scan !== false;
+  if (shouldScan) {
+    if (options.dryRun) {
+      const discovered = scanCodebase(cwd);
+      if (discovered.length > 0) {
+        console.log(color.bold('Would scaffold:'));
+        for (const { key, value } of discovered) {
+          console.log(`  ${key}: ${value}`);
         }
+      } else {
+        printWarning('No project information detected.');
       }
-    } catch { /* ignore parse errors */ }
-  }
-
-  // --- Python (pyproject.toml) ---
-  if (fs.existsSync(path.join(cwd, 'pyproject.toml'))) {
-    discovered.push({ key: 'project.stack', value: 'Python' });
-    if (fs.existsSync(path.join(cwd, 'Makefile'))) {
-      discovered.push({ key: 'commands.build', value: 'make build' });
-      discovered.push({ key: 'commands.test', value: 'make test' });
+    } else {
+      scaffoldProject();
     }
   }
 
-  // --- Go (go.mod) ---
-  const goModPath = path.join(cwd, 'go.mod');
-  if (fs.existsSync(goModPath)) {
-    try {
-      const goMod = fs.readFileSync(goModPath, 'utf8');
-      const moduleLine = /^module\s+(.+)$/m.exec(goMod);
-      if (moduleLine) discovered.push({ key: 'project.name', value: moduleLine[1] });
-    } catch { /* ignore */ }
-    discovered.push({ key: 'project.stack', value: 'Go' });
-    discovered.push({ key: 'commands.build', value: 'go build ./...' });
-    discovered.push({ key: 'commands.test', value: 'go test ./...' });
+  // Seed conventions.persistence (unless --no-scan or it already exists)
+  if (shouldScan && !options.dryRun) {
+    const existing = getValue('conventions.persistence', 'project');
+    if (existing === undefined) {
+      setValue('conventions.persistence', PERSISTENCE_VALUE, 'project');
+      console.log(`  ${color.green('+')} conventions.persistence: ${color.white(PERSISTENCE_VALUE)}`);
+    }
+
+    // Seed context.initialized marker for agents to detect fresh scaffold
+    const initMarker = getValue('context.initialized', 'project');
+    if (initMarker === undefined) {
+      const markerValue = 'scaffold — arch.* and context.* namespaces need deep analysis by an AI agent';
+      setValue('context.initialized', markerValue, 'project');
+      console.log(`  ${color.green('+')} context.initialized: ${color.white(markerValue)}`);
+    }
   }
 
-  // --- Rust (Cargo.toml) ---
-  if (fs.existsSync(path.join(cwd, 'Cargo.toml'))) {
-    discovered.push({ key: 'project.stack', value: 'Rust' });
-    discovered.push({ key: 'commands.build', value: 'cargo build' });
-    discovered.push({ key: 'commands.test', value: 'cargo test' });
+  // Generate CLAUDE.md (unless --no-claude)
+  if (options.claude !== false) {
+    if (options.dryRun) {
+      const content = generateClaudeMd({ cwd, dryRun: true });
+      if (content) {
+        console.log(color.bold('\nWould create CLAUDE.md:'));
+        console.log(content);
+      }
+    } else {
+      generateClaudeMd({ cwd, force: options.force });
+    }
   }
+}
 
+function mergeScaffoldEntries(discovered: ScaffoldEntry[]): number {
   if (discovered.length === 0) {
-    printWarning('No recognized project files found (package.json, pyproject.toml, go.mod, Cargo.toml).');
-    return;
+    printWarning('No project information detected.');
+    return 0;
   }
 
   // Deduplicate by key (first wins — e.g., package.json name over go.mod module)
@@ -424,6 +412,13 @@ function scaffoldProject(): void {
   if (count === 0) {
     console.log(color.gray('  All discovered entries already exist. Nothing to add.'));
   } else {
-    printSuccess(`Scaffolded ${count} entries from project files.`);
+    printSuccess(`Scaffolded ${count} entries.`);
   }
+
+  return count;
+}
+
+function scaffoldProject(): void {
+  const discovered = scanCodebase(process.cwd());
+  mergeScaffoldEntries(discovered);
 }

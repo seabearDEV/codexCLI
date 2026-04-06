@@ -69,6 +69,8 @@ export function classifyOp(tool: string): TelemetryEntry['op'] {
     case 'codex_alias_set':
     case 'codex_alias_remove':
     case 'codex_config_set':
+    case 'codex_confirm_set':
+    case 'codex_confirm_remove':
       return 'write';
     case 'codex_run':
       return 'exec';
@@ -80,6 +82,7 @@ export function classifyOp(tool: string): TelemetryEntry['op'] {
     case 'codex_config_get':
     case 'codex_stale':
     case 'codex_lint':
+    case 'codex_confirm_list':
       return 'read';
     case 'codex_init':
       return 'write';

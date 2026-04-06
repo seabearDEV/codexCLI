@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.8.0] - 2026-04-06
+
+### Added
+
+- **`alias` subcommand group** — `alias set <name> <path>`, `alias remove <name>`, `alias list`, `alias rename <old> <new>`. Dedicated alias management replacing scattered `-a` flags.
+- **`confirm` subcommand group** — `confirm set <key>`, `confirm remove <key>`, `confirm list`. Dedicated confirmation management replacing `set --confirm/--no-confirm`.
+- **`context` command** — CLI equivalent of MCP `codex_context` with `--tier` filtering (essential, standard, full), `--json`, `--raw`.
+- **`info` top-level command** — promoted from `config info`. Shows version, entry counts, storage paths.
+- **`search` hidden alias** — `ccli search` works as an alias for `ccli find`, matching MCP `codex_search` naming.
+- **Enhanced `ccli init`** — codebase scanner with 6 composable detectors (project, commands, files, deps, conventions, context) and ~50-entry known-deps lookup table. Generates `CLAUDE.md` with AI agent behavioral directives. Seeds `conventions.persistence` (three-file balance rule) and `context.initialized` (agent-driven analysis marker). Flags: `--no-scan`, `--no-claude`, `--force`, `--dry-run`.
+- **Agent-driven first-session analysis** — LLM instructions and CLAUDE.md template include FIRST SESSION guidance. Agents detect fresh scaffold via `context.initialized` marker and automatically perform deep codebase analysis (populate `arch.*`, `context.*`, enriched `files.*`).
+- **Centralized CLI instrumentation** — `withCliInstrumentation()` wrapper in `src/utils/instrumentation.ts`. All 22 CLI commands now have full telemetry + audit logging with parity to the MCP server wrapper.
+- **Shared instrumentation helpers** — `SKIP_AUDIT`, `BULK_OPS`, `captureValue` extracted from MCP server and shared between CLI and MCP wrappers.
+- **Knowledge Flywheel** section in README — explains how the knowledge base compounds across sessions and agents.
+- **68 new tests** — `scan.test.ts` (44), `claude-md.test.ts` (11), `init.test.ts` (13), `context.test.ts` (6), `cli-restructure.test.ts` (19).
+
+### Changed
+
+- **CLI audit parity** — previously untracked commands now fully instrumented: `run`, `edit`, `alias list`, `alias rename`, `confirm set/remove/list`, `context`, `lint`, `config set/get`, `export`, `import`, `reset`, `init`.
+- **`scaffoldProject()` refactored** — inline manifest parsing replaced with `scanCodebase()` from `src/commands/scan.ts`.
+- **`filterEntriesByTier` extracted** — moved from `mcp-server.ts` to `src/commands/context.ts`, shared between MCP and CLI.
+- **Help text updated** — new commands, subcommands, updated `find` description, completions table.
+- **`init` description updated** — from "Create project-scoped .codexcli.json" to "Initialize project (.codexcli.json + CLAUDE.md)".
+
+### Deprecated
+
+- `get -a` — use `alias list` instead (prints notice, still works)
+- `remove -a` — use `alias remove` instead
+- `rename -a` — use `alias rename` instead
+- `init --scaffold` — scanning is now the default (use `--no-scan` to skip)
+- `data projectfile` — use `init` instead
+
+## [1.7.0] - 2026-04-06
+
+### Added
+
+- **Staleness awareness in context/get** — `codex_context` and `codex_get` append `[untracked]` / `[Nd]` age tags to stale entries. CLI `get` prints yellow warning for stale entries.
+- **Exploration-weighted token savings** — `codex_stats` estimates tokens saved per namespace using weighted exploration cost multipliers. Bootstrap estimation based on response size and entry count. Per-namespace breakdown in `--detailed` output.
+- **`EXPLORATION_COST` map** — exported from telemetry.ts for transparency. Documents estimated exploration cost per namespace (files: 2000, arch: 3000, commands: 1000, etc.).
+- **Comprehensive test suite expansion** — 633 → 1048 tests across 46 files. Includes concurrency stress tests, MCP integration with real I/O, property-based fuzz tests, store/storage layer tests, telemetry boundary cases.
+
 ## [1.6.0] - 2026-04-06
 
 ### Added

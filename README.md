@@ -17,6 +17,8 @@ A command-line knowledge base with built-in AI agent integration via MCP.
   - [Renaming](#renaming)
   - [Editing Data](#editing-data)
   - [Removing Data](#removing-data)
+  - [Context (Knowledge Summary)](#context-knowledge-summary)
+  - [Run Confirmation](#run-confirmation)
   - [Interpolation](#interpolation)
     - [Conditional Interpolation](#conditional-interpolation)
     - [Exec Interpolation](#exec-interpolation)
@@ -54,7 +56,7 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **JSON Output**: Machine-readable `--json` flag on `get` and `find` for scripting
 - **Stdin Piping**: Pipe values into `set` from other commands
 - **Project-Scoped Data**: Opt-in `.codexcli.json` per project — project entries take precedence, fall through to global
-- **Init Scaffolding**: `ccli init --scaffold` auto-populates from `package.json`, `go.mod`, `Cargo.toml`, or `pyproject.toml`
+- **Smart Init**: `ccli init` scans your codebase, populates `.codexcli.json` with project/commands/files/deps/conventions/context entries, generates `CLAUDE.md`, and seeds the three-file knowledge convention
 - **Auto-Backup**: Automatic timestamped backups with configurable rotation (`max_backups` setting)
 - **File Locking**: Advisory locking prevents data corruption from concurrent access
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
@@ -294,24 +296,27 @@ ccli find "10.0" --values
 
 ### Aliases
 
-Aliases are shortcuts to frequently used key paths. They're managed through the `set`, `get`, and `remove` commands:
+Aliases are shortcuts to frequently used key paths. Managed via the `alias` subcommand:
 
 ```bash
-# Create an entry with an alias
-ccli set server.production.ip 192.168.1.100 -a ip
+# Create an alias
+ccli alias set ip server.production.ip
 
-# Add/change an alias on an existing entry (no value needed)
-ccli set server.production.ip -a sip
+# List all aliases
+ccli alias list
+
+# Remove an alias
+ccli alias remove ip
+
+# Rename an alias
+ccli alias rename ip sip
 
 # Use an alias anywhere you'd use a key
 ccli get ip
 ccli run ip
 
-# List all aliases
-ccli get -a
-
-# Remove an alias only (keep the entry)
-ccli remove ip -a
+# Create an alias inline when setting an entry
+ccli set server.production.ip 192.168.1.100 -a ip
 
 # Remove an entry and its alias
 ccli remove server.production.ip
@@ -490,7 +495,7 @@ ccli config set theme dark
 ccli config set colors false
 
 # Show version, stats, and storage paths
-ccli config info
+ccli info
 
 # Show usage examples
 ccli config examples
@@ -509,11 +514,17 @@ Available settings:
 CodexCLI supports per-project data files that live alongside your code. The `.codexcli.json` file is designed to be committed to version control, creating a shared knowledge base that persists across sessions, team members, and AI agents.
 
 ```bash
-# Initialize a project data file in the current directory
+# Initialize a project — scans codebase, creates .codexcli.json and CLAUDE.md
 ccli init
 
-# Initialize and auto-populate from project files (package.json, go.mod, etc.)
-ccli init --scaffold
+# Preview what init would create
+ccli init --dry-run
+
+# Init without CLAUDE.md generation
+ccli init --no-claude
+
+# Init without codebase scan (empty .codexcli.json)
+ccli init --no-scan
 
 # Store project knowledge
 ccli set commands.build "npm run build"
@@ -575,6 +586,24 @@ When an AI agent connects via MCP, the recommended workflow is:
 
 Agent usage is tracked automatically — run `ccli stats` to see bootstrap rate, write-back rate, and namespace coverage trends.
 
+#### The Knowledge Flywheel
+
+Every AI session has the same problem: the agent starts from zero, spends thousands of tokens exploring the codebase, and all that understanding vanishes when the session ends. CodexCLI turns that into a compounding asset.
+
+Here's how it works in practice:
+
+1. **You run `ccli init`** in a new project. The CLI scans the codebase in milliseconds and creates a skeleton `.codexcli.json` with project metadata, commands, file paths, dependencies, and conventions it can detect from the filesystem.
+
+2. **First AI session begins.** The agent calls `codex_context`, sees the skeleton, and recognizes it's a fresh project (`context.initialized: scaffold`). Before starting your task, it reads the actual source code — entry points, core modules, config files — and populates the deep knowledge: architecture decisions in `arch.*`, non-obvious gotchas in `context.*`, and rich file descriptions in `files.*`. This deep analysis runs once.
+
+3. **Every session after that** — whether it's Claude, Copilot, Cursor, ChatGPT, or any other MCP-compatible agent — bootstraps the full knowledge base in a single `codex_context` call. No re-exploration. No wasted tokens.
+
+4. **The flywheel accelerates.** Agent A discovers a database migration gotcha on Monday and stores it in `context.migration`. Agent B (different tool, different session) hits the same area on Tuesday and benefits immediately — it already knows about the gotcha. Agent B discovers an API pattern and stores it in `arch.api`. Agent C benefits on Wednesday.
+
+The knowledge base grows with every session. The token cost per session drops. `ccli stats` shows you the trend: bootstrap rate, hit rate, estimated tokens saved, per-namespace coverage. The more you use it, the more efficient every agent becomes.
+
+Because the knowledge lives in `.codexcli.json` (a plain JSON file committed to your repo), it works across machines, across team members, and across AI tools. No vendor lock-in, no cloud dependency, no API keys. Just a file that gets smarter over time.
+
 ### Data Management
 
 All data (entries, aliases, confirm metadata) is stored in a single `data.json` file — `~/.codexcli/data.json` for global data, `.codexcli.json` for project-scoped data.
@@ -615,6 +644,45 @@ ccli data reset all -f
 ```
 
 > **Auto-backup:** Before destructive operations (`data reset`, non-merge `data import`), CodexCLI automatically creates a timestamped backup in `~/.codexcli/.backups/`. The last 10 backups are kept by default — configure with `ccli config set max_backups <n>` (set to `0` to disable rotation).
+
+### Context (Knowledge Summary)
+
+Get a compact summary of stored project knowledge — the same view AI agents get via `codex_context`:
+
+```bash
+# Show project knowledge (standard tier — excludes arch.*)
+ccli context
+
+# Show only essential entries (project/commands/conventions)
+ccli context --tier essential
+
+# Show everything
+ccli context --tier full
+
+# Output as JSON
+ccli context --json
+
+# Plain text without colors
+ccli context --raw
+```
+
+### Run Confirmation
+
+Mark commands that should prompt before executing:
+
+```bash
+# Require confirmation before running
+ccli confirm set commands.deploy
+
+# List keys requiring confirmation
+ccli confirm list
+
+# Remove confirmation requirement
+ccli confirm remove commands.deploy
+
+# Skip confirmation at run time with -y
+ccli run commands.deploy -y
+```
 
 ### Staleness Detection
 
@@ -714,11 +782,13 @@ eval "$(ccli config completions bash)"
 
 | Context | Completions |
 |---|---|
-| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `init`, `stats`, `config`, `data`) |
+| `ccli <TAB>` | All commands (`set`, `get`, `run`, `find`, `edit`, `copy`, `remove`, `rename`, `alias`, `confirm`, `context`, `info`, `init`, `stale`, `lint`, `stats`, `audit`, `config`, `data`) |
 | `ccli get <TAB>` | Flags + stored data keys + aliases + namespace prefixes |
 | `ccli run <TAB>` | Flags + stored data keys + aliases |
 | `ccli run cd:<TAB>` | Data keys + aliases (completes the segment after `:`) |
 | `ccli set <TAB>` | Flags + namespace prefixes (one level at a time) |
+| `ccli alias <TAB>` | Subcommands (`set`, `remove`, `list`, `rename`) |
+| `ccli confirm <TAB>` | Subcommands (`set`, `remove`, `list`) |
 | `ccli config <TAB>` | Subcommands (`set`, `get`, `info`, `examples`, `completions`) |
 | `ccli config set <TAB>` | Config keys (`colors`, `theme`, `max_backups`) |
 | `ccli data <TAB>` | Subcommands (`export`, `import`, `reset`) |
@@ -753,18 +823,26 @@ ccli --debug get server.production
 | `set` | `s` | `<key> [value]` | Set an entry (value optional with `-a`; supports `key=val` batch) |
 | `get` | `g` | `[key]` | List keys (default) or retrieve entries with `-v` |
 | `run` | `r` | `<keys...>` | Execute stored command(s) (`:` compose, `&&` chain) |
-| `find` | `f` | `<term>` | Find entries by key or value |
+| `find` | `f` | `<term>` | Find entries by key or value (also: `search`) |
 | `edit` | `e` | `<key>` | Open an entry's value in `$EDITOR` |
 | `copy` | `cp` | `<source> <dest>` | Copy an entry to a new key |
 | `remove` | `rm` | `<key>` | Remove an entry and its alias |
 | `rename` | `rn` | `<old> <new>` | Rename an entry key or alias |
-| `config` | | `<subcommand>` | View or change configuration settings |
-| `init` | | | Create project-scoped `.codexcli.json` (`--scaffold` to auto-populate) |
-| `stats` | | | View MCP usage telemetry and trends (`--period`, `--detailed`, `--json`) |
-| `audit` | | `[key]` | Query audit log with before/after diffs (`--detailed`, `--cli`, `--mcp`, `--hits`, `--misses`, `--redundant`) |
+| `context` | | `[--tier <tier>]` | Show compact knowledge summary (essential, standard, full) |
+| `info` | | | Show version, stats, and storage paths |
+| `alias` | | `<subcommand>` | Manage key aliases (set, remove, list, rename) |
+| `confirm` | | `<subcommand>` | Manage run confirmation (set, remove, list) |
+| `init` | | | Initialize project (`.codexcli.json` + codebase scan + `CLAUDE.md`) |
 | `stale` | | `[days]` | Show entries not updated in N days (default 30) |
 | `lint` | | | Check entries against namespace schema (`--json`) |
+| `stats` | | | View MCP usage telemetry and trends (`--period`, `--detailed`, `--json`) |
+| `audit` | | `[key]` | Query audit log with before/after diffs (`--detailed`, `--cli`, `--mcp`, `--hits`, `--misses`, `--redundant`) |
+| `config` | | `<subcommand>` | View or change configuration settings |
 | `data` | | `<subcommand>` | Manage stored data (export, import, reset) |
+
+**Alias subcommands:** `set <name> <path>`, `remove <name>`, `list`, `rename <old> <new>`
+
+**Confirm subcommands:** `set <key>`, `remove <key>`, `list`
 
 **Config subcommands:** `set <key> <value>`, `get [key]`, `info`, `examples`, `completions <bash\|zsh\|install>`
 

@@ -75,15 +75,20 @@ CodexCLI is a structured, persistent knowledge base for software projects — ac
 - [x] LLM instructions expanded: all 19 MCP tools documented in 6 groups, FRESHNESS guidance added
 - [x] `codex_stale` sorts untracked entries first, uses consistent "untracked" wording across CLI and MCP
 
----
+### v1.7.x
+- [x] Staleness awareness: `codex_context` and `codex_get` surface `[untracked]` / `[Nd]` tags
+- [x] Exploration-weighted token savings in `codex_stats`
+- [x] Comprehensive test suite overhaul (633 → 1048 tests): concurrency, MCP integration with real I/O, property-based fuzz tests
 
-## Next
-
-### Stored Command Chains / Macros
-Store reusable sequences of key references that `run` resolves and executes as a chain.
-
-- [ ] Syntax for key references in stored values (e.g., space-separated keys or a dedicated marker) ([#16](https://github.com/seabearDEV/codexCLI/issues/16))
-- [ ] Recursion depth limits and interaction with `--dry`, `--confirm`, interpolation
+### v1.8.x (CLI Restructure)
+- [x] `alias` subcommand group: `alias set/remove/list/rename` (dedicated alias management)
+- [x] `confirm` subcommand group: `confirm set/remove/list` (dedicated confirmation management)
+- [x] `context` command: CLI equivalent of MCP `codex_context` with `--tier` filtering
+- [x] `info` promoted to top-level command (was `config info`)
+- [x] `search` as hidden alias for `find` (MCP naming parity)
+- [x] Enhanced `ccli init`: codebase scan (files/deps/conventions/context detection), `CLAUDE.md` generation, `conventions.persistence` seeding, `--dry-run`/`--no-scan`/`--no-claude`/`--force` flags
+- [x] Deprecation notices on old `-a` flag patterns (still functional, with migration guidance)
+- [x] Stored command chains: `run --chain` resolves stored value as space-separated key references ([#16](https://github.com/seabearDEV/codexCLI/issues/16))
 
 ---
 

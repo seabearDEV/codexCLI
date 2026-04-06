@@ -85,29 +85,12 @@ const server = new McpServer(
 
 // Wrap server.tool to auto-log telemetry and audit for every tool call
 const _origTool = server.tool.bind(server);
-const SKIP_AUDIT = new Set(['codex_stats', 'codex_audit']);
-const BULK_OPS = new Set(['codex_import', 'codex_reset']);
+import { SKIP_AUDIT, BULK_OPS, captureValue } from "./utils/instrumentation";
 
 function extractKey(name: string, params: Record<string, unknown>): string | undefined {
   if (name === 'codex_copy') return (params.dest ?? params.source) as string | undefined;
   if (name === 'codex_alias_set') return params.alias as string | undefined;
   return (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
-}
-
-function captureValue(name: string, key: string | undefined, scope: Scope): string | undefined {
-  if (!key || BULK_OPS.has(name)) return undefined;
-  try {
-    // Alias operations: capture the alias target by alias name
-    if (name === 'codex_alias_set' || name === 'codex_alias_remove') {
-      const aliases = loadAliases(scope);
-      return aliases[key];
-    }
-    // Resolve alias before store lookup so audit reflects the actual mutated entry
-    const resolvedKey = resolveKey(key, scope);
-    const val = getValue(resolvedKey, scope);
-    if (val === undefined) return undefined;
-    return sanitizeValue(typeof val === 'object' ? JSON.stringify(val) : String(val));
-  } catch { return undefined; }
 }
 
 // --- Token-efficiency metric helpers ---
@@ -1180,24 +1163,7 @@ server.tool(
 
 // --- codex_context ---
 
-const ESSENTIAL_PREFIXES = ['project.', 'commands.', 'conventions.'];
-const STANDARD_EXCLUDE_PREFIXES = ['arch.'];
-
-function filterEntriesByTier(
-  flat: Record<string, string>,
-  tier: 'essential' | 'standard' | 'full'
-): Record<string, string> {
-  if (tier === 'full') return flat;
-  if (tier === 'essential') {
-    return Object.fromEntries(
-      Object.entries(flat).filter(([k]) => ESSENTIAL_PREFIXES.some(p => k.startsWith(p)))
-    );
-  }
-  // standard: exclude arch.*
-  return Object.fromEntries(
-    Object.entries(flat).filter(([k]) => !STANDARD_EXCLUDE_PREFIXES.some(p => k.startsWith(p)))
-  );
-}
+import { filterEntriesByTier } from "./commands/context";
 
 server.tool(
   "codex_context",
