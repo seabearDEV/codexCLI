@@ -181,10 +181,10 @@ export async function withCliInstrumentation<T>(
       responseSize,
       project: projectFile ? path.dirname(projectFile) : undefined,
     };
-    logToolCall(ctx.tool, ctx.key, 'cli', resolvedScope, telemetryExtras, true);
+    void logToolCall(ctx.tool, ctx.key, 'cli', resolvedScope, telemetryExtras, true);
 
     // Audit
-    logAudit({
+    void logAudit({
       src: 'cli',
       tool: ctx.tool,
       op,
@@ -205,5 +205,5 @@ export async function withCliInstrumentation<T>(
     }, true);
   }
 
-  return result as T;
+  return result;
 }

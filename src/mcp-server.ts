@@ -128,7 +128,7 @@ function determineHit(result: unknown, success: boolean): boolean {
 /** Try to extract entry count from response text */
 function extractEntryCount(text: string): number | undefined {
   // codex_context footer: "(N entries)"
-  const tierMatch = text.match(/\((\d+) entries?\)/);
+  const tierMatch = /\((\d+) entries?\)/.exec(text);
   if (tierMatch) return parseInt(tierMatch[1], 10);
   // Count non-empty content lines (rough approximation for listings)
   const lines = text.split('\n').filter(l => l.trim() && !l.startsWith('[tier:') && !l.startsWith('Aliases:'));
@@ -1516,7 +1516,7 @@ server.tool(
 // --- Flush miss-path windows on shutdown ---
 process.on('beforeExit', () => {
   for (const mp of missTracker.flushAll()) {
-    appendMissPath(mp, true); // sync write for shutdown
+    void appendMissPath(mp, true); // sync write for shutdown — promise resolves immediately
   }
 });
 

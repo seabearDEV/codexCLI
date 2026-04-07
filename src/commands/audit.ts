@@ -146,7 +146,7 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
 
   // Trailing newline if last entry didn't already add one via diff/metrics
   const last = entries[entries.length - 1];
-  const lastHasDetail = last.before !== undefined || last.after !== undefined || last.error || (options.detailed && metricsLine(last));
+  const lastHasDetail = last.before !== undefined || last.after !== undefined || Boolean(last.error) || Boolean(options.detailed && metricsLine(last));
   if (!lastHasDetail) {
     console.log('');
   }
