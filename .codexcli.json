@@ -2,12 +2,13 @@
   "_meta": {
     "arch.audit": 1775497218448,
     "arch.binary": 1775347252160,
-    "arch.cli": 1775508048133,
-    "arch.interpolation": 1775524859092,
+    "arch.cli": 1775530717052,
+    "arch.interpolation": 1775530712709,
     "arch.lint": 1775347259273,
     "arch.llmInstructions": 1775358827605,
     "arch.mcp": 1775497222452,
     "arch.missPathTracking": 1775518365836,
+    "arch.projectResolution": 1775530704879,
     "arch.scaffold": 1775508051571,
     "arch.scope": 1775347247705,
     "arch.staleness": 1775347257904,
@@ -26,9 +27,9 @@
     "context.confirmFlow": 1775493255368,
     "context.devWorkflow": 1775358827618,
     "context.execInterpolation": 1775362844353,
-    "context.interpolationEscape": 1775524681994,
-    "context.mcpCwd": 1775520187554,
+    "context.mcpCwd": 1775530709022,
     "context.migration": 1775347272043,
+    "context.shortFlagAudit": 1775530720179,
     "context.testDataLeaks": 1775360216518,
     "conventions.atomicWrites": 1775347269392,
     "conventions.commits": 1775526068051,
@@ -100,9 +101,9 @@
       "store": "ScopedStore with mtime caching, auto-migration from old format, atomic writes (tmp file + rename with file locking).",
       "scope": "Three scopes: project, global, auto. Auto uses project if .codexcli.json exists. Single-key lookups fall through project -> global.",
       "mcp": "19 tools via @modelcontextprotocol/sdk. All tools accept optional scope param. Telemetry + audit auto-logged per call.",
-      "cli": "Commander.js CLI. Core CRUD: set/s, get/g, run/r, find/f, edit/e, copy/cp, rename/rn, remove/rm. Subcommand groups: alias (set/remove/list/rename), confirm (set/remove/list), config, data. Top-level: context, info, stale, lint, stats, audit. Hidden: search (alias for find). Deprecated: -a flags on set/get/remove/rename (use alias subcommand instead).",
+      "cli": "Commander.js CLI. Core CRUD: set/s, get/g, run/r, find/f, edit/e, copy/cp, rename/rn, remove/rm. Subcommand groups: alias (set/remove/list/rename), confirm (set/remove/list), config, data. Top-level: context, info, stale, lint, stats, audit. Hidden: search (alias for find). Deprecated (still functional, hidden): -a flags on set/get/remove/rename (use alias subcommand instead); --raw on get and context (renamed to --plain in v1.9.1).",
       "binary": "Production: ccli (Node.js SEA binary). Dev: cclid (npm-linked). getBinaryName() auto-detects — never hardcode.",
-      "interpolation": "Supports value refs (dollar-brace syntax), exec refs (dollar-paren syntax), fallback defaults (:-), and required checks (:?). Backslash-escape emits literals (backslash consumed on output). Recursive with circular-ref detection. --source flag skips interpolation on get; --raw only strips colors.",
+      "interpolation": "Supports value refs (dollar-brace syntax), exec refs (dollar-paren syntax), fallback defaults (:-), and required checks (:?). Backslash-escape emits literals (backslash consumed on output). Recursive with circular-ref detection. --source flag skips interpolation on get; --plain only strips colors (--raw is a deprecated alias for --plain).",
       "telemetry": "JSONL append at ~/.codexcli/telemetry.jsonl. Tracks tool, session, op type, namespace, source (mcp/cli), scope, agent (CODEX_AGENT_NAME). Enriched with duration, hit/miss, redundant, responseSize. codex_stats computes: delivery floor (bytes/4), exploration estimate (namespace-weighted multipliers for tool calls avoided), redundant write savings, per-namespace breakdown, trending metrics, and per-agent breakdowns. EXPLORATION_COST map exported from telemetry.ts for transparency.",
       "staleness": "_meta timestamps per key, auto-updated on write. ccli stale / codex_stale surfaces old entries. codex_context shows age tags >30d.",
       "lint": "Validates entries against recommended namespace schema. Custom namespaces via _schema.namespaces in .codexcli.json.",
@@ -110,7 +111,8 @@
       "scaffold": "ccli init scans codebase via scanCodebase() in src/commands/scan.ts — 6 composable detectors (detectProject, detectCommands, detectFiles, detectDeps, detectConventions, detectContext). Generates CLAUDE.md via src/commands/claude-md.ts. Seeds conventions.persistence entry for three-file balance. Flags: --no-scan, --no-claude, --force, --dry-run. Idempotent — skips existing keys.",
       "audit": "JSONL at ~/.codexcli/audit.jsonl. Captures before/after values, success/fail, scope, agent identity, enriched metrics (duration, responseSize, hit/miss, redundant, entryCount). CLI reads (get, search, stale) also logged. codex_audit (MCP) + ccli audit (CLI) to query with --detailed. Encrypted values masked, passwords redacted. CLI uses sync writes to guarantee log durability on process exit.",
       "tokenSavings": "Observed miss-path costing replaces static EXPLORATION_COST multipliers. Three layers: (1) miss-path windows track exploration cost when codex_get misses, (2) calibrated cost map uses median of observed miss-paths per namespace with static fallback when <5 samples, (3) net savings = gross exploration avoided − delivery cost (responseSize of all read hits). MissPath struct: { ts, session, namespace, key, toolCalls, explorationBytes, resolution }. Resolution types: writeback (clean), moved_on, timeout. Bootstrap savings use entry-count proxy with calibrated per-namespace costs.",
-      "missPathTracking": "MissWindowTracker in telemetry.ts: pure state machine tracking exploration cost when codex_get misses. Opens window on hit:false, closes on writeback (codex_set to same ns), moved_on (any hit), or timeout (5min). Persists to miss-paths.jsonl. MCP server wires tracker in wrapper finally block + flushes on beforeExit. getExplorationCost() returns observed median (>=5 writeback samples) or falls back to static EXPLORATION_COST map. computeStats() reports: deliveryCostTokens (bytes served / 4), netTokensSaved (gross - delivery), calibration map (observed vs static per namespace)."
+      "missPathTracking": "MissWindowTracker in telemetry.ts: pure state machine tracking exploration cost when codex_get misses. Opens window on hit:false, closes on writeback (codex_set to same ns), moved_on (any hit), or timeout (5min). Persists to miss-paths.jsonl. MCP server wires tracker in wrapper finally block + flushes on beforeExit. getExplorationCost() returns observed median (>=5 writeback samples) or falls back to static EXPLORATION_COST map. computeStats() reports: deliveryCostTokens (bytes served / 4), netTokensSaved (gross - delivery), calibration map (observed vs static per namespace).",
+      "projectResolution": "findProjectFile() resolution order (src/utils/paths.ts): 1) CODEX_NO_PROJECT env → disabled, 2) CODEX_PROJECT env → explicit .codexcli.json file or containing dir; fails closed if missing (no cwd fallback), 3) setProjectRootOverride() programmatic override (set by MCP server from client roots and from CODEX_PROJECT_DIR/--cwd launcher hints), 4) walk up from process.cwd(). MCP server captures roots via listRoots() after connect; falls back silently if client doesn't support roots. Result is cached; clearProjectFileCache() resets."
     },
     "conventions": {
       "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",
@@ -124,13 +126,13 @@
     "context": {
       "migration": "Auto-migrates old 3-file format to unified data.json on first access. Old files renamed to .backup.",
       "configSeparate": "config.json is separate from data.json — user preferences, not project data",
-      "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to set cwd before project file discovery. Without it, findProjectFile() walks up from inherited cwd (usually correct when Claude Code spawns). logAudit and logToolCall both self-resolve project via findProjectFile() — callers don't need to pass it.",
+      "mcpCwd": "MCP server resolves the project file via arch.projectResolution (CODEX_PROJECT env → MCP client roots → cwd walk-up). Old CODEX_PROJECT_DIR and --cwd launcher hints still work but now apply via setProjectRootOverride, not process.chdir, and work whether the server is run as a binary or imported. Pin deterministically by setting \"env\": { \"CODEX_PROJECT\": \"<repo path>\" } in the codexcli MCP block of .claude.json.",
       "testDataLeaks": "CODEX_DATA_DIR redirects global store + audit/telemetry logs to temp dir during tests. Project store (.codexcli.json) can still get test entries if it exists in cwd — always clean before committing.",
       "devWorkflow": "Use cclid (dev) / cclid-mcp (MCP dev) for local testing — never ccli in dev. Release: git tag triggers CI.",
       "aliasCollision": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation.",
       "execInterpolation": "Shell $(...) collides with codexCLI's exec interpolation syntax $(key). In stored commands, use backticks instead: `cmd` not $(cmd).",
       "confirmFlow": "MCP codex_run uses two-step confirmation for --confirm entries: step 1 returns command preview + one-time confirm_token, step 2 passes token back to execute. Token is single-use, key-scoped, 5min TTL. force:true and dry:true bypass confirm (CLI fallback).",
-      "interpolationEscape": "No escape mechanism for literal dollar-brace or dollar-paren in stored values. Interpolation runs unconditionally on get (unless --source). Workaround: describe syntax in prose instead of using literal examples. Revisit: consider backslash-escape support or a per-entry interpolation-off flag."
+      "shortFlagAudit": "Short-flag space is inconsistent across commands and needs a holistic audit in an upcoming release. Symptom that triggered this: --plain shipped without a short flag in v1.9.1 because -p was already taken by --preview elsewhere, and -P felt awkward as a one-off. Don't add new short flags piecemeal — wait for the audit so the whole namespace gets reorganized at once."
     },
     "files": {
       "entry": "src/index.ts — CLI entry point, Commander.js setup, all command registration, CLI-side audit logging",
