@@ -4,153 +4,74 @@
 
 CodexCLI is a structured, persistent knowledge base for software projects — accessible to both humans via CLI and AI agents via MCP. The goal is to make AI agents more efficient by giving them a way to learn, record, and share project knowledge across sessions.
 
-## Completed
-
-### Core CLI (v0.1.0 — v0.5.x)
-- [x] Hierarchical data storage with dot notation
-- [x] Command runner with composition (`:`) and chaining (`&&`)
-- [x] Variable interpolation (`${key}`) and exec interpolation (`$(key)`)
-- [x] Aliases, encryption, search, tree visualization
-- [x] Clipboard integration, inline editing (`$EDITOR`)
-- [x] JSON output, stdin piping, batch set
-- [x] Advisory file locking, atomic writes, auto-backup
-- [x] Shell tab-completion (Bash, Zsh) with dynamic key completion
-- [x] Shell wrapper for `cd`/`export` in current shell
-- [x] Per-entry confirmation (`--confirm` / `--no-confirm`)
-- [x] MCP server with 19 tools for AI agent integration
-- [x] LLM instructions (built-in defaults, user-overridable via `system.llm.instructions`)
-- [x] Depth-limited browsing (`--depth` / `-k`)
-- [x] Keys-only default output with `--values` flag
-
-### Unified Store & Project Scope (v0.6.0 — v0.7.0)
-- [x] Consolidated `entries.json` + `aliases.json` + `confirm.json` into single `data.json`
-- [x] Auto-migration from old 3-file format
-- [x] Project-scoped `.codexcli.json` files (`ccli init`)
-- [x] Scope resolution: project → global fallthrough for reads
-- [x] `--global` / `-G` flag on all data commands
-- [x] `--all` / `-A` flag on `get` for both scopes with section headers
-- [x] `--project` / `-P` flag on data management commands
-- [x] MCP `scope` parameter on all data-touching tools
-- [x] `mcp-server --cwd` flag for project root detection
-
-### GenAI Knowledge Base (v0.8.0)
-- [x] `codex_context` MCP tool for one-call session bootstrap
-- [x] `CODEX_PROJECT_DIR` environment variable
-- [x] Recommended schema (project/commands/arch/conventions/context/files/deps)
-- [x] LLM instructions rewritten for active learning workflow
-- [x] `.codexcli.json` committed to version control (not gitignored)
-- [x] Living example: CodexCLI's own `.codexcli.json` populated with real project data
-
-### Performance & Fixes (v0.8.1)
-- [x] Performance audit: cached `isColorEnabled`, batched file writes, single-stat loads, deferred alias maps
-- [x] `codex_rename` MCP tool (entry + alias rename with alias re-pointing and confirm migration)
-- [x] Fixed DEBUG check inconsistency across modules
-- [x] Removed dead code (~100 lines), deduplicated CLI_TREE shortcuts
-
-### v0.9.x
-- [x] Conditional interpolation: `${key:-default}` and `${key:?error}` ([#14](https://github.com/seabearDEV/codexCLI/issues/14), [PR #31](https://github.com/seabearDEV/codexCLI/pull/31))
-- [x] MCP telemetry: usage tracking, `codex_stats` tool, `ccli stats` command ([PR #32](https://github.com/seabearDEV/codexCLI/pull/32))
-- [x] Configurable backup rotation: `max_backups` config setting ([#10](https://github.com/seabearDEV/codexCLI/issues/10), [PR #33](https://github.com/seabearDEV/codexCLI/pull/33))
-- [x] Init scaffolding: `ccli init --scaffold` for Node.js, Go, Python, Rust ([PR #33](https://github.com/seabearDEV/codexCLI/pull/33))
-- [x] LLM instructions refactor: append model, `ccli config llm-instructions` ([PR #34](https://github.com/seabearDEV/codexCLI/pull/34))
-
-### v1.0.0 — v1.4.x
-- [x] Staleness detection: `_meta` timestamps, `ccli stale`, `codex_stale`, age tags in `codex_context`
-- [x] Schema validation: `ccli lint`, configurable `_schema.namespaces`
-- [x] Advanced search: regex patterns (`--regex`), field-specific filtering (`--keys`, `--values`)
-- [x] Audit log: before/after diffs, agent identity, `ccli audit` + `codex_audit`
-- [x] Tiered `codex_context`: essential, standard, full tiers for token efficiency
-- [x] Test isolation: `CODEX_DATA_DIR` redirects global store + audit/telemetry to temp dir
-- [x] Agent-agnostic optimizations: enriched tool descriptions, deduped entries, "prefer MCP" guidance
-- [x] `deps.*` namespace, workflow aliases, [Schema Guide](schema-guide.md)
-
-### v1.5.x — v1.6.x
-- [x] Enriched audit/telemetry: duration, hit/miss, redundant detection, responseSize, per-agent stats
-- [x] Two-step MCP confirmation: `confirm_token` flow for `codex_run` with `--confirm` entries
-- [x] Import flat-key expansion: `expandFlatKeys()` auto-converts dot-notation keys to nested structure
-- [x] Inline staleness warnings: `[untracked]` / `[Nd]` tags on `codex_get` and `codex_context` output, CLI yellow warning
-- [x] `getStalenessTag()` shared helper with 30-day threshold, untracked entries treated as most suspect
-- [x] Namespace-weighted token savings: exploration cost multipliers per namespace, bootstrap estimation, per-namespace breakdown in `codex_stats --detailed`
-- [x] [Token Savings documentation](token-savings.md): full methodology transparency with Mermaid diagrams
-- [x] LLM instructions expanded: all 19 MCP tools documented in 6 groups, FRESHNESS guidance added
-- [x] `codex_stale` sorts untracked entries first, uses consistent "untracked" wording across CLI and MCP
-
-### v1.7.x
-- [x] Staleness awareness: `codex_context` and `codex_get` surface `[untracked]` / `[Nd]` tags
-- [x] Exploration-weighted token savings in `codex_stats`
-- [x] Comprehensive test suite overhaul (633 → 1048 tests): concurrency, MCP integration with real I/O, property-based fuzz tests
-
-### v1.8.x (CLI Restructure)
-- [x] `alias` subcommand group: `alias set/remove/list/rename` (dedicated alias management)
-- [x] `confirm` subcommand group: `confirm set/remove/list` (dedicated confirmation management)
-- [x] `context` command: CLI equivalent of MCP `codex_context` with `--tier` filtering
-- [x] `info` promoted to top-level command (was `config info`)
-- [x] `search` as hidden alias for `find` (MCP naming parity)
-- [x] Enhanced `ccli init`: codebase scan (files/deps/conventions/context detection), `CLAUDE.md` generation, `conventions.persistence` seeding, `--dry-run`/`--no-scan`/`--no-claude`/`--force` flags
-- [x] Deprecation notices on old `-a` flag patterns (still functional, with migration guidance)
-- [x] Stored command chains: `run --chain` resolves stored value as space-separated key references ([#16](https://github.com/seabearDEV/codexCLI/issues/16))
-
-### v1.9.x (Observed Token Savings)
-- [x] Net token savings: delivery cost (context consumed by agent) subtracted from gross exploration savings
-- [x] Miss-path tracking: MCP server records exploration cost when reads miss, stored in `miss-paths.jsonl`
-- [x] Self-calibrating exploration costs: static multipliers replaced with observed medians after ≥5 writeback samples per namespace
-- [x] `MissWindowTracker` class: pure state machine for miss window lifecycle (open/accumulate/close)
-- [x] `miss-paths` reset type for CLI and MCP
-- [x] `logToolCall` self-resolves project (parity with `logAudit`)
-- [x] Token savings documentation rewritten with calibration methodology and net savings
+**Planned work is tracked in [GitHub Issues](https://github.com/seabearDEV/codexCLI/issues).** This document provides the high-level vision and release history.
 
 ---
 
-## Post-1.0
+## What's Next
 
-### Git-Aware Freshness
-Connect stored knowledge to the files it describes. When code changes, flag related entries.
+### Smarter Knowledge Management
 
-- [ ] Optional `_source` metadata linking entries to file paths (e.g., `arch.storage` → `src/store.ts`)
-- [ ] `ccli check` compares entry source files against git diff to flag potentially stale entries
-- [ ] MCP tool: `codex_check` returns entries whose source files have changed since last update
+Make the knowledge base aware of the code it describes, and easier to navigate.
 
-### Live Audit Streaming
-- [ ] `ccli audit --follow` / `-f`: tail the audit JSONL and format each entry live with colors, same layout as `ccli audit`
+- **Git-aware freshness** — link entries to source files, flag staleness on code changes ([#42](https://github.com/seabearDEV/codexCLI/issues/42))
+- **Live audit streaming** — `ccli audit --follow` for real-time formatted output ([#41](https://github.com/seabearDEV/codexCLI/issues/41))
+- **Fuzzy finder** — interactive search via fzf ([#13](https://github.com/seabearDEV/codexCLI/issues/13))
+- **Boolean search** — AND, OR, NOT operators ([#43](https://github.com/seabearDEV/codexCLI/issues/43))
+- **Richer data types** — lists, multi-line values, typed JSON ([#44](https://github.com/seabearDEV/codexCLI/issues/44))
 
-### Search & Navigation Enhancements
-- [ ] Fuzzy finder integration: `ccli get --interactive` or `ccli find --fzf` ([#13](https://github.com/seabearDEV/codexCLI/issues/13))
-- [ ] Boolean search operators (AND, OR, NOT)
+### Team & Collaboration
 
-### Richer Data Types
-Currently all values are strings. Some knowledge is better expressed as lists or structured data.
-
-- [ ] Support list values (e.g., `arch.patterns` → `["MVC", "Repository", "Observer"]`)
-- [ ] Support multi-line values with better display formatting
-- [ ] `codex_get` returns typed JSON when values are structured
-
-### Team Workflows
 Make the knowledge base useful for teams, not just solo developers.
 
-- [ ] Entry attribution: track who (human or AI) last modified each entry
-- [ ] `ccli log` shows history of changes / audit trail ([#12](https://github.com/seabearDEV/codexCLI/issues/12))
-- [ ] Merge conflict handling for `.codexcli.json` (custom merge driver or guidance)
-- [ ] `ccli diff` compares local vs committed entries
+- **Entry attribution** — track who/what last modified each entry ([#45](https://github.com/seabearDEV/codexCLI/issues/45))
+- **Merge conflict handling** — custom merge driver or tooling for `.codexcli.json` ([#46](https://github.com/seabearDEV/codexCLI/issues/46))
+- **`ccli diff`** — compare local vs committed entries ([#47](https://github.com/seabearDEV/codexCLI/issues/47))
 
-### Performance & Scale
-Ensure CodexCLI stays fast as knowledge bases grow.
+### Platform & Distribution
 
-- [ ] Benchmark: measure latency at 100, 500, 1000+ entries
-- [ ] Lazy loading: only parse sections of `data.json` that are accessed
-- [ ] Index file for large stores (avoid full JSON parse on every read)
+- **Fish/PowerShell completion** ([#6](https://github.com/seabearDEV/codexCLI/issues/6))
+- **Windows support** ([#49](https://github.com/seabearDEV/codexCLI/issues/49))
+- **`npx codexcli`** zero-install usage ([#50](https://github.com/seabearDEV/codexCLI/issues/50))
+- **IDE extensions** — VS Code and JetBrains ([#51](https://github.com/seabearDEV/codexCLI/issues/51))
+- **Performance at scale** — benchmarks, lazy loading, indexing ([#48](https://github.com/seabearDEV/codexCLI/issues/48))
 
-### Cross-Platform / Distribution
-- [ ] Fish and PowerShell shell completion ([#6](https://github.com/seabearDEV/codexCLI/issues/6))
-- [ ] Windows support testing and fixes
-- [ ] `npx codexcli` for zero-install usage
-- [ ] VS Code extension: browse/edit entries from the sidebar
-- [ ] JetBrains plugin
+### Housekeeping
 
-### Go Rewrite (Long-term)
-A Go rewrite is planned for better performance and single-binary distribution without Node.js.
+- **Interpolation escape audit** — scan entries for unescaped syntax landmines ([#39](https://github.com/seabearDEV/codexCLI/issues/39))
+- **Rename `--raw` flag** — clarify that it means "no colors", not "no interpolation" ([#40](https://github.com/seabearDEV/codexCLI/issues/40))
 
-- [ ] Port core data operations (set, get, remove, search)
-- [ ] Port MCP server
-- [ ] Data format compatibility (read/write same `.codexcli.json`)
-- [ ] Feature parity with TypeScript version
-- [ ] Migration path for existing users
+### Long-term: Go Rewrite
+
+A Go rewrite is planned for better performance and single-binary distribution without Node.js. Port core operations, MCP server, and data format compatibility. No issue yet — this is a future initiative.
+
+---
+
+## Release History
+
+### v1.9.0 — Observed Token Savings
+Net token savings, miss-path tracking, self-calibrating exploration costs per namespace.
+
+### v1.8.0 — CLI Restructure
+`alias`/`confirm` subcommand groups, `context` command, enhanced `ccli init` with codebase scanning, stored command chains (`--chain`).
+
+### v1.7.0 — Staleness & Testing
+Inline staleness tags in `codex_context`/`codex_get`, exploration-weighted token savings, test suite overhaul (633 → 1048 tests).
+
+### v1.5.0 — v1.6.0 — Enriched Telemetry
+Audit/telemetry metrics (duration, hit/miss, redundant), two-step MCP confirmation, namespace-weighted token savings, import flat-key expansion.
+
+### v1.0.0 — v1.4.0 — Production Ready
+Staleness detection, schema validation (`ccli lint`), regex search, audit log, tiered `codex_context`, agent-agnostic optimizations.
+
+### v0.9.0 — Conditional Interpolation & Telemetry
+`${key:-default}`/`${key:?error}`, MCP telemetry, backup rotation, init scaffolding.
+
+### v0.8.0 — GenAI Knowledge Base
+`codex_context` for one-call bootstrap, recommended schema, project-scoped `.codexcli.json`.
+
+### v0.6.0 — v0.7.0 — Unified Store
+Consolidated data format, project/global scope resolution, auto-migration.
+
+### v0.1.0 — v0.5.0 — Core CLI
+Hierarchical storage, interpolation, aliases, encryption, MCP server, shell completion.
