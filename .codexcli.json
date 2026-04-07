@@ -15,20 +15,23 @@
     "arch.store": 1775358827551,
     "arch.telemetry": 1775500435763,
     "arch.tokenSavings": 1775517276576,
+    "commands.build": 1775526064911,
     "commands.check": 1775353132791,
     "commands.clean": 1775353133317,
+    "commands.lint": 1775526065350,
     "commands.release": 1775362842974,
+    "commands.test": 1775526064504,
     "context.aliasCollision": 1775356765156,
     "context.configSeparate": 1775347273418,
     "context.confirmFlow": 1775493255368,
     "context.devWorkflow": 1775358827618,
     "context.execInterpolation": 1775362844353,
-    "context.importFlatKey": 1775498972732,
     "context.interpolationEscape": 1775524681994,
     "context.mcpCwd": 1775520187554,
     "context.migration": 1775347272043,
     "context.testDataLeaks": 1775360216518,
     "conventions.atomicWrites": 1775347269392,
+    "conventions.commits": 1775526068051,
     "conventions.debug": 1775347270745,
     "conventions.output": 1775347266674,
     "conventions.persistence": 1775359536319,
@@ -57,6 +60,8 @@
     "project.description": 1775347231858,
     "project.goals": 1775361263177,
     "project.name": 1775347230199,
+    "project.repo": 1775526066241,
+    "project.tracking": 1775526069499,
     "project.vision": 1775501535503
   },
   "aliases": {
@@ -77,13 +82,18 @@
     "commands": {
       "release": "git push origin main && VERSION=`node -p \"require('./package.json').version\"` && git tag \"v$VERSION\" && git push origin \"v$VERSION\" && echo \"🚀 Released v$VERSION\"",
       "check": "npm run build && npm run lint && npm test",
-      "clean": "rm -rf dist && npm run build"
+      "clean": "rm -rf dist && npm run build",
+      "test": "npm test",
+      "build": "npm run build",
+      "lint": "npm run lint"
     },
     "project": {
       "name": "codexcli",
       "description": "Persistent, structured knowledge store for software projects. CLI + MCP server. Agents bootstrap full project context in one call instead of re-exploring the codebase.",
       "vision": "Eliminate repetitive codebase exploration by AI agents. Every session starts with full context. Every insight gets stored for the next session. As the knowledge base grows, hit rates improve and agents spend fewer tokens exploring — tracked via per-period trends in codex_stats.",
-      "goals": "1) Token efficiency — fewer tokens per session. 2) Dogfooding — use codexCLI MCP for own project maintenance. 3) Dual-audience .codexcli.json — useful for devs AND GenAI agents. 4) Agent-agnostic — work across Claude, Copilot, ChatGPT, Cursor, etc."
+      "goals": "1) Token efficiency — fewer tokens per session. 2) Dogfooding — use codexCLI MCP for own project maintenance. 3) Dual-audience .codexcli.json — useful for devs AND GenAI agents. 4) Agent-agnostic — work across Claude, Copilot, ChatGPT, Cursor, etc.",
+      "repo": "https://github.com/seabearDEV/codexCLI",
+      "tracking": "GitHub Issues is the source of truth for planned work. ROADMAP.md is a vision doc with issue links, not a task tracker. CHANGELOG.md is the release record."
     },
     "arch": {
       "storage": "Unified data.json: { entries, aliases, confirm, _meta }. Project-scoped at .codexcli.json, global at ~/.codexcli/data.json.",
@@ -108,7 +118,8 @@
       "tests": "Vitest with globals. Unit tests mock fs/store. Integration tests use temp dirs via CODEX_DATA_DIR.",
       "atomicWrites": "All file writes use saveJsonSorted -> withFileLock -> atomicWriteFileSync (tmp file + rename)",
       "debug": "Always use process.env.DEBUG === 'true' (strict equality). Never use truthy check.",
-      "persistence": ".codexcli.json = project knowledge (any agent needs it). CLAUDE.md = Claude behavior directives (how to use codex, not what it contains). MEMORY.md = personal user preferences only (commit style, interaction prefs). Rule: if another agent would benefit, it goes in .codexcli.json."
+      "persistence": ".codexcli.json = project knowledge (any agent needs it). CLAUDE.md = Claude behavior directives (how to use codex, not what it contains). MEMORY.md = personal user preferences only (commit style, interaction prefs). Rule: if another agent would benefit, it goes in .codexcli.json.",
+      "commits": "Conventional commits: fix:, feat:, docs:, test:, refactor:. Version tags (v1.9.0) on release commits. Keep subject under 70 chars, use body for detail."
     },
     "context": {
       "migration": "Auto-migrates old 3-file format to unified data.json on first access. Old files renamed to .backup.",
@@ -119,7 +130,6 @@
       "aliasCollision": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation.",
       "execInterpolation": "Shell $(...) collides with codexCLI's exec interpolation syntax $(key). In stored commands, use backticks instead: `cmd` not $(cmd).",
       "confirmFlow": "MCP codex_run uses two-step confirmation for --confirm entries: step 1 returns command preview + one-time confirm_token, step 2 passes token back to execute. Token is single-use, key-scoped, 5min TTL. force:true and dry:true bypass confirm (CLI fallback).",
-      "importFlatKey": "Import now auto-expands flat dot-notation keys to nested structure via expandFlatKeys(). Fixed in v1.6.0+. No longer an issue.",
       "interpolationEscape": "No escape mechanism for literal dollar-brace or dollar-paren in stored values. Interpolation runs unconditionally on get (unless --source). Workaround: describe syntax in prose instead of using literal examples. Revisit: consider backslash-escape support or a per-entry interpolation-off flag."
     },
     "files": {
