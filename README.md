@@ -1,5 +1,7 @@
 # CodexCLI
 
+[![SafeSkill 20/100](https://img.shields.io/badge/SafeSkill-20%2F100_Blocked-red)](https://safeskill.dev/scan/seabeardev-codexcli)
+
 A command-line knowledge base with built-in AI agent integration via MCP.
 
 ## Table of Contents
