@@ -110,6 +110,9 @@ Connect stored knowledge to the files it describes. When code changes, flag rela
 - [ ] `ccli check` compares entry source files against git diff to flag potentially stale entries
 - [ ] MCP tool: `codex_check` returns entries whose source files have changed since last update
 
+### Live Audit Streaming
+- [ ] `ccli audit --follow` / `-f`: tail the audit JSONL and format each entry live with colors, same layout as `ccli audit`
+
 ### Search & Navigation Enhancements
 - [ ] Fuzzy finder integration: `ccli get --interactive` or `ccli find --fzf` ([#13](https://github.com/seabearDEV/codexCLI/issues/13))
 - [ ] Boolean search operators (AND, OR, NOT)
