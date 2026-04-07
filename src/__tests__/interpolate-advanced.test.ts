@@ -264,4 +264,53 @@ describe('interpolation — advanced edge cases', () => {
       expect(interpolate('$(build)')).toBe('ok');
     });
   });
+
+  // ── Backslash escape ────────────────────────────────────────────────
+  describe('backslash escape', () => {
+    it('emits literal ${key} when escaped with backslash', () => {
+      expect(interpolate('\\${foo}')).toBe('${foo}');
+    });
+
+    it('emits literal $(...) when escaped with backslash', () => {
+      expect(interpolate('\\$(cmd)')).toBe('$(cmd)');
+    });
+
+    it('does not call getValue for escaped value refs', () => {
+      interpolate('\\${project.name}');
+      expect(mockGetValue).not.toHaveBeenCalled();
+    });
+
+    it('does not call execSync for escaped exec refs', () => {
+      interpolate('\\$(commands.build)');
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('mixes escaped and live refs', () => {
+      mockGetValue.mockImplementation((key: string) => {
+        if (key === 'name') return 'codexcli';
+        return undefined;
+      });
+      expect(interpolate('\\${literal} and ${name}')).toBe('${literal} and codexcli');
+    });
+
+    it('handles multiple escaped refs in one string', () => {
+      expect(interpolate('\\${a} then \\${b}')).toBe('${a} then ${b}');
+    });
+
+    it('handles escaped ref with modifiers', () => {
+      expect(interpolate('\\${key:-default}')).toBe('${key:-default}');
+    });
+
+    it('preserves backslash not followed by interpolation', () => {
+      expect(interpolate('path\\to\\file')).toBe('path\\to\\file');
+    });
+
+    it('handles escaped exec ref alongside live value ref', () => {
+      mockGetValue.mockImplementation((key: string) => {
+        if (key === 'ver') return '1.0';
+        return undefined;
+      });
+      expect(interpolate('${ver} \\$(cmd)')).toBe('1.0 $(cmd)');
+    });
+  });
 });

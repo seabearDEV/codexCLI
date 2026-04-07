@@ -5,7 +5,6 @@ import { flattenObject } from './objectPath';
 import { isEncrypted } from './crypto';
 import { CodexValue } from '../types';
 
-const EXEC_INTERPOLATION_REGEX = /\$\(([^)]+)\)/g;
 const MAX_DEPTH = 10;
 
 /**
@@ -161,11 +160,30 @@ export function interpolate(
   if (!value.includes('${') && !value.includes('$(')) return value;
 
   // Phase 1: resolve ${key} references (brace-aware to support nested ${} in defaults)
+  // Backslash escape: \${...} emits literal ${...}, \$(...) emits literal $(...)
   let result = value;
   if (result.includes('${')) {
     let out = '';
     let i = 0;
     while (i < result.length) {
+      // Escaped value ref: \${...} → literal ${...}
+      if (result[i] === '\\' && result[i + 1] === '$' && result[i + 2] === '{') {
+        let depth = 1;
+        let j = i + 3;
+        while (j < result.length && depth > 0) {
+          if (result[j] === '{' && j > 0 && result[j - 1] === '$') depth++;
+          else if (result[j] === '}') depth--;
+          if (depth > 0) j++;
+        }
+        if (depth === 0) {
+          out += result.slice(i + 1, j + 1); // emit ${...} literally, consume backslash
+          i = j + 1;
+        } else {
+          out += result[i];
+          i++;
+        }
+        continue;
+      }
       if (result[i] === '$' && result[i + 1] === '{') {
         // Scan for matching closing brace, tracking nesting depth
         let depth = 1;
@@ -194,9 +212,37 @@ export function interpolate(
 
   // Phase 2: resolve $(key) exec references
   if (result.includes('$(')) {
-    result = result.replace(EXEC_INTERPOLATION_REGEX, (_match, ref: string) => {
-      return resolveExecRef(ref, maxDepth, seen, execCache);
-    });
+    let out = '';
+    let i = 0;
+    while (i < result.length) {
+      // Escaped exec ref: \$(...) → literal $(...)
+      if (result[i] === '\\' && result[i + 1] === '$' && result[i + 2] === '(') {
+        const close = result.indexOf(')', i + 3);
+        if (close !== -1) {
+          out += result.slice(i + 1, close + 1); // emit $(...) literally, consume backslash
+          i = close + 1;
+        } else {
+          out += result[i];
+          i++;
+        }
+        continue;
+      }
+      if (result[i] === '$' && result[i + 1] === '(') {
+        const close = result.indexOf(')', i + 2);
+        if (close !== -1) {
+          const ref = result.slice(i + 2, close);
+          out += resolveExecRef(ref, maxDepth, seen, execCache);
+          i = close + 1;
+        } else {
+          out += result[i];
+          i++;
+        }
+      } else {
+        out += result[i];
+        i++;
+      }
+    }
+    result = out;
   }
 
   return result;

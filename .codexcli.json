@@ -3,7 +3,7 @@
     "arch.audit": 1775497218448,
     "arch.binary": 1775347252160,
     "arch.cli": 1775508048133,
-    "arch.interpolation": 1775347254435,
+    "arch.interpolation": 1775524859092,
     "arch.lint": 1775347259273,
     "arch.llmInstructions": 1775358827605,
     "arch.mcp": 1775497222452,
@@ -24,6 +24,7 @@
     "context.devWorkflow": 1775358827618,
     "context.execInterpolation": 1775362844353,
     "context.importFlatKey": 1775498972732,
+    "context.interpolationEscape": 1775524681994,
     "context.mcpCwd": 1775520187554,
     "context.migration": 1775347272043,
     "context.testDataLeaks": 1775360216518,
@@ -91,7 +92,7 @@
       "mcp": "19 tools via @modelcontextprotocol/sdk. All tools accept optional scope param. Telemetry + audit auto-logged per call.",
       "cli": "Commander.js CLI. Core CRUD: set/s, get/g, run/r, find/f, edit/e, copy/cp, rename/rn, remove/rm. Subcommand groups: alias (set/remove/list/rename), confirm (set/remove/list), config, data. Top-level: context, info, stale, lint, stats, audit. Hidden: search (alias for find). Deprecated: -a flags on set/get/remove/rename (use alias subcommand instead).",
       "binary": "Production: ccli (Node.js SEA binary). Dev: cclid (npm-linked). getBinaryName() auto-detects — never hardcode.",
-      "interpolation": "${key} value refs, $(key) exec refs, ${key:-default} fallbacks, ${key:?error} required checks. Recursive with circular-ref detection. --raw skips interpolation.",
+      "interpolation": "Supports value refs (dollar-brace syntax), exec refs (dollar-paren syntax), fallback defaults (:-), and required checks (:?). Backslash-escape emits literals (backslash consumed on output). Recursive with circular-ref detection. --source flag skips interpolation on get; --raw only strips colors.",
       "telemetry": "JSONL append at ~/.codexcli/telemetry.jsonl. Tracks tool, session, op type, namespace, source (mcp/cli), scope, agent (CODEX_AGENT_NAME). Enriched with duration, hit/miss, redundant, responseSize. codex_stats computes: delivery floor (bytes/4), exploration estimate (namespace-weighted multipliers for tool calls avoided), redundant write savings, per-namespace breakdown, trending metrics, and per-agent breakdowns. EXPLORATION_COST map exported from telemetry.ts for transparency.",
       "staleness": "_meta timestamps per key, auto-updated on write. ccli stale / codex_stale surfaces old entries. codex_context shows age tags >30d.",
       "lint": "Validates entries against recommended namespace schema. Custom namespaces via _schema.namespaces in .codexcli.json.",
@@ -118,7 +119,8 @@
       "aliasCollision": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation.",
       "execInterpolation": "Shell $(...) collides with codexCLI's exec interpolation syntax $(key). In stored commands, use backticks instead: `cmd` not $(cmd).",
       "confirmFlow": "MCP codex_run uses two-step confirmation for --confirm entries: step 1 returns command preview + one-time confirm_token, step 2 passes token back to execute. Token is single-use, key-scoped, 5min TTL. force:true and dry:true bypass confirm (CLI fallback).",
-      "importFlatKey": "Import now auto-expands flat dot-notation keys to nested structure via expandFlatKeys(). Fixed in v1.6.0+. No longer an issue."
+      "importFlatKey": "Import now auto-expands flat dot-notation keys to nested structure via expandFlatKeys(). Fixed in v1.6.0+. No longer an issue.",
+      "interpolationEscape": "No escape mechanism for literal dollar-brace or dollar-paren in stored values. Interpolation runs unconditionally on get (unless --source). Workaround: describe syntax in prose instead of using literal examples. Revisit: consider backslash-escape support or a per-entry interpolation-off flag."
     },
     "files": {
       "entry": "src/index.ts — CLI entry point, Commander.js setup, all command registration, CLI-side audit logging",
