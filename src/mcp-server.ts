@@ -320,9 +320,20 @@ server.tool(
       setValue(resolved, storedValue, scope);
       if (alias) {
         setAlias(alias, resolved, scope);
-        return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}\nAlias set: ${alias} -> ${resolved}`);
       }
-      return textResponse(`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}`);
+      // Surface where the write actually landed so agents can detect a project→global fallback.
+      const projectFile = findProjectFile();
+      const wroteTo: 'project' | 'global' =
+        scope === 'project' ? 'project' :
+        scope === 'global' ? 'global' :
+        projectFile ? 'project' : 'global';
+      const lines: string[] = [`Set: ${resolved} = ${encrypt ? '[encrypted]' : value}`];
+      if (alias) lines.push(`Alias set: ${alias} -> ${resolved}`);
+      lines.push(`Wrote to: ${wroteTo}${wroteTo === 'project' && projectFile ? ` (${projectFile})` : ''}`);
+      if (wroteTo === 'global' && !scopeParam) {
+        lines.push(`Note: no .codexcli.json was resolved, so 'auto' scope fell through to global. If this entry is project-specific, re-run with scope:"project" after creating a project file, or pin CODEX_PROJECT in the MCP server env.`);
+      }
+      return textResponse(lines.join('\n'));
     } catch (err) {
       return errorResponse(`Error setting entry: ${String(err)}`);
     }
@@ -1195,7 +1206,8 @@ server.tool(
   },
   async ({ scope: scopeParam, tier }) => {
     try {
-      const hasProject = !!findProjectFile();
+      const projectFile = findProjectFile();
+      const hasProject = !!projectFile;
       const effectiveScope: Scope = scopeParam ? scopeParam as Scope : hasProject ? 'project' : 'auto';
 
       const flat = getEntriesFlat(effectiveScope);
@@ -1204,7 +1216,10 @@ server.tool(
       const aliases = loadAliases(effectiveScope);
 
       if (Object.keys(filtered).length === 0 && Object.keys(aliases).length === 0) {
-        return textResponse("No entries stored. Use codex_set to add project knowledge.");
+        const header = hasProject
+          ? `[project: ${projectFile}]\n\n`
+          : `[project: NONE — auto-scope writes will fall through to global. Pin CODEX_PROJECT in the MCP server env, or pass scope:"project"/"global" explicitly on writes.]\n\n`;
+        return textResponse(`${header}No entries stored. Use codex_set to add project knowledge.`);
       }
 
       // Load meta for age indicators
@@ -1212,6 +1227,14 @@ server.tool(
       const meta = effectiveScope === 'auto' ? loadMetaMerged() : loadMeta(effectiveScope);
 
       const lines: string[] = [];
+
+      // Header: declare resolved project file so agents know where writes will land.
+      if (hasProject) {
+        lines.push(`[project: ${projectFile}]`);
+      } else {
+        lines.push(`[project: NONE — auto-scope writes will fall through to global. Pin CODEX_PROJECT in the MCP server env, or pass scope:"project"/"global" explicitly on writes.]`);
+      }
+      lines.push('');
 
       if (Object.keys(filtered).length > 0) {
         for (const [k, v] of Object.entries(filtered)) {
