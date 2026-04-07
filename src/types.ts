@@ -5,6 +5,7 @@
 export interface GetOptions {
   tree?: boolean | undefined;
   raw?: boolean | undefined;
+  plain?: boolean | undefined;
   source?: boolean | undefined;
   decrypt?: boolean | undefined;
   copy?: boolean | undefined;

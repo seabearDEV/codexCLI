@@ -45,8 +45,9 @@ const RESET_TYPES: readonly string[] = VALID_RESET_TYPES;
 const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--tree': 'Display as tree',
   '-t': 'Display as tree',
-  '--raw': 'Output raw values',
-  '-r': 'Output raw values',
+  '--plain': 'Plain text, no colors',
+  '--raw': 'Plain text, no colors (deprecated, use --plain)',
+  '-r': 'Plain text, no colors (deprecated, use --plain)',
   '-s': 'Show before interpolation',
   '--force': 'Skip confirmation',
   '-f': 'Skip confirmation',
@@ -99,6 +100,7 @@ const setDef: CommandDef = {
 const getDef: CommandDef = {
   flags: {
     '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
+    '--plain': FLAG_DESCRIPTIONS['--plain'],
     '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
     '--source': FLAG_DESCRIPTIONS['--source'], '-s': FLAG_DESCRIPTIONS['-s'],
     '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
@@ -215,6 +217,7 @@ const CLI_TREE: Record<string, CommandDef> = {
   context: {
     flags: {
       '--tier': 'Context tier (essential, standard, full)', '-t': 'Context tier',
+      '--plain': FLAG_DESCRIPTIONS['--plain'],
       '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
       '--json': 'Output as JSON', '-j': 'Output as JSON',
       '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],

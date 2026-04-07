@@ -120,10 +120,15 @@ describe('Completions', () => {
       expect(treeItem!.description).toBe('Display as tree');
       expect(treeItem!.group).toBe('flags');
 
+      const plainItem = findItem(results, '--plain');
+      expect(plainItem).toBeDefined();
+      expect(plainItem!.description).toBe('Plain text, no colors');
+      expect(plainItem!.group).toBe('flags');
+
+      // --raw is kept as a hidden deprecated alias
       const rawItem = findItem(results, '--raw');
       expect(rawItem).toBeDefined();
-      expect(rawItem!.description).toBe('Output raw values');
-      expect(rawItem!.group).toBe('flags');
+      expect(rawItem!.description).toBe('Plain text, no colors (deprecated, use --plain)');
     });
 
     it('returns flags for run command when typing a dash', () => {

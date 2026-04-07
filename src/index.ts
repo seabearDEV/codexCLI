@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import * as commands from './commands';
 import { removeAlias, resolveKey, loadAliases, setAlias, renameAlias } from './alias';
 import { setConfirm, removeConfirm, loadConfirmKeys } from './confirm';
@@ -144,7 +144,8 @@ codexCLI
   .alias('g')
   .description('List keys or retrieve entries (-v for values)')
   .option('-t, --tree', 'Display data in a hierarchical tree structure')
-  .option('-r, --raw', 'Output plain text without colors (for scripting)')
+  .option('--plain', 'Output plain text without colors (for scripting)')
+  .addOption(new Option('-r, --raw', 'Deprecated alias for --plain').hideHelp())
   .option('-s, --source', 'Show stored value before interpolation')
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
   .option('-c, --copy', 'Copy value to clipboard')
@@ -154,8 +155,12 @@ codexCLI
   .option('-j, --json', 'Output as JSON (for scripting)')
   .option('-G, --global', 'Target global data store')
   .option('-A, --all', 'Show entries from all scopes (project + global)')
-  .action(async (key: string | undefined, options: { tree?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
+  .action(async (key: string | undefined, options: { tree?: boolean, plain?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
     if (options.aliases) console.error(color.yellow('Deprecation: use `alias list` instead of `get -a`.'));
+    if (options.raw) console.error(color.yellow('Deprecation: --raw is now --plain. The old flag still works but will be removed in a future release.'));
+    const plain = Boolean(options.plain || options.raw);
+    options.plain = plain;
+    options.raw = plain; // keep downstream code working until full rename
     const scope = options.global ? 'global' as const : undefined;
     const resolvedKey = key ? resolveKey(key) : undefined;
     await withCliInstrumentation(
@@ -437,9 +442,14 @@ codexCLI
   .description('Show a compact summary of stored project knowledge')
   .option('-t, --tier <tier>', 'Context tier: essential, standard, full', 'standard')
   .option('-G, --global', 'Target global data store')
-  .option('-r, --raw', 'Output plain text without colors')
+  .option('--plain', 'Output plain text without colors')
+  .addOption(new Option('-r, --raw', 'Deprecated alias for --plain').hideHelp())
   .option('-j, --json', 'Output as JSON')
-  .action(async (options: { tier?: string, global?: boolean, raw?: boolean, json?: boolean }) => {
+  .action(async (options: { tier?: string, global?: boolean, plain?: boolean, raw?: boolean, json?: boolean }) => {
+    if (options.raw) console.error(color.yellow('Deprecation: --raw is now --plain. The old flag still works but will be removed in a future release.'));
+    const plain = Boolean(options.plain || options.raw);
+    options.plain = plain;
+    options.raw = plain;
     const scope = options.global ? 'global' as const : undefined;
     await withPager(() => withCliInstrumentation(
       { tool: 'codex_context', scope, params: { tier: options.tier } },
