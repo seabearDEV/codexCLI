@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Interpolation backslash escape** — `\${key}` and `\$(key)` now emit literal `${key}` / `$(key)` with the backslash consumed. Prevents stored documentation or examples containing interpolation syntax from triggering resolution errors on read.
+
+### Fixed
+
+- **`arch.interpolation` codex entry** — was self-poisoned by its own `${key}` examples, causing `"key" not found` errors on read. Rewritten to use prose descriptions. Also corrected the claim that `--raw` skips interpolation (it's `--source`).
+
 ## [1.9.0] - 2026-04-06
 
 ### Added
