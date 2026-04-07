@@ -28,7 +28,9 @@ import {
 } from "./alias";
 import {
   ensureDataDirectoryExists,
+  setProjectRootOverride,
 } from "./utils/paths";
+import { fileURLToPath } from "url";
 import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from "./store";
 import { hasConfirm, setConfirm, removeConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
@@ -1519,20 +1521,53 @@ process.on('beforeExit', () => {
 });
 
 // --- Start server ---
+/**
+ * Try to learn the active project directory from the MCP client's `roots`.
+ * Called after the transport is connected and the initialize handshake has
+ * completed. Best-effort: failures are silent because not every client
+ * implements `roots/list`.
+ */
+async function applyClientRootsOverride(): Promise<void> {
+  // CODEX_PROJECT (handled in paths.ts) takes precedence — don't override it.
+  if (process.env.CODEX_PROJECT) return;
+  try {
+    // McpServer wraps the low-level Server; listRoots is exposed there.
+    const lowLevel = (server as unknown as { server: { listRoots: () => Promise<{ roots?: { uri: string }[] }> } }).server;
+    const result = await lowLevel.listRoots();
+    const first = result?.roots?.[0]?.uri;
+    if (!first) return;
+    let dir: string;
+    if (first.startsWith('file://')) {
+      dir = fileURLToPath(first);
+    } else if (first.startsWith('/')) {
+      dir = first;
+    } else {
+      return;
+    }
+    setProjectRootOverride(dir);
+  } catch {
+    // Client doesn't support roots, or request failed — fall back to cwd.
+  }
+}
+
 export async function startMcpServer(): Promise<void> {
+  // Honor explicit project-dir hints before connect, in case the client
+  // doesn't implement roots and the launcher passed CODEX_PROJECT_DIR/--cwd.
+  const projectDir = process.env.CODEX_PROJECT_DIR
+    ?? (process.argv.includes('--cwd') ? process.argv[process.argv.indexOf('--cwd') + 1] : undefined);
+  if (projectDir) {
+    setProjectRootOverride(projectDir);
+  }
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
+  // After the handshake, prefer client-advertised roots over launcher hints.
+  await applyClientRootsOverride();
 }
 
 // Auto-start when run directly (e.g. `node dist/mcp-server.js` or `cclid-mcp`)
 // When imported by index.ts for the `mcp-server` subcommand, the caller invokes startMcpServer() explicitly.
 if (process.argv[1] && (process.argv[1].endsWith('mcp-server.js') || process.argv[1].endsWith('cclid-mcp'))) {
-  // Support CODEX_PROJECT_DIR env var or --cwd flag for project-scoped data detection
-  const projectDir = process.env.CODEX_PROJECT_DIR
-    ?? (process.argv.includes('--cwd') ? process.argv[process.argv.indexOf('--cwd') + 1] : undefined);
-  if (projectDir) {
-    process.chdir(projectDir);
-  }
   startMcpServer().catch((err) => {
     process.stderr.write(`MCP server error: ${err}\n`);
     process.exit(1);

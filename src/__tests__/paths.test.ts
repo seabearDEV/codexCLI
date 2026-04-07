@@ -83,6 +83,88 @@ describe('paths utilities', () => {
       }
     });
 
+    it('honors CODEX_PROJECT pointing at a .codexcli.json file', async () => {
+      const projectFile = path.join(tmpDir, '.codexcli.json');
+      fs.writeFileSync(projectFile, '{}');
+      vi.resetModules();
+      const original = process.env.CODEX_PROJECT;
+      process.env.CODEX_PROJECT = projectFile;
+      try {
+        const { findProjectFile, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectFile()).toBe(projectFile);
+      } finally {
+        if (original !== undefined) process.env.CODEX_PROJECT = original;
+        else delete process.env.CODEX_PROJECT;
+      }
+    });
+
+    it('honors CODEX_PROJECT pointing at a directory', async () => {
+      const projectFile = path.join(tmpDir, '.codexcli.json');
+      fs.writeFileSync(projectFile, '{}');
+      vi.resetModules();
+      const original = process.env.CODEX_PROJECT;
+      process.env.CODEX_PROJECT = tmpDir;
+      try {
+        const { findProjectFile, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectFile()).toBe(projectFile);
+      } finally {
+        if (original !== undefined) process.env.CODEX_PROJECT = original;
+        else delete process.env.CODEX_PROJECT;
+      }
+    });
+
+    it('CODEX_PROJECT pointing at a missing path returns null (no cwd fallback)', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_PROJECT;
+      process.env.CODEX_PROJECT = path.join(tmpDir, 'nope');
+      try {
+        const { findProjectFile, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectFile()).toBeNull();
+      } finally {
+        if (original !== undefined) process.env.CODEX_PROJECT = original;
+        else delete process.env.CODEX_PROJECT;
+      }
+    });
+
+    it('setProjectRootOverride changes the search start directory', async () => {
+      const projectFile = path.join(tmpDir, '.codexcli.json');
+      fs.writeFileSync(projectFile, '{}');
+      vi.resetModules();
+      try {
+        const { findProjectFile, setProjectRootOverride } = await import('../utils/paths');
+        setProjectRootOverride(tmpDir);
+        expect(findProjectFile()).toBe(projectFile);
+        setProjectRootOverride(null);
+      } catch (e) {
+        const { setProjectRootOverride } = await import('../utils/paths');
+        setProjectRootOverride(null);
+        throw e;
+      }
+    });
+
+    it('CODEX_NO_PROJECT wins over CODEX_PROJECT', async () => {
+      const projectFile = path.join(tmpDir, '.codexcli.json');
+      fs.writeFileSync(projectFile, '{}');
+      vi.resetModules();
+      const originalNo = process.env.CODEX_NO_PROJECT;
+      const originalP = process.env.CODEX_PROJECT;
+      process.env.CODEX_NO_PROJECT = '1';
+      process.env.CODEX_PROJECT = projectFile;
+      try {
+        const { findProjectFile, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectFile()).toBeNull();
+      } finally {
+        if (originalNo !== undefined) process.env.CODEX_NO_PROJECT = originalNo;
+        else delete process.env.CODEX_NO_PROJECT;
+        if (originalP !== undefined) process.env.CODEX_PROJECT = originalP;
+        else delete process.env.CODEX_PROJECT;
+      }
+    });
+
     it('clearProjectFileCache resets the cache', async () => {
       vi.resetModules();
       process.env.CODEX_NO_PROJECT = '1';

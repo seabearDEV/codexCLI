@@ -85,9 +85,28 @@ export function getUnifiedDataFilePath(): string {
 // Cached project file path (null = not searched yet, string = found, '' = not found)
 let projectFileCache: string | null = null;
 
+// Programmatic override for the directory where the search begins.
+// Set by the MCP server after capturing client roots.
+let projectRootOverride: string | null = null;
+
+/**
+ * Set the directory used as the starting point for project file discovery,
+ * overriding process.cwd(). Pass null to clear. Clears the cached result.
+ */
+export function setProjectRootOverride(dir: string | null): void {
+  projectRootOverride = dir;
+  projectFileCache = null;
+}
+
 /**
  * Walk up from cwd to find a .codexcli.json project file.
  * Returns the absolute path if found, null otherwise.
+ *
+ * Resolution order:
+ *   1. CODEX_NO_PROJECT env var → disabled (returns null)
+ *   2. CODEX_PROJECT env var → explicit path to a .codexcli.json file or its directory
+ *   3. setProjectRootOverride() value (e.g. MCP client roots) → walk up from there
+ *   4. process.cwd() → walk up from there
  */
 export function findProjectFile(): string | null {
   if (projectFileCache !== null) {
@@ -100,8 +119,30 @@ export function findProjectFile(): string | null {
     return null;
   }
 
+  // Explicit env var override — file path or containing directory
+  const envPath = process.env.CODEX_PROJECT;
+  if (envPath) {
+    const resolved = path.resolve(envPath);
+    let candidate = resolved;
+    try {
+      if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+        candidate = path.join(resolved, '.codexcli.json');
+      }
+    } catch {
+      // fall through; existsSync below will handle it
+    }
+    if (fs.existsSync(candidate)) {
+      projectFileCache = candidate;
+      return candidate;
+    }
+    // Env var was set but didn't resolve — treat as "no project" rather than
+    // silently falling back to a different directory the user didn't ask for.
+    projectFileCache = '';
+    return null;
+  }
+
   const globalDir = getDataDirectory();
-  let dir = process.cwd();
+  let dir = projectRootOverride ?? process.cwd();
   const root = path.parse(dir).root;
 
   while (true) {
