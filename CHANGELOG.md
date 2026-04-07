@@ -20,6 +20,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **MCP server bound to the wrong project** — `findProjectFile()` walked up from `process.cwd()`, which silently bound the server to whichever `.codexcli.json` lived above its inherited cwd. The new resolution order is: `CODEX_NO_PROJECT` → `CODEX_PROJECT` → `setProjectRootOverride()` (set from MCP roots and from launcher hints) → `process.cwd()` walk-up. The pre-existing `CODEX_PROJECT_DIR` and `--cwd` launcher hints still work but now apply via the override (no `process.chdir`) and work whether the server is run as a binary or imported.
 - **`arch.interpolation` codex entry** — was self-poisoned by its own `${key}` examples, causing `"key" not found` errors on read. Rewritten to use prose descriptions. Also corrected the claim that `--raw` skips interpolation (it's `--source`).
 
+### Maintenance
+
+- **Cleared pre-existing lint backlog** — fixed 6 ESLint errors that had accumulated since v1.9.0, so `npm run lint` (and the `commands.check` alias) is green again. No behavior changes: `prefer-nullish-coalescing`, `prefer-regexp-exec`, `no-floating-promises` (all targets are `sync=true` and resolve immediately, marked `void`), and `no-unnecessary-type-assertion`.
+
 ## [1.9.0] - 2026-04-06
 
 ### Added
