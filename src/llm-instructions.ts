@@ -52,7 +52,7 @@ Configuration:
 - codex_config_set — update a config setting
 
 Observability:
-- codex_stats — view usage metrics and token savings (hit rate, exploration cost avoided, per-namespace breakdown, trends). Pass detailed: true for full breakdown.
+- codex_stats — view usage metrics and token savings: hit rate, net tokens saved (exploration avoided minus delivery cost), per-namespace breakdown with calibration tags (observed vs static cost estimates), trends. Pass detailed: true for full breakdown including calibration status.
 - codex_audit — query the audit log of data mutations and reads (before/after diffs, agent identity, hit/miss tracking). Pass detailed: true for per-entry latency, response sizes, and redundancy flags.
 - codex_stale — find entries not updated recently. Run after codex_context when starting a new task to audit freshness.
 

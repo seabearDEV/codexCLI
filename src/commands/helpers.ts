@@ -175,7 +175,7 @@ export function askPassword(prompt: string): Promise<string> {
 }
 
 export const VALID_DATA_TYPES = ['entries', 'aliases', 'confirm', 'all'] as const;
-export const VALID_RESET_TYPES = ['entries', 'aliases', 'confirm', 'all', 'audit', 'telemetry'] as const;
+export const VALID_RESET_TYPES = ['entries', 'aliases', 'confirm', 'all', 'audit', 'telemetry', 'miss-paths'] as const;
 
 export function validateDataType(type: string): boolean {
   return (VALID_DATA_TYPES as readonly string[]).includes(type);

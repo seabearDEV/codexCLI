@@ -18,7 +18,7 @@ vi.mock('../utils/paths', async (importOriginal) => {
   };
 });
 
-import { computeStats, loadTelemetry, TelemetryEntry, EXPLORATION_COST } from '../utils/telemetry';
+import { computeStats, loadTelemetry, TelemetryEntry, EXPLORATION_COST, MissPath } from '../utils/telemetry';
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-telemetry-adv-'));
@@ -220,6 +220,93 @@ describe('computeStats — boundary cases', () => {
     ]);
     const stats = computeStats(30);
     expect(stats.period).toBe('30d');
+  });
+});
+
+describe('computeStats — net savings and calibration', () => {
+  function writeMissPaths(records: MissPath[]) {
+    fs.writeFileSync(
+      path.join(tmpDir, 'miss-paths.jsonl'),
+      records.map(r => JSON.stringify(r)).join('\n') + '\n',
+    );
+  }
+
+  it('computes deliveryCostTokens and netTokensSaved', () => {
+    const now = Date.now();
+    writeEntries([
+      // Read hit with responseSize → delivery cost = 400/4 = 100 tokens
+      { ts: now, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch', hit: true, responseSize: 400 },
+    ]);
+    const stats = computeStats();
+    // deliveryCost = estimatedTokensSaved = 400/4 = 100
+    expect(stats.deliveryCostTokens).toBe(100);
+    // estimatedTotalTokensSaved uses EXPLORATION_COST[arch] = 3000 for the one hit
+    expect(stats.estimatedTotalTokensSaved).toBe(3000);
+    // net = 3000 - 100 = 2900
+    expect(stats.netTokensSaved).toBe(2900);
+  });
+
+  it('netTokensSaved can be negative when delivery cost exceeds exploration value', () => {
+    const now = Date.now();
+    // Large response for a cheap namespace (project: 500 tokens)
+    writeEntries([
+      { ts: now, tool: 'codex_get', session: 's1', op: 'read', ns: 'project', hit: true, responseSize: 4000 },
+    ]);
+    const stats = computeStats();
+    // deliveryCost = 4000/4 = 1000
+    // exploration = EXPLORATION_COST[project] = 500
+    // net = 500 - 1000 = -500
+    expect(stats.netTokensSaved).toBe(-500);
+  });
+
+  it('populates calibration field with static source when no miss-paths', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch', hit: true, responseSize: 100 },
+      { ts: now, tool: 'codex_get', session: 's1', op: 'read', ns: 'files', hit: true, responseSize: 100 },
+    ]);
+    const stats = computeStats();
+    expect(stats.calibration['arch']).toBeDefined();
+    expect(stats.calibration['arch'].source).toBe('static');
+    expect(stats.calibration['files']).toBeDefined();
+    expect(stats.calibration['files'].source).toBe('static');
+  });
+
+  it('uses observed costs when miss-paths.jsonl has sufficient data', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch', hit: true, responseSize: 100 },
+    ]);
+    // 6 writeback miss-paths for arch with explorationBytes = 800 each → 800/4 = 200 tokens median
+    writeMissPaths(Array.from({ length: 6 }, (_, i) => ({
+      ts: i, session: `s${i}`, namespace: 'arch', key: 'arch.x',
+      toolCalls: 2, explorationBytes: 800,
+      resolution: 'writeback' as const, resolvedAt: i + 100,
+    })));
+    const stats = computeStats();
+    expect(stats.calibration['arch'].source).toBe('observed');
+    expect(stats.calibration['arch'].cost).toBe(200);
+    // Exploration tokens for the 1 hit = 200 (observed), not 3000 (static)
+    expect(stats.explorationBreakdown['arch']?.tokensSaved).toBe(200);
+  });
+
+  it('deliveryCostTokens and netTokensSaved are 0 when no hits', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch' },
+    ]);
+    const stats = computeStats();
+    expect(stats.deliveryCostTokens).toBe(0);
+    expect(stats.netTokensSaved).toBe(0);
+  });
+
+  it('calibration is empty when no read hits', () => {
+    const now = Date.now();
+    writeEntries([
+      { ts: now, tool: 'codex_set', session: 's1', op: 'write', ns: 'arch' },
+    ]);
+    const stats = computeStats();
+    expect(Object.keys(stats.calibration)).toHaveLength(0);
   });
 });
 

@@ -12,12 +12,14 @@ CodexCLI tracks how much work it saves AI agents by providing stored knowledge i
   - [Data Served](#data-served)
   - [Avg Latency](#avg-latency)
   - [Est. Tokens Saved](#est-tokens-saved)
-  - [Cached Data](#cached-data)
+  - [Delivery Cost](#delivery-cost)
+  - [Net Savings](#net-savings)
   - [By Namespace Breakdown](#by-namespace-breakdown)
   - [Duplicate Writes Avoided](#duplicate-writes-avoided)
 - [How Exploration Cost Is Estimated](#how-exploration-cost-is-estimated)
   - [The Core Idea](#the-core-idea)
   - [Namespace Multipliers](#namespace-multipliers)
+  - [Miss-Path Calibration](#miss-path-calibration)
   - [Bootstrap (codex_context) Estimation](#bootstrap-codex_context-estimation)
   - [Worked Example](#worked-example)
 - [Data Collection](#data-collection)
@@ -45,21 +47,23 @@ Token savings:
   Duplicate writes:  10% of writes were already up to date (6 of 58)
   Data served:       51.4KB returned from store, 585B avg
   Avg latency:       2ms per call
-  Est. tokens saved: ~47.2K (agent tool calls avoided by using stored knowledge)
-    Cached data:     ~12.3K tokens (raw bytes served / 4)
+  Est. tokens saved: ~47.2K (exploration avoided by using stored knowledge)
+    Delivery cost:   ~12.3K tokens (context delivered to agent)
+    Net savings:     ~34.9K tokens
 ```
 
-With `--detailed`, you also see the per-namespace breakdown:
+With `--detailed`, you also see the per-namespace breakdown with calibration tags:
 
 ```
     By namespace:
-      bootstrap       ~20.0K (3 lookups x 6.7K tokens each)
-      arch            ~9.0K (3 lookups x 3.0K tokens each)
-      files           ~6.0K (3 lookups x 2.0K tokens each)
-      context         ~6.0K (2 lookups x 3.0K tokens each)
-      commands        ~2.0K (2 lookups x 1.0K tokens each)
-      project         ~1.5K (3 lookups x 500 tokens each)
+      bootstrap       ~20.0K (3 lookups x 6.7K each)
+      arch            ~9.0K (3 lookups x 3.0K each) [observed, n=12]
+      files           ~6.0K (3 lookups x 2.0K each) [static]
+      context         ~6.0K (2 lookups x 3.0K each) [static]
+      commands        ~2.0K (2 lookups x 1.0K each) [observed, n=8]
+      project         ~1.5K (3 lookups x 500 each) [static]
     Duplicate writes avoided: ~900 (6 writes already up to date)
+    Calibration: 2/6 namespaces observed, 4 static
 ```
 
 Every number in this output is explained below.
@@ -137,19 +141,37 @@ Est. tokens saved: ~47.2K (agent tool calls avoided by using stored knowledge)
 
 **Why it matters:** This is the return on investment for maintaining the knowledge base. Every token saved is a token the agent can spend on actual work instead of rediscovering what it already knew.
 
-### Cached Data
+### Delivery Cost
 
 ```
-Cached data:     ~12.3K tokens (raw bytes served / 4)
+Delivery cost:   ~12.3K tokens (context delivered to agent)
 ```
 
-**What it measures:** A conservative floor estimate — the bytes returned from cache hits, divided by 4 (approximately 4 bytes per token across most LLM tokenizers).
+**What it measures:** The token cost of CodexCLI itself — the data it pushes into the agent's context window on cache hits. Every `codex_context` or `codex_get` hit returns data that consumes agent tokens.
 
 **How it's calculated:** `sum(responseSize for all hit reads) / 4`
 
-**Why it matters:** This is the minimum tokens saved — it only counts the data that was delivered, not the exploration work that was avoided. Think of it as measuring the package that arrived, not the trip to the store that was skipped.
+**Why it matters:** Token savings aren't free. If CodexCLI delivers 50KB of context but only saves the agent from 30KB of exploration, the net effect is negative. Delivery cost creates a natural pressure to keep the knowledge base lean and high-signal. Storing 500 low-value entries inflates delivery cost and erodes net savings.
 
-**Relationship to the exploration estimate:** The cached data number will always be lower than the exploration estimate. The ratio between them shows the "leverage" of the knowledge base — how much exploration each cached byte prevents.
+### Net Savings
+
+```
+Net savings:     ~34.9K tokens
+```
+
+**What it measures:** The bottom line — exploration avoided minus delivery cost. This is the true value of the knowledge base.
+
+**How it's calculated:** `estimatedTotalTokensSaved - deliveryCostTokens`
+
+**Why it matters:** This is the number that matters for ROI. Gross exploration savings can look impressive, but if delivery cost is high, the knowledge base is consuming more tokens than it saves. Net savings can go negative — that's a signal to prune entries.
+
+```mermaid
+flowchart LR
+    G["Gross: exploration avoided"] --> NET["Net Savings"]
+    D["Delivery cost: context consumed"] --> NET
+    NET -->|Positive| GOOD["Knowledge base is earning its keep"]
+    NET -->|Negative| PRUNE["Store is too noisy — prune entries"]
+```
 
 ### By Namespace Breakdown
 
@@ -220,6 +242,49 @@ These multipliers are defined in `src/utils/telemetry.ts` as `EXPLORATION_COST`:
 
 The values are intentionally conservative. A real `arch.*` lookup might save 5,000+ tokens if the agent would have read 3-4 files and reasoned about the architecture. We estimate 3,000.
 
+### Miss-Path Calibration
+
+The static multipliers above are educated guesses. CodexCLI replaces them with **observed costs** as it collects real data from cache misses.
+
+**How it works:** When a `codex_get` or `codex_search` misses (returns no data), CodexCLI opens a "miss window" for that session and namespace. It tracks subsequent tool calls — the exploration the agent does to find the answer — until one of three things happens:
+
+| Resolution | Trigger | Meaning |
+|------------|---------|---------|
+| **writeback** | Agent calls `codex_set` to the same namespace | Agent found the answer and stored it — clean signal |
+| **moved_on** | Agent gets a hit on any key | Agent found what it needed elsewhere |
+| **timeout** | 5 minutes elapse with no resolution | Agent abandoned the search or session ended |
+
+The exploration cost for each closed miss window is `sum(responseSize of all calls in the window) / 4` — the tokens the agent actually consumed while searching.
+
+**Calibration threshold:** Once a namespace accumulates **5 or more writeback resolutions**, CodexCLI switches from the static multiplier to the **median observed cost** for that namespace. The `[observed, n=12]` tag in the stats output indicates this.
+
+```mermaid
+flowchart TD
+    MISS["codex_get → miss"] --> OPEN["Open miss window"]
+    OPEN --> ACC["Track subsequent calls
+    (toolCalls++, explorationBytes += responseSize)"]
+    ACC --> WB{"codex_set to
+    same namespace?"}
+    WB -->|Yes| CLOSE_WB["Close: writeback
+    → high-quality cost sample"]
+    WB -->|No| HIT{"Any read hit?"}
+    HIT -->|Yes| CLOSE_MO["Close: moved_on"]
+    HIT -->|No| TO{"5min timeout?"}
+    TO -->|Yes| CLOSE_TO["Close: timeout"]
+    TO -->|No| ACC
+
+    CLOSE_WB --> CAL{"≥5 writeback
+    samples?"}
+    CAL -->|Yes| OBS["Use observed median cost
+    for this namespace"]
+    CAL -->|No| STATIC["Keep static multiplier
+    as fallback"]
+```
+
+**Why only writebacks?** A `writeback` resolution means the agent completed a full miss→explore→find→store cycle. That's a clean measurement of exploration cost. `moved_on` and `timeout` are noisy — the agent may have partially explored or given up — and are excluded from calibration.
+
+Miss-path records are stored in `~/.codexcli/miss-paths.jsonl` and can be cleared with `ccli reset miss-paths` or `codex_reset type:"miss-paths"`.
+
 ### Bootstrap (codex_context) Estimation
 
 The `codex_context` tool is special — it returns many entries at once in a single call. Its exploration cost is calculated differently:
@@ -247,19 +312,27 @@ flowchart TD
     F -->|codex_context| B["Bootstrap estimation
     entries ≈ responseSize / 80
     cost = max(bytes/4, entries × 200)"]
-    F -->|other reads| N["Namespace lookup
-    cost = EXPLORATION_COST[ns]
+    F -->|other reads| CAL{"Calibrated?
+    (≥5 writeback samples)"}
+    CAL -->|Yes| OBS["Observed median cost
+    from miss-paths.jsonl"]
+    CAL -->|No| STATIC["Static EXPLORATION_COST[ns]
     (default: 1,000)"]
     T --> R{"Filter: redundant=true"}
     R --> RW["Redundant writes
     cost = count × 150"]
 
-    B --> SUM["Total tokens saved"]
-    N --> SUM
-    RW --> SUM
+    B --> GROSS["Gross tokens saved"]
+    OBS --> GROSS
+    STATIC --> GROSS
+    RW --> GROSS
 
-    T --> DF["Delivery floor (all hit reads)
+    T --> DC["Delivery cost (all hit reads)
     cost = sum(responseSize) / 4"]
+
+    GROSS --> NET["Net tokens saved
+    = gross − delivery cost"]
+    DC --> NET
 ```
 
 ### Worked Example
@@ -276,12 +349,11 @@ A typical session might look like this:
 | 6 | `codex_set` | context | — | Redundant | 150 |
 
 **Totals:**
-- Delivery floor: `(8000 + 200 + 300) / 4 = 2,125 tokens`
-- Exploration estimate: `20,000 + 2,000 + 3,000 = 25,000 tokens`
-- Redundant write savings: `1 * 150 = 150 tokens`
-- **Total: 25,150 tokens saved**
+- Gross exploration avoided: `20,000 + 2,000 + 3,000 + 150 = 25,150 tokens`
+- Delivery cost: `(8000 + 200 + 300) / 4 = 2,125 tokens`
+- **Net savings: 25,150 − 2,125 = 23,025 tokens**
 
-The exploration estimate is **12x** the delivery floor in this example, reflecting the leverage of stored knowledge.
+The gross estimate is **12x** the delivery cost in this example, reflecting the leverage of stored knowledge. As the knowledge base grows, both numbers increase — but if entries become low-signal, delivery cost grows faster than exploration savings, and net savings shrinks.
 
 ## Data Collection
 
@@ -306,6 +378,8 @@ flowchart LR
         (append-only)"]
         AUD["audit.jsonl
         (before/after diffs)"]
+        MP["miss-paths.jsonl
+        (exploration cost samples)"]
     end
 
     subgraph analysis ["Analysis"]
@@ -317,7 +391,10 @@ flowchart LR
     CLI --> enrichment
     enrichment --> TEL
     enrichment --> AUD
+    MCP -->|"miss windows
+    (MCP only)"| MP
     TEL --> STATS
+    MP --> STATS
 ```
 
 ### What Gets Logged
@@ -382,11 +459,11 @@ A write is "redundant" when:
 
 ## Limitations and Shortcomings
 
-### The multipliers are educated guesses
+### The static multipliers are educated guesses (but self-calibrating)
 
-The namespace multipliers (e.g., `files: 2000`, `arch: 3000`) are based on reasonable estimates of typical agent behavior, not empirical measurement. Different agents, different codebases, and different tasks would produce different actual exploration costs.
+The static namespace multipliers (e.g., `files: 2000`, `arch: 3000`) are based on reasonable estimates of typical agent behavior, not empirical measurement. Different agents, codebases, and tasks would produce different actual exploration costs.
 
-**Impact:** The exploration estimate could over- or under-count by 2-3x for any individual lookup. Across many lookups, the errors tend to average out, but the total should be treated as an order-of-magnitude estimate, not a precise measurement.
+**Impact:** The exploration estimate could over- or under-count by 2-3x for any individual lookup. However, as miss-path data accumulates (≥5 writeback samples per namespace), the static multipliers are replaced with observed medians. The `[observed, n=N]` vs `[static]` tags in `--detailed` output show which namespaces have been calibrated.
 
 ### No per-entry granularity
 
@@ -414,9 +491,8 @@ When `codex_get arch` returns a subtree with 13 entries, the entire response is 
 
 ## Future Improvements
 
-- **Empirical calibration:** Run controlled experiments comparing sessions with and without CodexCLI to calibrate the multipliers against real token usage.
 - **Per-entry cost modeling:** Use `responseSize` or value length to weight individual entries differently within a namespace.
-- **Entry count in telemetry:** Add `entryCount` to the telemetry JSONL (currently only in the audit log) for more accurate bootstrap estimation.
-- **Agent-specific multipliers:** Different agents (Claude Code, Copilot, Cursor) have different exploration patterns and token costs. Per-agent multipliers could improve accuracy.
+- **Agent-specific multipliers:** Different agents (Claude Code, Copilot, Cursor) have different exploration patterns and token costs. Per-agent calibration using miss-path data could improve accuracy.
 - **Cross-session deduplication:** Track when the same entry is read across multiple sessions to measure cumulative value over time.
 - **Configurable multipliers:** Allow users to override `EXPLORATION_COST` values for their specific workflows.
+- **Miss-path query tool:** Expose miss-path records via `codex_miss_paths` MCP tool for agents to inspect exploration cost data directly.

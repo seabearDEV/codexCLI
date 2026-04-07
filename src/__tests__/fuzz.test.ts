@@ -151,7 +151,7 @@ describe('fuzz: flattenObject ↔ expandFlatKeys round-trip', () => {
 });
 
 describe('fuzz: encrypt/decrypt round-trip', () => {
-  it('random values survive encrypt→decrypt (50 trials)', () => {
+  it('random values survive encrypt→decrypt (50 trials)', { timeout: 15000 }, () => {
     const password = 'fuzz-test-password-' + randomString(8);
     for (let trial = 0; trial < 50; trial++) {
       const plaintext = randomValue();

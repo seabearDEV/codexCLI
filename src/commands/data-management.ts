@@ -14,7 +14,7 @@ import { createAutoBackup } from '../utils/autoBackup';
 import { findProjectFile, clearProjectFileCache } from '../store';
 import { saveJsonSorted } from '../utils/saveJsonSorted';
 import { getAuditPath } from '../utils/audit';
-import { getTelemetryPath } from '../utils/telemetry';
+import { getTelemetryPath, getMissPathsPath } from '../utils/telemetry';
 import { scanCodebase, ScaffoldEntry } from './scan';
 import { generateClaudeMd } from './claude-md';
 
@@ -177,13 +177,14 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
       if (!confirmed) return;
     }
 
-    // Log-file resets (audit, telemetry) — global only, no backup needed
-    if (type === 'audit' || type === 'telemetry') {
-      const file = type === 'audit' ? getAuditPath() : getTelemetryPath();
+    // Log-file resets (audit, telemetry, miss-paths) — global only, no backup needed
+    if (type === 'audit' || type === 'telemetry' || type === 'miss-paths') {
+      const file = type === 'audit' ? getAuditPath() : type === 'telemetry' ? getTelemetryPath() : getMissPathsPath();
       if (fs.existsSync(file)) {
         fs.unlinkSync(file);
       }
-      printSuccess(`${type === 'audit' ? 'Audit log' : 'Telemetry'} has been cleared`);
+      const label = type === 'audit' ? 'Audit log' : type === 'telemetry' ? 'Telemetry' : 'Miss-path log';
+      printSuccess(`${label} has been cleared`);
       return;
     }
 

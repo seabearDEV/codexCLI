@@ -231,9 +231,15 @@ vi.mock('../utils/telemetry', () => ({
     readWriteRatio: '0:0', namespaceCoverage: {}, topTools: [], scopeBreakdown: { project: 0, global: 0, unscoped: 0 },
     estimatedTokensSaved: 0, estimatedTokensSavedBootstrap: 0,
     estimatedExplorationTokensSaved: 0, estimatedRedundantWriteTokensSaved: 0, estimatedTotalTokensSaved: 0, explorationBreakdown: {},
+    deliveryCostTokens: 0, netTokensSaved: 0, calibration: {},
   })),
   classifyOp: vi.fn(() => 'meta'),
   getTelemetryPath: vi.fn(() => '/mock/telemetry.jsonl'),
+  getMissPathsPath: vi.fn(() => '/mock/miss-paths.jsonl'),
+  MissWindowTracker: class { onToolCall() { return []; } flushAll() { return []; } get openCount() { return 0; } },
+  appendMissPath: vi.fn(() => Promise.resolve()),
+  getSessionId: vi.fn(() => 'mock-session'),
+  extractNamespace: vi.fn((key?: string) => key ? key.split('.')[0] : '*'),
 }));
 
 vi.mock('../utils/audit', () => ({

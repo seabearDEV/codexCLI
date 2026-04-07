@@ -37,7 +37,7 @@ import { version } from "../package.json";
 import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject } from "./utils/interpolate";
-import { logToolCall, computeStats, classifyOp, getTelemetryPath, TelemetryExtras } from "./utils/telemetry";
+import { logToolCall, computeStats, classifyOp, getTelemetryPath, getMissPathsPath, TelemetryExtras, MissWindowTracker, appendMissPath, getSessionId, extractNamespace } from "./utils/telemetry";
 import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams, getAuditPath } from "./utils/audit";
 import { getEffectiveInstructions } from "./llm-instructions";
 import { parsePeriodDays } from "./utils";
@@ -60,6 +60,9 @@ ensureDataDirectoryExists();
 import crypto from 'crypto';
 const CONFIRM_TOKEN_TTL = 5 * 60 * 1000;
 const pendingConfirmations = new Map<string, { key: string; command: string; expires: number }>();
+
+// --- Miss-path tracker for observed exploration cost ---
+const missTracker = new MissWindowTracker();
 
 function createConfirmToken(key: string, command: string): string {
   const token = crypto.randomBytes(8).toString('hex');
@@ -272,6 +275,21 @@ server.tool = ((...args: any[]) => {
         entryCount,
         redundant,
       });
+
+      // Miss-path tracking: feed every call to the tracker
+      const closedPaths = missTracker.onToolCall({
+        session: getSessionId(),
+        tool: name,
+        namespace: extractNamespace(key),
+        key: key ?? '',
+        op,
+        hit,
+        responseSize,
+        agent: process.env.CODEX_AGENT_NAME,
+      });
+      for (const mp of closedPaths) {
+        void appendMissPath(mp);
+      }
     }
 
     return result;
@@ -1127,18 +1145,19 @@ server.tool(
 // --- codex_reset ---
 server.tool(
   "codex_reset",
-  "Reset entries and/or aliases to empty state, or clear audit/telemetry logs",
+  "Reset entries and/or aliases to empty state, or clear audit/telemetry/miss-path logs",
   {
-    type: z.enum(["entries", "aliases", "confirm", "all", "audit", "telemetry"]).describe("What to reset ('all' covers entries+aliases+confirm, not logs)"),
-    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global). Ignored for audit/telemetry."),
+    type: z.enum(["entries", "aliases", "confirm", "all", "audit", "telemetry", "miss-paths"]).describe("What to reset ('all' covers entries+aliases+confirm, not logs)"),
+    scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global). Ignored for audit/telemetry/miss-paths."),
   },
   async ({ type, scope: scopeParam }) => {
     try {
       // Log-file resets — global only
-      if (type === "audit" || type === "telemetry") {
-        const file = type === "audit" ? getAuditPath() : getTelemetryPath();
+      if (type === "audit" || type === "telemetry" || type === "miss-paths") {
+        const file = type === "audit" ? getAuditPath() : type === "telemetry" ? getTelemetryPath() : getMissPathsPath();
         if (fs.existsSync(file)) fs.unlinkSync(file);
-        return textResponse(`${type === "audit" ? "Audit log" : "Telemetry"} has been cleared.`);
+        const label = type === "audit" ? "Audit log" : type === "telemetry" ? "Telemetry" : "Miss-path log";
+        return textResponse(`${label} has been cleared.`);
       }
 
       const scope = toScope(scopeParam);
@@ -1354,18 +1373,27 @@ server.tool(
           lines.push(`  Avg latency:       ${Math.round(stats.avgDurationMs)}ms per call`);
         if (stats.estimatedTotalTokensSaved > 0) {
           const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
-          lines.push(`  Est. tokens saved: ~${fmtNum(stats.estimatedTotalTokensSaved)} (agent tool calls avoided by using stored knowledge)`);
-          lines.push(`    Cached data:     ~${fmtNum(stats.estimatedTokensSaved)} tokens (raw bytes served ÷ 4)`);
+          lines.push(`  Est. tokens saved: ~${fmtNum(stats.estimatedTotalTokensSaved)} (exploration avoided by using stored knowledge)`);
+          lines.push(`    Delivery cost:   ~${fmtNum(stats.deliveryCostTokens)} tokens (context delivered to agent)`);
+          lines.push(`    Net savings:     ~${fmtNum(stats.netTokensSaved)} tokens`);
           if (detailed) {
             lines.push('    By namespace:');
             const breakdown = Object.entries(stats.explorationBreakdown)
               .sort(([,a], [,b]) => b.tokensSaved - a.tokensSaved);
             for (const [ns, { hits, tokensSaved }] of breakdown) {
               const perHit = hits > 0 ? Math.round(tokensSaved / hits) : 0;
-              lines.push(`      ${ns.padEnd(15)} ~${fmtNum(tokensSaved)} (${hits} lookup${hits !== 1 ? 's' : ''} × ${fmtNum(perHit)} tokens each)`);
+              const cal = stats.calibration[ns];
+              const calTag = cal ? (cal.source === 'observed' ? ` [observed, n=${cal.samples}]` : ' [static]') : '';
+              lines.push(`      ${ns.padEnd(15)} ~${fmtNum(tokensSaved)} (${hits} lookup${hits !== 1 ? 's' : ''} × ${fmtNum(perHit)} each)${calTag}`);
             }
             if (stats.estimatedRedundantWriteTokensSaved > 0) {
               lines.push(`    Duplicate writes avoided: ~${fmtNum(stats.estimatedRedundantWriteTokensSaved)} (${stats.redundantWrites} write${stats.redundantWrites !== 1 ? 's' : ''} already up to date)`);
+            }
+            const calEntries = Object.values(stats.calibration);
+            if (calEntries.length > 0) {
+              const observed = calEntries.filter(c => c.source === 'observed').length;
+              const total = calEntries.length;
+              lines.push(`    Calibration: ${observed}/${total} namespaces observed, ${total - observed} static`);
             }
           }
         } else if (stats.estimatedTokensSaved > 0) {
@@ -1482,6 +1510,13 @@ server.tool(
     }
   }
 );
+
+// --- Flush miss-path windows on shutdown ---
+process.on('beforeExit', () => {
+  for (const mp of missTracker.flushAll()) {
+    appendMissPath(mp, true); // sync write for shutdown
+  }
+});
 
 // --- Start server ---
 export async function startMcpServer(): Promise<void> {

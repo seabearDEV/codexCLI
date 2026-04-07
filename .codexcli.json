@@ -7,12 +7,14 @@
     "arch.lint": 1775347259273,
     "arch.llmInstructions": 1775358827605,
     "arch.mcp": 1775497222452,
+    "arch.missPathTracking": 1775518365836,
     "arch.scaffold": 1775508051571,
     "arch.scope": 1775347247705,
     "arch.staleness": 1775347257904,
     "arch.storage": 1775347244612,
     "arch.store": 1775358827551,
     "arch.telemetry": 1775500435763,
+    "arch.tokenSavings": 1775517276576,
     "commands.check": 1775353132791,
     "commands.clean": 1775353133317,
     "commands.release": 1775362842974,
@@ -22,7 +24,7 @@
     "context.devWorkflow": 1775358827618,
     "context.execInterpolation": 1775362844353,
     "context.importFlatKey": 1775498972732,
-    "context.mcpCwd": 1775347274785,
+    "context.mcpCwd": 1775520187554,
     "context.migration": 1775347272043,
     "context.testDataLeaks": 1775360216518,
     "conventions.atomicWrites": 1775347269392,
@@ -95,7 +97,9 @@
       "lint": "Validates entries against recommended namespace schema. Custom namespaces via _schema.namespaces in .codexcli.json.",
       "llmInstructions": "Built-in defaults + customizable via system.llm.instructions entry. ccli config llm-instructions to view/edit.",
       "scaffold": "ccli init scans codebase via scanCodebase() in src/commands/scan.ts — 6 composable detectors (detectProject, detectCommands, detectFiles, detectDeps, detectConventions, detectContext). Generates CLAUDE.md via src/commands/claude-md.ts. Seeds conventions.persistence entry for three-file balance. Flags: --no-scan, --no-claude, --force, --dry-run. Idempotent — skips existing keys.",
-      "audit": "JSONL at ~/.codexcli/audit.jsonl. Captures before/after values, success/fail, scope, agent identity, enriched metrics (duration, responseSize, hit/miss, redundant, entryCount). CLI reads (get, search, stale) also logged. codex_audit (MCP) + ccli audit (CLI) to query with --detailed. Encrypted values masked, passwords redacted. CLI uses sync writes to guarantee log durability on process exit."
+      "audit": "JSONL at ~/.codexcli/audit.jsonl. Captures before/after values, success/fail, scope, agent identity, enriched metrics (duration, responseSize, hit/miss, redundant, entryCount). CLI reads (get, search, stale) also logged. codex_audit (MCP) + ccli audit (CLI) to query with --detailed. Encrypted values masked, passwords redacted. CLI uses sync writes to guarantee log durability on process exit.",
+      "tokenSavings": "Observed miss-path costing replaces static EXPLORATION_COST multipliers. Three layers: (1) miss-path windows track exploration cost when codex_get misses, (2) calibrated cost map uses median of observed miss-paths per namespace with static fallback when <5 samples, (3) net savings = gross exploration avoided − delivery cost (responseSize of all read hits). MissPath struct: { ts, session, namespace, key, toolCalls, explorationBytes, resolution }. Resolution types: writeback (clean), moved_on, timeout. Bootstrap savings use entry-count proxy with calibrated per-namespace costs.",
+      "missPathTracking": "MissWindowTracker in telemetry.ts: pure state machine tracking exploration cost when codex_get misses. Opens window on hit:false, closes on writeback (codex_set to same ns), moved_on (any hit), or timeout (5min). Persists to miss-paths.jsonl. MCP server wires tracker in wrapper finally block + flushes on beforeExit. getExplorationCost() returns observed median (>=5 writeback samples) or falls back to static EXPLORATION_COST map. computeStats() reports: deliveryCostTokens (bytes served / 4), netTokensSaved (gross - delivery), calibration map (observed vs static per namespace)."
     },
     "conventions": {
       "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",
@@ -108,7 +112,7 @@
     "context": {
       "migration": "Auto-migrates old 3-file format to unified data.json on first access. Old files renamed to .backup.",
       "configSeparate": "config.json is separate from data.json — user preferences, not project data",
-      "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to find project files — its cwd may differ from project root",
+      "mcpCwd": "MCP server needs --cwd or CODEX_PROJECT_DIR to set cwd before project file discovery. Without it, findProjectFile() walks up from inherited cwd (usually correct when Claude Code spawns). logAudit and logToolCall both self-resolve project via findProjectFile() — callers don't need to pass it.",
       "testDataLeaks": "CODEX_DATA_DIR redirects global store + audit/telemetry logs to temp dir during tests. Project store (.codexcli.json) can still get test entries if it exists in cwd — always clean before committing.",
       "devWorkflow": "Use cclid (dev) / cclid-mcp (MCP dev) for local testing — never ccli in dev. Release: git tag triggers CI.",
       "aliasCollision": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation.",

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { getDataDirectory } from './paths';
+import { getDataDirectory, findProjectFile } from './paths';
 
 export interface TelemetryEntry {
   ts: number;
@@ -22,17 +22,224 @@ export interface TelemetryEntry {
 // One session ID per MCP server process
 const sessionId = crypto.randomBytes(4).toString('hex');
 
+export function getSessionId(): string {
+  return sessionId;
+}
+
 const pendingWrites: Promise<void>[] = [];
 
 export function getTelemetryPath(): string {
   return path.join(getDataDirectory(), 'telemetry.jsonl');
 }
 
+// ── Miss-path tracking ──────────────────────────────────────────────
+
+export interface MissPath {
+  ts: number;
+  session: string;
+  namespace: string;
+  key: string;
+  toolCalls: number;
+  explorationBytes: number;
+  resolution: 'writeback' | 'moved_on' | 'timeout';
+  resolvedAt: number;
+  agent?: string | undefined;
+}
+
+export function getMissPathsPath(): string {
+  return path.join(getDataDirectory(), 'miss-paths.jsonl');
+}
+
+const pendingMissPathWrites: Promise<void>[] = [];
+
+export function appendMissPath(record: MissPath, sync = false): Promise<void> {
+  const line = JSON.stringify(record) + '\n';
+  if (sync) {
+    try { fs.appendFileSync(getMissPathsPath(), line, { mode: 0o600 }); } catch { /* best-effort */ }
+    return Promise.resolve();
+  }
+  const p = new Promise<void>((resolve) => {
+    fs.appendFile(getMissPathsPath(), line, { mode: 0o600 }, () => resolve());
+  });
+  pendingMissPathWrites.push(p);
+  return p;
+}
+
+export async function flushMissPaths(): Promise<void> {
+  await Promise.all(pendingMissPathWrites);
+  pendingMissPathWrites.length = 0;
+}
+
+function pushMissPathLine(entries: MissPath[], line: string): void {
+  if (!line.trim()) return;
+  try {
+    entries.push(JSON.parse(line) as MissPath);
+  } catch {
+    // Skip malformed lines
+  }
+}
+
+export function loadMissPaths(): MissPath[] {
+  const chunkSize = 64 * 1024;
+  const entries: MissPath[] = [];
+
+  try {
+    const fd = fs.openSync(getMissPathsPath(), 'r');
+    const buffer = Buffer.alloc(chunkSize);
+    let remainder = '';
+
+    try {
+      let bytesRead: number;
+      do {
+        bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
+        if (bytesRead <= 0) break;
+
+        const chunk = remainder + buffer.toString('utf8', 0, bytesRead);
+        const lines = chunk.split('\n');
+        remainder = lines.pop() ?? '';
+
+        for (const line of lines) {
+          pushMissPathLine(entries, line);
+        }
+      } while (bytesRead === buffer.length);
+
+      if (remainder) {
+        pushMissPathLine(entries, remainder);
+      }
+
+      return entries;
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return [];
+  }
+}
+
+// ── Miss-window tracker (pure state machine, no I/O) ────────────────
+
+interface OpenMissWindow {
+  ts: number;
+  session: string;
+  namespace: string;
+  key: string;
+  toolCalls: number;
+  explorationBytes: number;
+  agent?: string | undefined;
+}
+
+const MISS_WINDOW_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+export class MissWindowTracker {
+  private windows = new Map<string, OpenMissWindow>();
+
+  /**
+   * Called after every MCP tool call. Returns closed MissPath records (if any).
+   * A single call can close multiple windows (e.g. timeout sweep + writeback).
+   */
+  onToolCall(params: {
+    session: string;
+    tool: string;
+    namespace: string;
+    key: string;
+    op: string;
+    hit: boolean | undefined;
+    responseSize: number;
+    agent?: string | undefined;
+  }): MissPath[] {
+    const now = Date.now();
+    const closed: MissPath[] = [];
+
+    // 1. Timeout sweep: close windows older than 5 minutes
+    for (const [wk, w] of this.windows) {
+      if (now - w.ts > MISS_WINDOW_TIMEOUT_MS) {
+        closed.push(this.closeWindow(wk, 'timeout', now));
+      }
+    }
+
+    // 2. Close as moved_on: a hit on any namespace means the agent found what it needed
+    if (params.hit === true) {
+      for (const [wk, w] of this.windows) {
+        if (w.session === params.session) {
+          closed.push(this.closeWindow(wk, 'moved_on', now));
+        }
+      }
+    }
+
+    // 3. Close as writeback: codex_set to same session+namespace
+    if (params.tool === 'codex_set') {
+      const wk = `${params.session}:${params.namespace}`;
+      if (this.windows.has(wk)) {
+        closed.push(this.closeWindow(wk, 'writeback', now));
+      }
+    }
+
+    // 4. Accumulate: for all remaining open windows in this session, tally the call
+    for (const [, w] of this.windows) {
+      if (w.session === params.session) {
+        w.toolCalls++;
+        w.explorationBytes += params.responseSize;
+      }
+    }
+
+    // 5. Open new window: read miss with no existing window for this session+namespace
+    if (params.op === 'read' && params.hit === false) {
+      const wk = `${params.session}:${params.namespace}`;
+      if (!this.windows.has(wk)) {
+        this.windows.set(wk, {
+          ts: now,
+          session: params.session,
+          namespace: params.namespace,
+          key: params.key,
+          toolCalls: 0,
+          explorationBytes: 0,
+          agent: params.agent,
+        });
+      }
+    }
+
+    return closed;
+  }
+
+  /** Flush all open windows as timeouts (call on shutdown). */
+  flushAll(): MissPath[] {
+    const now = Date.now();
+    const closed: MissPath[] = [];
+    for (const wk of [...this.windows.keys()]) {
+      closed.push(this.closeWindow(wk, 'timeout', now));
+    }
+    return closed;
+  }
+
+  /** Number of currently open windows (for testing). */
+  get openCount(): number {
+    return this.windows.size;
+  }
+
+  private closeWindow(windowKey: string, resolution: MissPath['resolution'], now: number): MissPath {
+    const w = this.windows.get(windowKey)!;
+    this.windows.delete(windowKey);
+    return {
+      ts: w.ts,
+      session: w.session,
+      namespace: w.namespace,
+      key: w.key,
+      toolCalls: w.toolCalls,
+      explorationBytes: w.explorationBytes,
+      resolution,
+      resolvedAt: now,
+      agent: w.agent,
+    };
+  }
+}
+
+// ── Namespace extraction ────────────────────────────────────────────
+
 /**
  * Extract the top-level namespace from a dot-notation key.
  * "arch.mcp" → "arch", undefined/empty → "*"
  */
-function extractNamespace(key?: string): string {
+export function extractNamespace(key?: string): string {
   if (!key) return '*';
   const dot = key.indexOf('.');
   return dot === -1 ? key : key.slice(0, dot);
@@ -54,6 +261,33 @@ export const EXPLORATION_COST: Record<string, number> = {
 const DEFAULT_EXPLORATION_COST = 1000;
 const BOOTSTRAP_PER_ENTRY_COST = 200;
 const REDUNDANT_WRITE_COST = 150;
+const MIN_OBSERVED_SAMPLES = 5;
+
+export interface ExplorationCostResult {
+  cost: number;
+  source: 'observed' | 'static';
+  samples: number;
+}
+
+/**
+ * Get exploration cost for a namespace, preferring observed miss-path data.
+ * Falls back to static EXPLORATION_COST when fewer than 5 writeback samples exist.
+ */
+export function getExplorationCost(namespace: string, missPaths?: MissPath[]): ExplorationCostResult {
+  const relevant = (missPaths ?? []).filter(
+    mp => mp.resolution === 'writeback' && mp.namespace === namespace,
+  );
+  if (relevant.length >= MIN_OBSERVED_SAMPLES) {
+    const costs = relevant.map(mp => mp.explorationBytes / 4).sort((a, b) => a - b);
+    const median = costs[Math.floor(costs.length / 2)];
+    return { cost: Math.round(median), source: 'observed', samples: relevant.length };
+  }
+  return {
+    cost: EXPLORATION_COST[namespace] ?? DEFAULT_EXPLORATION_COST,
+    source: 'static',
+    samples: relevant.length,
+  };
+}
 
 /**
  * Classify an MCP tool call as read, write, exec, or meta.
@@ -105,6 +339,14 @@ export interface TelemetryExtras {
 }
 
 export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global', extras?: TelemetryExtras, sync = false): Promise<void> {
+  // Self-resolve project if not provided (same as logAudit does)
+  let project = extras?.project;
+  if (project === undefined) {
+    try {
+      const pf = findProjectFile();
+      project = pf ? path.dirname(pf) : undefined;
+    } catch { /* best-effort */ }
+  }
   const entry: TelemetryEntry = {
     ts: Date.now(),
     tool,
@@ -115,6 +357,7 @@ export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 
     scope,
     agent: process.env.CODEX_AGENT_NAME ?? undefined,
     ...extras,
+    project,
   };
   const line = JSON.stringify(entry) + '\n';
   if (sync) {
@@ -219,6 +462,11 @@ export interface TelemetryStats {
   estimatedRedundantWriteTokensSaved: number;
   estimatedTotalTokensSaved: number;
   explorationBreakdown: Record<string, { hits: number; tokensSaved: number }>;
+  // Net savings (delivery cost subtracted)
+  deliveryCostTokens: number;
+  netTokensSaved: number;
+  // Calibration: observed vs static cost source per namespace
+  calibration: Record<string, ExplorationCostResult>;
   // Agent breakdown
   agentBreakdown: Record<string, { calls: number; reads: number; writes: number }>;
   // Trend comparison (vs previous period)
@@ -363,9 +611,13 @@ export function computeStats(periodDays = 0): TelemetryStats {
       .reduce((sum, e) => sum + e.responseSize!, 0) / 4
   );
 
-  // Exploration-weighted token savings (namespace-aware)
+  // Exploration-weighted token savings (namespace-aware, calibrated when possible)
   const explorationBreakdown: Record<string, { hits: number; tokensSaved: number }> = {};
+  const calibration: Record<string, ExplorationCostResult> = {};
   let estimatedExplorationTokensSaved = 0;
+
+  // Load miss-path data once for calibration
+  const missPathCache = loadMissPaths();
 
   const readHits = entries.filter(e => e.op === 'read' && e.hit === true);
   for (const e of readHits) {
@@ -382,16 +634,21 @@ export function computeStats(periodDays = 0): TelemetryStats {
       estimatedExplorationTokensSaved += rounded;
     } else {
       const ns = e.ns === '*' ? 'other' : e.ns;
-      const cost = EXPLORATION_COST[ns] ?? DEFAULT_EXPLORATION_COST;
+      const costResult = getExplorationCost(ns, missPathCache);
+      if (!calibration[ns]) calibration[ns] = costResult;
       if (!explorationBreakdown[ns]) explorationBreakdown[ns] = { hits: 0, tokensSaved: 0 };
       explorationBreakdown[ns].hits++;
-      explorationBreakdown[ns].tokensSaved += cost;
-      estimatedExplorationTokensSaved += cost;
+      explorationBreakdown[ns].tokensSaved += costResult.cost;
+      estimatedExplorationTokensSaved += costResult.cost;
     }
   }
 
   const estimatedRedundantWriteTokensSaved = redundantWrites * REDUNDANT_WRITE_COST;
   const estimatedTotalTokensSaved = estimatedExplorationTokensSaved + estimatedRedundantWriteTokensSaved;
+
+  // Net savings: gross exploration avoided minus delivery cost (tokens consumed by cache hits)
+  const deliveryCostTokens = estimatedTokensSaved; // raw bytes served ÷ 4
+  const netTokensSaved = estimatedTotalTokensSaved - deliveryCostTokens;
 
   // Agent breakdown
   const agentBreakdown: Record<string, { calls: number; reads: number; writes: number }> = {};
@@ -465,6 +722,9 @@ export function computeStats(periodDays = 0): TelemetryStats {
     estimatedRedundantWriteTokensSaved,
     estimatedTotalTokensSaved,
     explorationBreakdown,
+    deliveryCostTokens,
+    netTokensSaved,
+    calibration,
     agentBreakdown,
     trend,
   };

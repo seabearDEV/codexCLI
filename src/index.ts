@@ -783,18 +783,28 @@ codexCLI
         console.log(`  Avg latency:       ${color.white(`${Math.round(stats.avgDurationMs)}ms`)} per call`);
       if (stats.estimatedTotalTokensSaved > 0) {
         const fmtNum = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
-        console.log(`  Est. tokens saved: ${color.green(`~${fmtNum(stats.estimatedTotalTokensSaved)}`)} (agent tool calls avoided by using stored knowledge)`);
-        console.log(`    Cached data:     ${color.white(`~${fmtNum(stats.estimatedTokensSaved)}`)} tokens (raw bytes served ÷ 4)`);
+        console.log(`  Est. tokens saved: ${color.green(`~${fmtNum(stats.estimatedTotalTokensSaved)}`)} (exploration avoided by using stored knowledge)`);
+        console.log(`    Delivery cost:   ${color.white(`~${fmtNum(stats.deliveryCostTokens)}`)} tokens (context delivered to agent)`);
+        const netColor = stats.netTokensSaved >= 0 ? color.green : color.red;
+        console.log(`    Net savings:     ${netColor(`~${fmtNum(stats.netTokensSaved)}`)} tokens`);
         if (options.detailed) {
           console.log('    By namespace:');
           const breakdown = Object.entries(stats.explorationBreakdown)
             .sort(([,a], [,b]) => b.tokensSaved - a.tokensSaved);
           for (const [ns, { hits, tokensSaved }] of breakdown) {
             const perHit = hits > 0 ? Math.round(tokensSaved / hits) : 0;
-            console.log(`      ${color.gray(`${ns.padEnd(15)} ~${fmtNum(tokensSaved)} (${hits} lookup${hits !== 1 ? 's' : ''} × ${fmtNum(perHit)} tokens each)`)}`);
+            const cal = stats.calibration[ns];
+            const calTag = cal ? (cal.source === 'observed' ? ` [observed, n=${cal.samples}]` : ' [static]') : '';
+            console.log(`      ${color.gray(`${ns.padEnd(15)} ~${fmtNum(tokensSaved)} (${hits} lookup${hits !== 1 ? 's' : ''} × ${fmtNum(perHit)} each)${calTag}`)}`);
           }
           if (stats.estimatedRedundantWriteTokensSaved > 0) {
             console.log(`    ${color.gray(`Duplicate writes avoided: ~${fmtNum(stats.estimatedRedundantWriteTokensSaved)} (${stats.redundantWrites} write${stats.redundantWrites !== 1 ? 's' : ''} already up to date)`)}`);
+          }
+          const calEntries = Object.values(stats.calibration);
+          if (calEntries.length > 0) {
+            const observed = calEntries.filter(c => c.source === 'observed').length;
+            const total = calEntries.length;
+            console.log(`    ${color.gray(`Calibration: ${observed}/${total} namespaces observed, ${total - observed} static`)}`);
           }
         }
       } else if (stats.estimatedTokensSaved > 0) {

@@ -63,7 +63,7 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **Staleness Detection**: Track when entries were last updated, find stale knowledge (`ccli stale`), inline `[untracked]` / `[Nd]` warnings on `get` and `context` output
 - **Schema Validation**: Check entries against recommended namespaces (`ccli lint`), customizable via `_schema.namespaces`
 - **MCP Server**: 19 tools for any MCP-compatible AI agent (Claude Code, Copilot, ChatGPT, etc.) via the Model Context Protocol
-- **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs, hit/miss tracking, and per-entry metrics (`ccli audit --detailed`). Includes [namespace-weighted token savings estimates](docs/token-savings.md) and per-agent breakdown.
+- **Telemetry & Audit**: Track usage patterns with scope-aware telemetry (`ccli stats`) and full audit log with before/after diffs, hit/miss tracking, and per-entry metrics (`ccli audit --detailed`). Includes [net token savings with self-calibrating exploration cost estimates](docs/token-savings.md), miss-path tracking, and per-agent breakdown.
 
 ## Installation
 
@@ -220,8 +220,8 @@ ccli get server.ip -c
 # Output as JSON (for scripting)
 ccli get server --json
 
-# Show aliases only
-ccli get -a
+# List all aliases
+ccli alias list
 ```
 
 ### Running Commands
@@ -346,7 +346,7 @@ Rename entry keys or aliases without re-creating them:
 ccli rename server.old server.new
 
 # Rename an alias
-ccli rename -a oldalias newalias
+ccli alias rename oldalias newalias
 
 # Rename a key and set a new alias on it
 ccli rename server.old server.new --set-alias sn
@@ -376,7 +376,7 @@ ccli remove server.old
 ccli remove server.old -f
 
 # Remove an alias only (keep the entry)
-ccli remove myalias -a
+ccli alias remove myalias
 ```
 
 ### Interpolation

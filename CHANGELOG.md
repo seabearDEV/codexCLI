@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] - 2026-04-06
+
+### Added
+
+- **Net token savings** — `ccli stats` and `codex_stats` now report delivery cost (tokens consumed by cache hits) and net savings (gross exploration avoided minus delivery cost). Encourages lean, high-signal knowledge bases.
+- **Miss-path tracking** — MCP server tracks exploration cost when `codex_get`/`codex_search` misses. Opens a "miss window" that records subsequent tool calls until the agent finds the answer (writeback), moves on, or times out. Stored in `~/.codexcli/miss-paths.jsonl`.
+- **Self-calibrating exploration costs** — static per-namespace cost multipliers are replaced with observed medians once 5+ writeback miss-path samples exist. `--detailed` stats show `[observed, n=N]` vs `[static]` per namespace. Calibration status summary in detailed output.
+- **`MissWindowTracker` class** — pure state machine in `src/utils/telemetry.ts` with no I/O, fully testable. Handles window lifecycle: open on miss, accumulate on subsequent calls, close on writeback/moved_on/timeout.
+- **`miss-paths` reset type** — `ccli reset miss-paths` and `codex_reset type:"miss-paths"` to clear the miss-path log.
+- **30 new tests** — `miss-path.test.ts` (MissWindowTracker lifecycle, persistence roundtrip, calibration thresholds), extended `telemetry-advanced.test.ts` (net savings, calibration, backward compat).
+
+### Fixed
+
+- **MCP telemetry missing `project` field** — `logToolCall()` now self-resolves the project directory via `findProjectFile()`, matching `logAudit()`'s behavior. Previously relied on the caller to pass it, which was inconsistent.
+- **Fuzz test timeout** — encrypt/decrypt round-trip test (50 trials) now has a 15s timeout instead of the default 5s.
+- **MCP test mocks** — `mcp-server.test.ts` and `mcp-advanced.test.ts` mocks updated for new telemetry exports (`MissWindowTracker`, `appendMissPath`, `getSessionId`, `extractNamespace`).
+
+### Changed
+
+- **Stats display updated** — "Est. tokens saved" line now shows "exploration avoided" instead of "agent tool calls avoided". Delivery cost and net savings lines added below. Per-namespace breakdown includes calibration tags.
+- **Token savings documentation** — `docs/token-savings.md` rewritten with miss-path calibration methodology, net savings explanation, updated diagrams and worked example.
+- **LLM instructions** — `codex_stats` description updated to mention net savings, delivery cost, and calibration.
+
 ## [1.8.0] - 2026-04-06
 
 ### Added

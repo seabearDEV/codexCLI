@@ -1,6 +1,6 @@
 {
 	"name": "codexcli",
-	"version": "1.8.0",
+	"version": "1.9.0",
 	"description": "Persistent, structured knowledge store for software projects — CLI + MCP server for AI agent integration",
 	"bin": {
 		"cclid": "dist/index.js",
@@ -26,8 +26,10 @@
 		"cli",
 		"command-line",
 		"data-store",
-		"reference",
-		"information"
+		"knowledge-base",
+		"mcp",
+		"ai-agent",
+		"model-context-protocol"
 	],
 	"author": "Kory Hoopes (seabearDEV)",
 	"license": "MIT",

@@ -90,6 +90,15 @@ CodexCLI is a structured, persistent knowledge base for software projects — ac
 - [x] Deprecation notices on old `-a` flag patterns (still functional, with migration guidance)
 - [x] Stored command chains: `run --chain` resolves stored value as space-separated key references ([#16](https://github.com/seabearDEV/codexCLI/issues/16))
 
+### v1.9.x (Observed Token Savings)
+- [x] Net token savings: delivery cost (context consumed by agent) subtracted from gross exploration savings
+- [x] Miss-path tracking: MCP server records exploration cost when reads miss, stored in `miss-paths.jsonl`
+- [x] Self-calibrating exploration costs: static multipliers replaced with observed medians after ≥5 writeback samples per namespace
+- [x] `MissWindowTracker` class: pure state machine for miss window lifecycle (open/accumulate/close)
+- [x] `miss-paths` reset type for CLI and MCP
+- [x] `logToolCall` self-resolves project (parity with `logAudit`)
+- [x] Token savings documentation rewritten with calibration methodology and net savings
+
 ---
 
 ## Post-1.0
@@ -135,7 +144,7 @@ Ensure CodexCLI stays fast as knowledge bases grow.
 - [ ] JetBrains plugin
 
 ### Go Rewrite (Long-term)
-A Go rewrite is planned for better performance and single-binary distribution without Node.js. See `docs/go-rewrite-plan.md` for details.
+A Go rewrite is planned for better performance and single-binary distribution without Node.js.
 
 - [ ] Port core data operations (set, get, remove, search)
 - [ ] Port MCP server
