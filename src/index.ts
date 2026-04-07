@@ -158,7 +158,7 @@ codexCLI
   .action(async (key: string | undefined, options: { tree?: boolean, plain?: boolean, raw?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
     if (options.aliases) console.error(color.yellow('Deprecation: use `alias list` instead of `get -a`.'));
     if (options.raw) console.error(color.yellow('Deprecation: --raw is now --plain. The old flag still works but will be removed in a future release.'));
-    const plain = Boolean(options.plain || options.raw);
+    const plain = Boolean(options.plain ?? options.raw);
     options.plain = plain;
     options.raw = plain; // keep downstream code working until full rename
     const scope = options.global ? 'global' as const : undefined;
@@ -447,7 +447,7 @@ codexCLI
   .option('-j, --json', 'Output as JSON')
   .action(async (options: { tier?: string, global?: boolean, plain?: boolean, raw?: boolean, json?: boolean }) => {
     if (options.raw) console.error(color.yellow('Deprecation: --raw is now --plain. The old flag still works but will be removed in a future release.'));
-    const plain = Boolean(options.plain || options.raw);
+    const plain = Boolean(options.plain ?? options.raw);
     options.plain = plain;
     options.raw = plain;
     const scope = options.global ? 'global' as const : undefined;

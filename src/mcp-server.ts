@@ -1531,9 +1531,24 @@ async function applyClientRootsOverride(): Promise<void> {
   // CODEX_PROJECT (handled in paths.ts) takes precedence — don't override it.
   if (process.env.CODEX_PROJECT) return;
   try {
-    // McpServer wraps the low-level Server; listRoots is exposed there.
-    const lowLevel = (server as unknown as { server: { listRoots: () => Promise<{ roots?: { uri: string }[] }> } }).server;
-    const result = await lowLevel.listRoots();
+    // McpServer wraps the low-level Server. Only request roots if the client
+    // advertised the capability during initialize — otherwise the request
+    // can hang or error on clients that don't implement roots/list.
+    const lowLevel = (server as unknown as {
+      server: {
+        getClientCapabilities: () => { roots?: unknown } | undefined;
+        listRoots: () => Promise<{ roots?: { uri: string }[] }>;
+      }
+    }).server;
+    const caps = lowLevel.getClientCapabilities?.();
+    if (!caps?.roots) return;
+
+    // Hard timeout in case the client advertises the capability but stalls.
+    const timeoutMs = 2000;
+    const result = await Promise.race([
+      lowLevel.listRoots(),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('listRoots timeout')), timeoutMs)),
+    ]);
     const first = result?.roots?.[0]?.uri;
     if (!first) return;
     let dir: string;
