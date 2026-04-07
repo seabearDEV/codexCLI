@@ -6,12 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-04-07
+
 ### Added
 
 - **Interpolation backslash escape** — `\${key}` and `\$(key)` now emit literal `${key}` / `$(key)` with the backslash consumed. Prevents stored documentation or examples containing interpolation syntax from triggering resolution errors on read.
+- **`--plain` flag on `get` and `context`** — replaces the misleadingly-named `--raw`, which implied "no processing" when its actual behavior was "no colors". `-r`/`--raw` is kept as a hidden, deprecated alias and prints a one-line deprecation warning. Closes [#40](https://github.com/seabearDEV/codexCLI/issues/40).
+- **`CODEX_PROJECT` env var** — explicit override for the project file location. Accepts a path to a `.codexcli.json` file or its containing directory. Fails closed if the path doesn't exist (no silent walk-up to a different project), so it's safe to pin in `.claude.json` MCP blocks.
+- **MCP client roots support** — the MCP server now calls `roots/list` after the initialize handshake and uses the first advertised root as the project file search start. Best-effort and silent for clients that don't implement roots.
 
 ### Fixed
 
+- **MCP server bound to the wrong project** — `findProjectFile()` walked up from `process.cwd()`, which silently bound the server to whichever `.codexcli.json` lived above its inherited cwd. The new resolution order is: `CODEX_NO_PROJECT` → `CODEX_PROJECT` → `setProjectRootOverride()` (set from MCP roots and from launcher hints) → `process.cwd()` walk-up. The pre-existing `CODEX_PROJECT_DIR` and `--cwd` launcher hints still work but now apply via the override (no `process.chdir`) and work whether the server is run as a binary or imported.
 - **`arch.interpolation` codex entry** — was self-poisoned by its own `${key}` examples, causing `"key" not found` errors on read. Rewritten to use prose descriptions. Also corrected the claim that `--raw` skips interpolation (it's `--source`).
 
 ## [1.9.0] - 2026-04-06
