@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Fixed
+
+- **File-per-entry store: torn reads during concurrent writes** — `load()` could observe a partially-committed `save()` when another process was mid-write (some entries updated, others not), with no way to detect it. The store now uses a seqlock-style commit epoch in a new `_epoch.json` sidecar: even values mean "stable," odd means "writer mid-commit." `save()` bumps the epoch to odd before touching any files and to the next even value after all writes complete, both under the existing directory lock. `load()` snapshots the epoch before and after its scan and retries (bounded to 3 attempts with 1–8 ms backoff) if it sees a mismatch or an odd "before" value. Missing or bogus `_epoch.json` reads as 0, so legacy directories and fresh installs transition cleanly through the first save.
+- **File-per-entry store: migration race on pristine installs** — `migrateFileToDirectory` ran without a lock. Two processes starting simultaneously on a pristine install could both enter the migration path and race. The migration now runs inside `withFileLock(newDirPath, …)`, reusing the same lock key as the steady-state store, so migrations and normal saves are mutually exclusive. The loser waits, observes the new directory, and returns `already-present`. Migration also seeds `_epoch.json` at 0 inside its tmp directory before the atomic rename, so readers see a coherent epoch from the instant the store directory exists.
+
+### Added
+
+- **`_README.md` hand-edit warning sidecar** — file-per-entry layout's big UX win is that per-entry files are browsable in a file manager, but that also invites developers to open one and tweak it directly (which desyncs per-entry metadata and breaks staleness signals — see `conventions.editSurface`). The store now seeds a `_README.md` on first `save()` and during migration with an in-context nudge pointing at the supported edit paths. Idempotent: a user-customized `_README.md` is never overwritten.
+
+### Changed
+
+- **File-per-entry store: sidecar mtime tracking** — `_aliases.json` and `_confirm.json` were re-read and JSON-parsed on every `scanAndSync()`, even when nothing had changed. They now go through the same mtime-cached path as entry files: a stat-first refresh skips the re-read when mtime matches. Missing sidecars cache as an `-1` sentinel so they're detected the moment they appear on disk. `load()` now returns defensive shallow copies of the cached sidecar maps so callers that mutate-then-save (`setAlias` and friends) can't accidentally pollute the cache.
+
 ## [1.10.0] - 2026-04-07
 
 ### Changed
