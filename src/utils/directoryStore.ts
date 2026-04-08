@@ -74,9 +74,16 @@ const ENTRY_FILE_SUFFIX = '.json';
 const README_CONTENT = `# codexCLI store — do not hand-edit
 
 This directory is managed by codexCLI. Each \`*.json\` file is a single
-store entry written through the CLI or MCP tools. Sidecar files starting
-with \`_\` (this README, \`_aliases.json\`, \`_confirm.json\`, \`_epoch.json\`)
-are internal bookkeeping.
+store entry written through the CLI or MCP tools.
+
+**Internal sidecar files** (prefix \`_\`, safe to ignore):
+
+- \`_README.md\` — this file
+- \`_aliases.json\` — short-name aliases for entries
+- \`_confirm.json\` — entries that require confirmation before running
+- \`_epoch.json\` — internal commit counter for crash safety; the integer
+  climbs by 2 with every save and is used by readers to detect a writer
+  mid-commit. You should never need to touch it.
 
 **Edit via one of:**
 
@@ -452,9 +459,12 @@ export function createDirectoryStore(
     for (let attempt = 0; attempt <= MAX_LOAD_RETRIES; attempt++) {
       const before = readEpoch(dir);
       if (before % 2 !== 0) {
-        // Writer is mid-commit. Back off briefly and retry.
+        // Writer is mid-commit. Back off briefly and retry. Backoffs only
+        // fire on attempts 0..MAX_LOAD_RETRIES-1 (1ms, 2ms, 4ms with the
+        // current MAX_LOAD_RETRIES=3); on the final attempt we log and
+        // proceed with a best-effort scan rather than waiting again.
         if (attempt < MAX_LOAD_RETRIES) {
-          Atomics.wait(_loadRetrySleep, 0, 0, 1 << attempt); // 1ms, 2ms, 4ms, 8ms
+          Atomics.wait(_loadRetrySleep, 0, 0, 1 << attempt);
           continue;
         }
         debug(
@@ -472,7 +482,12 @@ export function createDirectoryStore(
         );
         break;
       }
-      // otherwise: loop and retry with a fresh scan
+      // Otherwise: loop and retry with a fresh scan. No backoff here —
+      // unlike the odd-epoch case, an epoch *mismatch* means the writer
+      // already committed (we read the post-commit even value as `after`).
+      // Writes are sub-millisecond, so by the time we re-scan the writer
+      // is almost certainly done; backing off would only add latency in
+      // the common case without preventing further mismatches.
     }
 
     // Assemble the nested `entries` tree from the flat per-key cache.

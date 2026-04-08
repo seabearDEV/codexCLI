@@ -15,26 +15,96 @@ function isDev(): boolean {
 
 // Add caching for path resolution
 let dataDirectoryCache: string | null = null;
+let dataDirEnsured = false;
+let dataDirWritabilityWarned = false;
 
 /**
- * Get the directory where data files should be stored
+ * Get the directory where data files should be stored.
+ *
+ * Resolution order:
+ *   1. `CODEX_DATA_DIR` env var (must be a non-empty absolute path)
+ *   2. Dev mode: `<repo>/data`
+ *   3. Production: `~/.codexcli`
+ *
+ * Validation: when `CODEX_DATA_DIR` is set, it must be an absolute path.
+ * Relative values are rejected with a hard error rather than silently
+ * resolved against `process.cwd()` — the resolved location of a relative
+ * path depends on which directory the process happened to be in at the
+ * moment of the first call, which is surprising (especially for
+ * long-running MCP servers whose cwd may differ from the user's shell).
+ * Empty strings are treated as unset.
+ *
+ * If the resolved directory exists but isn't writable, a one-time warning
+ * is emitted to stderr. Non-existent directories are not warned about
+ * here — `ensureDataDirectoryExists()` creates them later, and warning
+ * about a path we're about to create would be noise.
  */
 export function getDataDirectory(): string {
-  dataDirectoryCache ??= process.env.CODEX_DATA_DIR
-    ?? (isDev()
-      ? path.join(path.resolve(__dirname, '..', '..'), 'data')
-      : path.join(os.homedir(), '.codexcli'));
+  if (dataDirectoryCache !== null) return dataDirectoryCache;
+
+  const fromEnv = process.env.CODEX_DATA_DIR;
+  if (fromEnv !== undefined && fromEnv !== '') {
+    if (!path.isAbsolute(fromEnv)) {
+      throw new Error(
+        `CODEX_DATA_DIR must be an absolute path. Got: ${JSON.stringify(fromEnv)}. ` +
+        `Relative paths are rejected because the resolved location would depend on ` +
+        `process.cwd() at first call.`
+      );
+    }
+    dataDirectoryCache = fromEnv;
+  } else if (isDev()) {
+    dataDirectoryCache = path.join(path.resolve(__dirname, '..', '..'), 'data');
+  } else {
+    dataDirectoryCache = path.join(os.homedir(), '.codexcli');
+  }
+
+  // One-time writability check. We only warn when the directory exists
+  // already; non-existent paths are normal on first run and get created
+  // by ensureDataDirectoryExists().
+  if (!dataDirWritabilityWarned) {
+    try {
+      if (fs.existsSync(dataDirectoryCache)) {
+        fs.accessSync(dataDirectoryCache, fs.constants.W_OK | fs.constants.X_OK);
+      }
+    } catch {
+      process.stderr.write(
+        `Warning: data directory ${dataDirectoryCache} is not writable. ` +
+        `codexCLI may fail to save changes.\n`
+      );
+    }
+    dataDirWritabilityWarned = true;
+  }
+
   return dataDirectoryCache;
+}
+
+/**
+ * True if `CODEX_DATA_DIR` is set to a non-empty value. Used by `ccli info`
+ * (and tests) to label the data path with its source.
+ */
+export function isDataDirectoryFromEnv(): boolean {
+  const fromEnv = process.env.CODEX_DATA_DIR;
+  return fromEnv !== undefined && fromEnv !== '';
+}
+
+/**
+ * Reset the cached data directory and related one-shot flags. After this
+ * call, the next `getDataDirectory()` re-reads `CODEX_DATA_DIR` and may
+ * re-emit the writability warning. Mirrors `clearProjectFileCache()`.
+ * Primarily used by tests; production code has no reason to call this.
+ */
+export function clearDataDirectoryCache(): void {
+  dataDirectoryCache = null;
+  dataDirEnsured = false;
+  dataDirWritabilityWarned = false;
 }
 
 /**
  * Ensures data directory exists
  * Creates it if it doesn't exist
- * 
+ *
  * @returns {string} Path to the data directory
  */
-let dataDirEnsured = false;
-
 export function ensureDataDirectoryExists(): string {
   const dataDir = getDataDirectory();
 

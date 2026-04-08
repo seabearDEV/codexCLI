@@ -36,6 +36,7 @@ vi.mock('../utils/paths', () => ({
   getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
   getGlobalStoreDirPath: vi.fn(() => '/mock/store'),
+  isDataDirectoryFromEnv: vi.fn(() => false),
 }));
 
 vi.mock('fs', () => {
@@ -85,6 +86,18 @@ describe('showInfo', () => {
     const output = getOutput();
     expect(output).toContain('/mock/store');
     expect(output).toContain('config.json');
+  });
+
+  it('annotates Data line with (CODEX_DATA_DIR) when env var is set', async () => {
+    const pathsMock = await import('../utils/paths');
+    (pathsMock.isDataDirectoryFromEnv as Mock).mockReturnValueOnce(true);
+    showInfo();
+    expect(getOutput()).toContain('(CODEX_DATA_DIR)');
+  });
+
+  it('does not annotate Data line when env var is not set', () => {
+    showInfo();
+    expect(getOutput()).not.toContain('(CODEX_DATA_DIR)');
   });
 
   it('shows version label', () => {

@@ -25,6 +25,99 @@ describe('paths utilities', () => {
       const { getDataDirectory } = await import('../utils/paths');
       expect(getDataDirectory()).toBe(process.env.CODEX_DATA_DIR);
     });
+
+    it('throws when CODEX_DATA_DIR is a relative path', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_DATA_DIR;
+      process.env.CODEX_DATA_DIR = './relative/path';
+      try {
+        const { getDataDirectory } = await import('../utils/paths');
+        expect(() => getDataDirectory()).toThrow(/absolute path/i);
+      } finally {
+        if (original !== undefined) process.env.CODEX_DATA_DIR = original;
+        else delete process.env.CODEX_DATA_DIR;
+      }
+    });
+
+    it('treats an empty CODEX_DATA_DIR as unset (does not produce a relative path)', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_DATA_DIR;
+      process.env.CODEX_DATA_DIR = '';
+      try {
+        const { getDataDirectory } = await import('../utils/paths');
+        const result = getDataDirectory();
+        expect(result).not.toBe('');
+        expect(path.isAbsolute(result)).toBe(true);
+      } finally {
+        if (original !== undefined) process.env.CODEX_DATA_DIR = original;
+        else delete process.env.CODEX_DATA_DIR;
+      }
+    });
+  });
+
+  describe('clearDataDirectoryCache', () => {
+    it('resets the cache so a new CODEX_DATA_DIR is picked up on the next call', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_DATA_DIR;
+      const firstDir = path.join(tmpDir, 'first');
+      const secondDir = path.join(tmpDir, 'second');
+      try {
+        process.env.CODEX_DATA_DIR = firstDir;
+        const { getDataDirectory, clearDataDirectoryCache } = await import('../utils/paths');
+        expect(getDataDirectory()).toBe(firstDir);
+
+        // Without clearing, the cache wins even when the env changes.
+        process.env.CODEX_DATA_DIR = secondDir;
+        expect(getDataDirectory()).toBe(firstDir);
+
+        // After clearing, the next call re-reads the env.
+        clearDataDirectoryCache();
+        expect(getDataDirectory()).toBe(secondDir);
+      } finally {
+        if (original !== undefined) process.env.CODEX_DATA_DIR = original;
+        else delete process.env.CODEX_DATA_DIR;
+      }
+    });
+  });
+
+  describe('isDataDirectoryFromEnv', () => {
+    it('returns true when CODEX_DATA_DIR is set to a non-empty value', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_DATA_DIR;
+      process.env.CODEX_DATA_DIR = path.join(tmpDir, 'somewhere');
+      try {
+        const { isDataDirectoryFromEnv } = await import('../utils/paths');
+        expect(isDataDirectoryFromEnv()).toBe(true);
+      } finally {
+        if (original !== undefined) process.env.CODEX_DATA_DIR = original;
+        else delete process.env.CODEX_DATA_DIR;
+      }
+    });
+
+    it('returns false when CODEX_DATA_DIR is unset', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_DATA_DIR;
+      delete process.env.CODEX_DATA_DIR;
+      try {
+        const { isDataDirectoryFromEnv } = await import('../utils/paths');
+        expect(isDataDirectoryFromEnv()).toBe(false);
+      } finally {
+        if (original !== undefined) process.env.CODEX_DATA_DIR = original;
+      }
+    });
+
+    it('returns false when CODEX_DATA_DIR is an empty string', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_DATA_DIR;
+      process.env.CODEX_DATA_DIR = '';
+      try {
+        const { isDataDirectoryFromEnv } = await import('../utils/paths');
+        expect(isDataDirectoryFromEnv()).toBe(false);
+      } finally {
+        if (original !== undefined) process.env.CODEX_DATA_DIR = original;
+        else delete process.env.CODEX_DATA_DIR;
+      }
+    });
   });
 
   describe('ensureDataDirectoryExists', () => {

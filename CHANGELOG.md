@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Added
+
+- **`CODEX_DATA_DIR` validation, provenance, and documentation** — the env var has always been honored by `getDataDirectory()`, but it was undocumented, unvalidated, and invisible. Three changes close those gaps:
+  - **Validation**: `CODEX_DATA_DIR` must be an absolute path. Relative values (`./mydata`, etc.) now throw with a clear error rather than silently resolving against `process.cwd()` — the resolved location of a relative path depended on whichever directory the process happened to be in at first call, which is surprising for long-running MCP servers. Empty strings are treated as unset.
+  - **Provenance**: `ccli info` annotates the `Data` line with `(CODEX_DATA_DIR)` when the env var is set, so users can verify their override at a glance instead of guessing whether it took effect.
+  - **Writability warning**: if the resolved data directory exists but isn't writable, a one-time warning fires to stderr on first `getDataDirectory()` call. Non-existent paths are not warned about — `ensureDataDirectoryExists()` creates them later.
+  - **Docs**: new `## Environment Variables` section in the README listing every `CODEX_*` variable (`CODEX_DATA_DIR`, `CODEX_PROJECT`, `CODEX_PROJECT_DIR`, `CODEX_NO_PROJECT`, `CODEX_AGENT_NAME`) with purpose, default, and a notes section. Closes [#63](https://github.com/seabearDEV/codexCLI/issues/63).
+- **`clearDataDirectoryCache()`** in `src/utils/paths.ts` — resets the module-level cache and one-shot flags so a subsequent `getDataDirectory()` call re-reads `CODEX_DATA_DIR`. Mirrors `clearProjectFileCache()` and is primarily useful for tests; production code has no reason to call it.
+- **`isDataDirectoryFromEnv()`** in `src/utils/paths.ts` — small predicate exported so `ccli info` (and tests) can label the data path with its source.
+
 ### Fixed
 
 - **File-per-entry store: torn reads during concurrent writes** — `load()` could observe a partially-committed `save()` when another process was mid-write (some entries updated, others not), with no way to detect it. The store now uses a seqlock-style commit epoch in a new `_epoch.json` sidecar: even values mean "stable," odd means "writer mid-commit." `save()` bumps the epoch to odd before touching any files and to the next even value after all writes complete, both under the existing directory lock. `load()` snapshots the epoch before and after its scan and retries (bounded to 3 attempts with 1–8 ms backoff) if it sees a mismatch or an odd "before" value. Missing or bogus `_epoch.json` reads as 0, so legacy directories and fresh installs transition cleanly through the first save.
