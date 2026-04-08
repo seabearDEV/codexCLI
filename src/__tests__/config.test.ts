@@ -83,6 +83,33 @@ describe('Config', () => {
       expect(config.colors).toBe(false);
       expect(config.theme).toBe('default');
     });
+
+    it('does not let caller mutation pollute defaultConfig on a fresh-install ENOENT path', () => {
+      // Regression test for the bug Copilot caught in PR #66 review:
+      // loadConfig() was returning `defaultConfig` BY REFERENCE in the
+      // ENOENT branch, so a caller doing the loadConfig→mutate→saveConfig
+      // pattern (e.g. setConfigSetting on a fresh install) would mutate
+      // the module-level `defaultConfig` constant and pollute every
+      // subsequent caller in the process.
+      (fs.statSync as Mock).mockImplementation(() => {
+        const err = new Error('ENOENT') as Error & { code: string };
+        err.code = 'ENOENT';
+        throw err;
+      });
+
+      // First call: simulates first-run reading defaults.
+      const first = loadConfig();
+      expect(first.colors).toBe(true);
+
+      // Mutate the returned object as setConfigSetting would.
+      first.colors = false;
+
+      // Second call: still ENOENT (file still doesn't exist in this test).
+      // Must return fresh defaults, NOT a polluted reference.
+      const second = loadConfig();
+      expect(second.colors).toBe(true);
+      expect(second).not.toBe(first);
+    });
   });
 
   describe('saveConfig', () => {

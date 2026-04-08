@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import * as commands from './commands';
 import { removeAlias, resolveKey, loadAliases, setAlias, renameAlias } from './alias';
 import { setConfirm, removeConfirm, loadConfirmKeys } from './confirm';
@@ -148,7 +148,7 @@ codexCLI
   .option('-s, --source', 'Show stored value before interpolation')
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
   .option('-c, --copy', 'Copy value to clipboard')
-  .option('-a, --aliases', 'Show aliases only')
+  .addOption(new Option('-a, --aliases', 'Show aliases only — use `alias list` instead').hideHelp())
   .option('-v, --values', 'Include values in output')
   .option('-k, --depth <n>', 'Limit key depth (e.g. -k 1 for top-level only)', parseInt)
   .option('-j, --json', 'Output as JSON (for scripting)')
@@ -242,7 +242,7 @@ codexCLI
   .command('rename <old> <new>')
   .alias('rn')
   .description('Rename an entry key or alias')
-  .option('-a, --alias', 'Rename an alias instead of an entry key')
+  .addOption(new Option('-a, --alias', 'Rename an alias instead of an entry key — use `alias rename` instead').hideHelp())
   .option('--set-alias <name>', 'Set an alias on the renamed key')
   .option('-G, --global', 'Target global data store')
   .action(async (oldName: string, newName: string, options: { alias?: boolean, setAlias?: string, global?: boolean }) => {
@@ -266,7 +266,7 @@ codexCLI
   .command('remove <key>')
   .alias('rm')
   .description('Remove an entry')
-  .option('-a, --alias', 'Remove the alias only (keep the entry)')
+  .addOption(new Option('-a, --alias', 'Remove the alias only (keep the entry) — use `alias remove` instead').hideHelp())
   .option('-f, --force', 'Skip confirmation prompt')
   .option('-G, --global', 'Target global data store')
   .action(async (key: string, options: { alias?: boolean, force?: boolean, global?: boolean }) => {

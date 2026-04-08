@@ -6,50 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### ⚠️ Breaking Changes
+
+Three breaking items in v1.11. Each is small individually; review before upgrading if you script against the CLI.
+
+1. **`withFileLock` fails closed in production.** Lock acquisition failures now throw instead of silently running the closure unlocked. All three production call sites (`directoryStore.save()`, `migrateFileToDirectory()`, `saveJsonSorted()`) were audited and confirmed to have a guaranteed-existing parent directory before invoking `withFileLock`, so the new throw never fires in normal operation. Set `CODEX_DISABLE_LOCKING=1` to restore the pre-v1.11 silent fallback (test-only escape hatch).
+2. **`--raw` / `-r` on `get` and `context` removed entirely.** Was a deprecated alias for `--plain` since v1.9.1. Migration: replace any scripted use of `ccli get foo --raw` or `ccli context --raw` with `--plain` (or the new `-p` short). The deprecation warning has been live for two minor versions.
+3. **`stats --detailed` and `audit --detailed` moved from `-d` to `-D`.** Frees lowercase `-d` to mean `--decrypt` unambiguously across all read commands (`get`, `run`, `edit`). Mirrors the `-G/-A/-P` capital-letter convention for "broadeners". Anyone passing `-d` to `ccli stats` or `ccli audit` will get a usage error.
+
+### Added
+
+- **`-p` short for `--plain`** on `get` and `context` (closes the original short-flag-audit trigger from `context.shortFlagAudit`). Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62).
+- **`-j` short for `--json` on `stats`** — every other JSON-emitting command already had `-j`; `stats` was the lone exception. Pure consistency fix.
+- **`CODEX_DATA_DIR` validation, provenance, and documentation** — the env var has always been honored by `getDataDirectory()`, but was undocumented, unvalidated, and invisible. Closes [#63](https://github.com/seabearDEV/codexCLI/issues/63).
+  - **Validation**: `CODEX_DATA_DIR` must be an absolute path. Relative values (`./mydata`, etc.) now throw with a clear error rather than silently resolving against `process.cwd()`. Empty strings are treated as unset.
+  - **Provenance**: `ccli info` annotates the `Data` line with `(CODEX_DATA_DIR)` when the env var is set, so users can verify their override at a glance.
+  - **Writability warning**: if the resolved data directory exists but isn't writable, a one-time warning fires to stderr on first `getDataDirectory()` call.
+  - **Docs**: new `## Environment Variables` section in the README listing every `CODEX_*` variable with purpose, default, and notes.
+- **`clearDataDirectoryCache()`** in `src/utils/paths.ts` — resets the module-level cache and one-shot flags so a subsequent `getDataDirectory()` call re-reads `CODEX_DATA_DIR`. Mirrors `clearProjectFileCache()`. Primarily for tests.
+- **`isDataDirectoryFromEnv()`** in `src/utils/paths.ts` — small predicate so `ccli info` (and tests) can label the data path with its source.
+- **`CODEX_DISABLE_LOCKING=1` env var** — test-only opt-out that restores the pre-v1.11 silent-fallback behavior of `withFileLock`. Documented in the README env-var section.
+- **`_README.md` hand-edit warning sidecar** — file-per-entry layout's big UX win is that per-entry files are browsable in a file manager, but that also invites developers to tweak them directly (which desyncs per-entry metadata and breaks staleness signals — see `conventions.editSurface`). The store now seeds a `_README.md` on first `save()` and during migration with an in-context nudge pointing at the supported edit paths. Idempotent: a user-customized `_README.md` is never overwritten.
+- **Release checklist** at `docs/release-checklist.md` — captures the manual smoke steps for the v1.11 breaking changes plus a reusable per-release template.
+
 ### Changed
 
-- **`withFileLock` fails closed in production (BREAKING for any caller relying on the silent fallback)** — `src/utils/fileLock.ts` previously caught all `acquireLock` failures and silently ran the closure unlocked. The seqlock added in v1.10.x protected readers from torn states but did *not* protect writers from clobbering each other under the silent fallback path. Closes [#61](https://github.com/seabearDEV/codexCLI/issues/61).
-  - **New default**: lock acquisition failures throw and propagate. Audit confirmed all three production call sites (`directoryStore.save()`, `migrateFileToDirectory()`, `saveJsonSorted()`) have a guaranteed-existing parent directory before they invoke `withFileLock`, so the new throw never fires in normal operation.
-  - **Test escape hatch**: set `CODEX_DISABLE_LOCKING=1` to restore the pre-v1.11 silent-fallback behavior. Read fresh on every call so tests can flip it on/off without restarting the process. Documented in the README env-var section as test-only.
-  - **Stale doc removed**: the JSDoc on `migrateFileToDirectory` previously said "lock acquisition will fail and `withFileLock` will fall through to running unlocked" — that path was already mitigated by PR #64's `ensureDataDirectoryExists()` call in `getGlobalStore()`. Updated to reflect the new fail-closed semantics.
-- **`loadConfig()` returns defensive shallow copies of the cached `Config`** — same hazard PR #58 fixed for sidecar caches in `directoryStore.ts`, found during the defensive shallow-cache audit folded into this PR. `setConfigSetting()` calls `loadConfig()`, mutates the result in place, then calls `saveConfig()` with the mutated reference; under the previous shared-reference behavior, the in-memory cache would be polluted by those mutations between the write and the next mtime-triggered re-read. Strictly defensive — no observable user-facing bug, but closes the same class of latent bug.
+- **Short-flag namespace audit** — first comprehensive pass at the short-flag space since v1.0. Three flag moves, one orphan adoption, one consistency fix. See the Breaking Changes section for the `-d` → `-D` move on `stats`/`audit`. The other two changes are strictly additive (`-p` for `--plain`, `-j` for `stats --json`). Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62).
+- **`GetOptions.raw` field renamed to `plain`** in `src/types.ts` and `ContextOptions.raw` → `plain` in `src/commands/context.ts`. Internal API change; downstream consumers in `src/commands/entries.ts`, `src/commands/context.ts`, and `src/formatting.ts` (`displayTree` / `formatTree`) updated to match.
+- **`loadConfig()` returns defensive shallow copies of the cached `Config`** — same hazard PR #58 fixed for sidecar caches in `directoryStore.ts`, found during the defensive shallow-cache audit. `setConfigSetting()` calls `loadConfig()`, mutates the result in place, then calls `saveConfig()` with the mutated reference; under the previous shared-reference behavior, the in-memory cache would be polluted by those mutations between the write and the next mtime-triggered re-read. **All three return paths** (cached, freshly-parsed, ENOENT/error fallback) now return copies; `saveConfig()` also stores a copy in the cache for defense in depth.
+- **File-per-entry store: sidecar mtime tracking** — `_aliases.json` and `_confirm.json` were re-read and JSON-parsed on every `scanAndSync()`, even when nothing had changed. They now go through the same mtime-cached path as entry files: a stat-first refresh skips the re-read when mtime matches. Missing sidecars cache as an `-1` sentinel so they're detected the moment they appear on disk. `load()` now returns defensive shallow copies of the cached sidecar maps so callers that mutate-then-save (`setAlias` and friends) can't accidentally pollute the cache.
+- **Legacy `-a` flags on `get`/`rename`/`remove` are now hidden from `--help`** — these are undocumented entry points to the alias-subcommand functionality (`ccli get -a` ≡ `ccli alias list`, etc.). They still work for back-compat but no longer appear in `--help` output. The canonical paths are the `alias` subcommands. (`set -a` and `find -a` are documented and remain visible — see `arch.cli` codex entry for the rationale.)
 
 ### Removed
 
-- **`--raw` / `-r` on `get` and `context`** — deprecated since v1.9.1 (when it was renamed to `--plain` because the name `--raw` misleadingly implied "no processing" when its actual behavior was "no colors"). Removed entirely in v1.11. Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62) (part of the short-flag namespace audit).
-  - **Migration**: replace any scripted use of `ccli get foo --raw` or `ccli context --raw` with `--plain` (or the new `-p` short).
-  - The deprecation warning has been live since v1.9.1, so anyone running the deprecated form has had multiple minor versions of notice.
-
-### Changed
-
-- **Short-flag namespace audit (BREAKING)** — first comprehensive pass at the short-flag space since v1.0. Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62). Three flag moves, one orphan adoption, one consistency fix:
-  - **`get --plain` and `context --plain` gain `-p`** — the original audit trigger. `--plain` shipped without a short in v1.9.1 specifically because `-r` was occupied by the deprecated `--raw`; with `--raw` gone, `-p` is now free *and* obvious. Mnemonic wins over consistency.
-  - **`stats --json` gains `-j`** — every other JSON-emitting command (`get`, `find`, `context`, `stale`, `lint`, `audit`) already used `-j, --json`. `stats` was the lone exception. Pure consistency fix.
-  - **`stats --detailed` and `audit --detailed` move from `-d` to `-D`** — frees the lowercase `-d` to mean `--decrypt` unambiguously across all read commands (`get`, `run`, `edit`). The capital-letter convention mirrors `-G/-A/-P` for "broadeners". This is the only scripted-caller breakage in the audit: anyone passing `-d` to `ccli stats` or `ccli audit` will get a usage error.
-- **`GetOptions.raw` field renamed to `plain`** in `src/types.ts` and `ContextOptions.raw` → `plain` in `src/commands/context.ts`. Internal API change; downstream consumers in `src/commands/entries.ts`, `src/commands/context.ts`, and `src/formatting.ts` (`displayTree` / `formatTree`) updated to match.
-
-### Added
-
-- **`CODEX_DATA_DIR` validation, provenance, and documentation** — the env var has always been honored by `getDataDirectory()`, but it was undocumented, unvalidated, and invisible. Three changes close those gaps:
-  - **Validation**: `CODEX_DATA_DIR` must be an absolute path. Relative values (`./mydata`, etc.) now throw with a clear error rather than silently resolving against `process.cwd()` — the resolved location of a relative path depended on whichever directory the process happened to be in at first call, which is surprising for long-running MCP servers. Empty strings are treated as unset.
-  - **Provenance**: `ccli info` annotates the `Data` line with `(CODEX_DATA_DIR)` when the env var is set, so users can verify their override at a glance instead of guessing whether it took effect.
-  - **Writability warning**: if the resolved data directory exists but isn't writable, a one-time warning fires to stderr on first `getDataDirectory()` call. Non-existent paths are not warned about — `ensureDataDirectoryExists()` creates them later.
-  - **Docs**: new `## Environment Variables` section in the README listing every `CODEX_*` variable (`CODEX_DATA_DIR`, `CODEX_PROJECT`, `CODEX_PROJECT_DIR`, `CODEX_NO_PROJECT`, `CODEX_AGENT_NAME`) with purpose, default, and a notes section. Closes [#63](https://github.com/seabearDEV/codexCLI/issues/63).
-- **`clearDataDirectoryCache()`** in `src/utils/paths.ts` — resets the module-level cache and one-shot flags so a subsequent `getDataDirectory()` call re-reads `CODEX_DATA_DIR`. Mirrors `clearProjectFileCache()` and is primarily useful for tests; production code has no reason to call it.
-- **`isDataDirectoryFromEnv()`** in `src/utils/paths.ts` — small predicate exported so `ccli info` (and tests) can label the data path with its source.
+- **`--raw` / `-r` on `get` and `context`** — see Breaking Changes #2. Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62).
 
 ### Fixed
 
-- **File-per-entry store: torn reads during concurrent writes** — `load()` could observe a partially-committed `save()` when another process was mid-write (some entries updated, others not), with no way to detect it. The store now uses a seqlock-style commit epoch in a new `_epoch.json` sidecar: even values mean "stable," odd means "writer mid-commit." `save()` bumps the epoch to odd before touching any files and to the next even value after all writes complete, both under the existing directory lock. `load()` snapshots the epoch before and after its scan and retries (bounded to 3 attempts with 1–8 ms backoff) if it sees a mismatch or an odd "before" value. Missing or bogus `_epoch.json` reads as 0, so legacy directories and fresh installs transition cleanly through the first save.
+- **File-per-entry store: torn reads during concurrent writes** — `load()` could observe a partially-committed `save()` when another process was mid-write (some entries updated, others not), with no way to detect it. The store now uses a seqlock-style commit epoch in a new `_epoch.json` sidecar: even values mean "stable," odd means "writer mid-commit." `save()` bumps the epoch to odd before touching any files and to the next even value after all writes complete, both under the existing directory lock. `load()` snapshots the epoch before and after its scan and retries (bounded to 3 attempts with 1–4 ms backoff) if it sees a mismatch or an odd "before" value. Missing or bogus `_epoch.json` reads as 0, so legacy directories and fresh installs transition cleanly through the first save.
 - **File-per-entry store: migration race on pristine installs** — `migrateFileToDirectory` ran without a lock. Two processes starting simultaneously on a pristine install could both enter the migration path and race. The migration now runs inside `withFileLock(newDirPath, …)`, reusing the same lock key as the steady-state store, so migrations and normal saves are mutually exclusive. The loser waits, observes the new directory, and returns `already-present`. Migration also seeds `_epoch.json` at 0 inside its tmp directory before the atomic rename, so readers see a coherent epoch from the instant the store directory exists.
-
-### Added
-
-- **`_README.md` hand-edit warning sidecar** — file-per-entry layout's big UX win is that per-entry files are browsable in a file manager, but that also invites developers to open one and tweak it directly (which desyncs per-entry metadata and breaks staleness signals — see `conventions.editSurface`). The store now seeds a `_README.md` on first `save()` and during migration with an in-context nudge pointing at the supported edit paths. Idempotent: a user-customized `_README.md` is never overwritten.
-
-### Changed
-
-- **File-per-entry store: sidecar mtime tracking** — `_aliases.json` and `_confirm.json` were re-read and JSON-parsed on every `scanAndSync()`, even when nothing had changed. They now go through the same mtime-cached path as entry files: a stat-first refresh skips the re-read when mtime matches. Missing sidecars cache as an `-1` sentinel so they're detected the moment they appear on disk. `load()` now returns defensive shallow copies of the cached sidecar maps so callers that mutate-then-save (`setAlias` and friends) can't accidentally pollute the cache.
+- **`withFileLock` fails closed in production** — see Breaking Changes #1. Closes [#61](https://github.com/seabearDEV/codexCLI/issues/61).
 
 ## [1.10.0] - 2026-04-07
 
