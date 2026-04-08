@@ -312,4 +312,80 @@ describe('entries advanced', () => {
       expect(result.trim()).toBe('visible');
     });
   });
+
+  // ── CLI responseSize measurement (v1.11.x telemetry consistency) ─────
+
+  describe('CLI responseSize measurement', () => {
+    // Pre-v1.11.x, the CLI wrapper computed responseSize from the `after`
+    // value, which was only set for writes — so every CLI READ silently
+    // logged responseSize: undefined. The codex_stats "data served"
+    // metric only counted MCP traffic. The fix monkey-patches stdout.write
+    // in the wrapper and counts actual bytes emitted, matching the MCP
+    // semantic.
+    //
+    // These tests exercise the wrapper end-to-end via execSync and read
+    // the resulting telemetry.jsonl to verify responseSize is non-zero
+    // for both reads and writes.
+
+    const readTelemetryEntries = () => {
+      const telemetryPath = path.join(tmpDir, 'telemetry.jsonl');
+      if (!fs.existsSync(telemetryPath)) return [];
+      return fs
+        .readFileSync(telemetryPath, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+    };
+
+    it('CLI read records non-zero responseSize matching the printed output', () => {
+      run('set --force greet.hello "Hello, world!"');
+      const output = run('get greet.hello --plain');
+      const printed = output; // --plain strips colors but keeps content + trailing newline
+
+      const entries = readTelemetryEntries();
+      const getEntries = entries.filter(
+        (e) => e.tool === 'codex_get' && e.src === 'cli'
+      );
+      expect(getEntries.length).toBeGreaterThan(0);
+      const last = getEntries[getEntries.length - 1];
+      expect(typeof last.responseSize).toBe('number');
+      expect(last.responseSize).toBe(Buffer.byteLength(printed, 'utf8'));
+    });
+
+    it('CLI write records non-zero responseSize matching the printed confirmation', () => {
+      const output = run('set --force confirm.write "value"');
+
+      const entries = readTelemetryEntries();
+      const setEntries = entries.filter(
+        (e) => e.tool === 'codex_set' && e.src === 'cli'
+      );
+      expect(setEntries.length).toBeGreaterThan(0);
+      const last = setEntries[setEntries.length - 1];
+      expect(typeof last.responseSize).toBe('number');
+      expect(last.responseSize).toBeGreaterThan(0);
+      // The recorded responseSize should match the bytes that were
+      // actually printed to stdout (the success confirmation message).
+      expect(last.responseSize).toBe(Buffer.byteLength(output, 'utf8'));
+    });
+
+    it('audit and telemetry use the same session ID for the same operation', () => {
+      run('set --force session.test "value"');
+
+      // Read both logs and verify the latest set ops match.
+      const telemetryEntries = readTelemetryEntries();
+      const auditPath = path.join(tmpDir, 'audit.jsonl');
+      const auditEntries = fs
+        .readFileSync(auditPath, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+      const lastTelem = telemetryEntries[telemetryEntries.length - 1];
+      const lastAudit = auditEntries[auditEntries.length - 1];
+
+      expect(lastTelem.session).toBeDefined();
+      expect(lastAudit.session).toBeDefined();
+      expect(lastTelem.session).toBe(lastAudit.session);
+    });
+  });
 });

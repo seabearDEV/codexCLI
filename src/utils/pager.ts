@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { addResponseBytes } from './responseMeasure';
 
 /**
  * Buffers all stdout output produced by `fn`, then either writes it directly
@@ -60,6 +61,16 @@ export async function withPager(fn: () => void | Promise<void>): Promise<void> {
   const parts = pagerCmd.split(/\s+/);
   const pagerBin = parts[0];
   const pagerArgs = parts.slice(1);
+
+  // Long-output (paged) path bypasses `originalWrite` because output goes
+  // through the pager's stdin via an OS pipe (not Node's stdout.write).
+  // The CLI instrumentation wrapper hooks `process.stdout.write` to count
+  // bytes, but that hook is on the wrong layer here — the buffered bytes
+  // never flow through it for paged output. So count them explicitly.
+  // `addResponseBytes` is a no-op when no measurement is active (e.g. when
+  // withPager is called outside the CLI instrumentation wrapper), so this
+  // is safe in all callers.
+  addResponseBytes(Buffer.byteLength(buffer, 'utf8'));
 
   return new Promise<void>((resolve) => {
     const child = spawn(pagerBin, pagerArgs, {

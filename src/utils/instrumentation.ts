@@ -5,6 +5,7 @@ import { loadAliases, resolveKey } from '../alias';
 import { sanitizeValue, sanitizeParams, logAudit } from './audit';
 import { logToolCall, classifyOp, TelemetryExtras } from './telemetry';
 import { findProjectFile } from '../store';
+import { startResponseMeasure, addResponseBytes, endResponseMeasure } from './responseMeasure';
 
 // ── Shared constants (used by both MCP and CLI wrappers) ─────────────
 
@@ -96,6 +97,29 @@ export async function withCliInstrumentation<T>(
     } catch { /* ignore */ }
   }
 
+  // Begin measuring stdout output for responseSize. We monkey-patch
+  // process.stdout.write so that every byte the handler writes to stdout
+  // — whether through console.log, direct stdout writes, or buffered
+  // through withPager — gets counted into a single process-scoped counter.
+  // The counter is read in the finally block and used as `responseSize`,
+  // matching the MCP wrapper's "bytes returned to caller" semantic.
+  startResponseMeasure();
+  // Bind the original to preserve `this` so we don't need an unbound-method
+  // exception. We then forward the variadic call signature via apply, which
+  // sidesteps the overloaded-signature problem in TypeScript's stdout.write
+  // type (string-or-buffer + optional encoding + optional callback).
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  type StdoutWriteArgs = Parameters<typeof process.stdout.write>;
+  process.stdout.write = function (...args: StdoutWriteArgs): boolean {
+    const chunk = args[0];
+    if (typeof chunk === 'string') {
+      addResponseBytes(Buffer.byteLength(chunk, 'utf8'));
+    } else if (chunk instanceof Uint8Array) {
+      addResponseBytes(chunk.byteLength);
+    }
+    return (originalStdoutWrite as (...a: StdoutWriteArgs) => boolean)(...args);
+  } as typeof process.stdout.write;
+
   // Execute handler
   const prevExitCode = process.exitCode;
   let result: T | undefined;
@@ -108,6 +132,12 @@ export async function withCliInstrumentation<T>(
     errorMsg = String(err);
     throw err;
   } finally {
+    // Always restore stdout.write before reading the measurement, so any
+    // logging from the wrapper itself (or the audit/telemetry write paths
+    // below) doesn't pollute the count or get measured as response.
+    process.stdout.write = originalStdoutWrite;
+    const measuredResponseSize = endResponseMeasure();
+
     if (success) {
       success = process.exitCode === prevExitCode;
     }
@@ -138,8 +168,12 @@ export async function withCliInstrumentation<T>(
       } catch { /* ignore */ }
     }
 
-    // Compute metrics
-    const responseSize = after ? Buffer.byteLength(after, 'utf8') : undefined;
+    // Compute metrics. responseSize is the actual stdout byte count
+    // captured by the wrapper above (matches the MCP wrapper's "bytes
+    // returned to caller" semantic). Falls back to undefined if no
+    // measurement happened (shouldn't occur in practice — every code
+    // path through this wrapper installs a measurement).
+    const responseSize = measuredResponseSize;
     const requestSize = ctx.params ? Buffer.byteLength(JSON.stringify(ctx.params), 'utf8') : undefined;
 
     // Hit detection for reads
