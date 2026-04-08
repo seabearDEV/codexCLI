@@ -66,6 +66,18 @@ function getGlobalStore(): ScopedStore {
       //      and the pre-rename data.json format. Produces a unified .codexcli/data.json.
       //   2. Unified → directory (v1.10.0): converts the unified file to the file-per-entry
       //      layout at ~/.codexcli/store/. This is the new canonical layout.
+      //
+      // Ensure the parent directory (~/.codexcli/) exists before the
+      // directory migration runs, so its file lock (placed at
+      // `<storeDir>.lock`, a sibling of the store dir) can be created.
+      // Without this, pristine installs would fall through to the
+      // unlocked fallback in withFileLock — still safe on a truly-fresh
+      // system, but we prefer locked from the start.
+      try {
+        ensureDataDirectoryExists();
+      } catch (err) {
+        debug(`Failed to ensure global data directory before migration: ${String(err)}`);
+      }
       try {
         migrateToUnifiedFile();
       } catch (err) {

@@ -32,6 +32,41 @@ function randomKey(depth: number = Math.ceil(Math.random() * 4)): string {
   return segments.join('.');
 }
 
+/**
+ * Generate a set of random dotted keys in which no key is a prefix of
+ * another. This is the invariant `expandFlatKeys` + `flattenObject`
+ * round-trip requires — if both `a.b` and `a.b.c` appear in the same
+ * flat map, one of them has to lose when expanded (you can't have `a.b`
+ * be both a string and an object), so the round-trip is undefined.
+ *
+ * Candidates are generated one at a time and accepted only if they
+ * neither extend nor are extended by an already-accepted key. Bounded
+ * retries keep the loop from spinning on a pathological RNG streak;
+ * `requested` is a target, not a hard guarantee, and the returned array
+ * is always non-empty.
+ */
+function randomPrefixFreeKeys(requested: number): string[] {
+  const accepted: string[] = [];
+  const maxAttempts = requested * 20;
+  for (let attempt = 0; attempt < maxAttempts && accepted.length < requested; attempt++) {
+    const candidate = randomKey();
+    if (!candidate) continue;
+    let collides = false;
+    for (const existing of accepted) {
+      if (candidate === existing ||
+          candidate.startsWith(existing + '.') ||
+          existing.startsWith(candidate + '.')) {
+        collides = true;
+        break;
+      }
+    }
+    if (!collides) accepted.push(candidate);
+  }
+  // Guarantee at least one key so the enclosing test loop always has work.
+  if (accepted.length === 0) accepted.push('fallback');
+  return accepted;
+}
+
 function randomValue(): string {
   const types = ['short', 'long', 'unicode', 'special', 'empty'];
   const type = types[Math.floor(Math.random() * types.length)];
@@ -132,11 +167,17 @@ describe('fuzz: flattenObject ↔ expandFlatKeys round-trip', () => {
   });
 
   it('expand then flatten returns same flat map (50 trials)', () => {
+    // Input must be prefix-free: the `expand → flatten` round-trip is only
+    // defined when no key in the flat map is a prefix of another. If both
+    // `a.b` and `a.b.c` appear, `expandFlatKeys` has to pick one to win
+    // (the other's value is lost), so the round-trip is undefined. Using
+    // raw `randomKey()` here produced ~40% flakes whenever the RNG
+    // happened to generate colliding keys; see `randomPrefixFreeKeys`.
     for (let trial = 0; trial < 50; trial++) {
       const flat: Record<string, string> = {};
       const numKeys = 3 + Math.floor(Math.random() * 8);
-      for (let i = 0; i < numKeys; i++) {
-        flat[randomKey()] = randomValue();
+      for (const key of randomPrefixFreeKeys(numKeys)) {
+        flat[key] = randomValue();
       }
 
       const expanded = expandFlatKeys(flat);

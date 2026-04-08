@@ -473,3 +473,340 @@ describe('getStoreLockKey', () => {
     expect(getStoreLockKey('/a/b/.codexcli')).toBe('/a/b/.codexcli');
   });
 });
+
+// ── Epoch seqlock (torn-read protection) ──────────────────────────────
+
+function readEpochFile(dir: string): number {
+  const raw = fs.readFileSync(path.join(dir, '_epoch.json'), 'utf8');
+  return (JSON.parse(raw) as { epoch: number }).epoch;
+}
+
+describe('epoch seqlock', () => {
+  it('first save bumps epoch from 0 to 2 (stable even)', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    expect(readEpochFile(dir)).toBe(2);
+  });
+
+  it('subsequent saves advance epoch by 2 each time', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+    expect(readEpochFile(dir)).toBe(2);
+
+    store.save({ entries: { a: '2' }, aliases: {}, confirm: {} });
+    expect(readEpochFile(dir)).toBe(4);
+
+    store.save({ entries: { a: '3' }, aliases: {}, confirm: {} });
+    expect(readEpochFile(dir)).toBe(6);
+  });
+
+  it('load() tolerates a missing epoch file (legacy dirs without _epoch.json)', () => {
+    // Simulate a store directory that was created before the epoch file existed.
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(
+      path.join(dir, 'only.json'),
+      JSON.stringify({ value: 'preserved' })
+    );
+
+    const store = makeStore(dir);
+    const data = store.load();
+    expect(data.entries).toEqual({ only: 'preserved' });
+  });
+
+  it('load() recovers from a bogus/garbled epoch file', () => {
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '_epoch.json'), 'not json');
+    fs.writeFileSync(
+      path.join(dir, 'x.json'),
+      JSON.stringify({ value: 'still readable' })
+    );
+
+    const store = makeStore(dir);
+    const data = store.load();
+    expect(data.entries).toEqual({ x: 'still readable' });
+  });
+
+  it('load() returns a consistent snapshot when epoch is even and unchanged across scan', () => {
+    // This is the happy path: no concurrent writer, load() completes on attempt 0.
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1', b: '2' },
+      aliases: { x: 'a' },
+      confirm: { a: true },
+      _meta: { a: 100, b: 200 },
+    });
+
+    const fresh = makeStore(dir);
+    const loaded = fresh.load();
+
+    expect(loaded.entries).toEqual({ a: '1', b: '2' });
+    expect(loaded.aliases).toEqual({ x: 'a' });
+    expect(loaded.confirm).toEqual({ a: true });
+  });
+
+  it('load() detects an odd (in-progress) epoch and still returns best-effort data', () => {
+    // Simulate a crashed writer that left an odd epoch on disk. load() should
+    // exhaust retries, log via debug, and return whatever it can scan —
+    // rather than hanging or throwing.
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    // Stamp an odd epoch to simulate a crashed mid-commit writer.
+    fs.writeFileSync(path.join(dir, '_epoch.json'), JSON.stringify({ epoch: 7 }) + '\n');
+
+    const fresh = makeStore(dir);
+    const loaded = fresh.load();
+
+    // We should still get the entry data that was durably written.
+    expect(loaded.entries).toEqual({ a: '1' });
+  });
+});
+
+// ── Migration lock (concurrent first-run) ──────────────────────────────
+
+describe('migrateFileToDirectory concurrency', () => {
+  it('is safe to call twice in a row (second call is already-present)', () => {
+    // Sequential calls exercise the same idempotency guarantee the lock
+    // provides for concurrent callers: the winner migrates, the loser
+    // finds the directory already populated.
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1', b: '2' },
+      aliases: {},
+      confirm: {},
+      _meta: { a: 100, b: 200 },
+    }));
+
+    const first = migrateFileToDirectory(oldFile, newDir);
+    expect(first.status).toBe('migrated');
+    expect(first.entryCount).toBe(2);
+
+    // The "lingering old file" cleanup branch runs if the old file reappears,
+    // so put it back to verify the second call takes the already-present path.
+    fs.writeFileSync(oldFile, JSON.stringify({ entries: { a: '1' } }));
+    const second = migrateFileToDirectory(oldFile, newDir);
+    expect(second.status).toBe('already-present');
+    // Old file was renamed to .backup as cleanup.
+    expect(fs.existsSync(oldFile)).toBe(false);
+  });
+
+  it('seeds _epoch.json at 0 during migration', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1' },
+      aliases: {},
+      confirm: {},
+    }));
+
+    migrateFileToDirectory(oldFile, newDir);
+
+    expect(fs.existsSync(path.join(newDir, '_epoch.json'))).toBe(true);
+    expect(readEpochFile(newDir)).toBe(0);
+  });
+
+  it('first save after migration bumps epoch to 2', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1' },
+      aliases: {},
+      confirm: {},
+    }));
+
+    migrateFileToDirectory(oldFile, newDir);
+    const store = makeStore(newDir);
+    store.save({
+      entries: { a: '1', b: 'new' },
+      aliases: {},
+      confirm: {},
+    });
+
+    expect(readEpochFile(newDir)).toBe(2);
+  });
+
+  it('removes the tmp dir on a throwing migration, leaving no partial state', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    // Malformed JSON causes migrateFileToDirectory to throw before the tmp→final rename.
+    fs.writeFileSync(oldFile, '{corrupt');
+
+    expect(() => migrateFileToDirectory(oldFile, newDir)).toThrow();
+    expect(fs.existsSync(newDir)).toBe(false);
+    expect(fs.existsSync(newDir + '.tmp')).toBe(false);
+  });
+});
+
+// ── Sidecar mtime tracking ─────────────────────────────────────────────
+
+describe('sidecar mtime cache', () => {
+  it('does not re-read _aliases.json when its mtime is unchanged', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1' },
+      aliases: { x: 'a' },
+      confirm: {},
+    });
+
+    // Prime the cache.
+    store.load();
+
+    // Spy on fs.readFileSync after priming, counting reads of the aliases sidecar.
+    const readFileSync = fs.readFileSync;
+    let aliasReads = 0;
+    const aliasPath = path.join(dir, '_aliases.json');
+    // @ts-expect-error -- intentional test-only monkey patch
+    fs.readFileSync = function spyRead(p: fs.PathOrFileDescriptor, ...rest: unknown[]) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(aliasPath)) {
+        aliasReads++;
+      }
+      // @ts-expect-error -- spread through to the real impl
+      return readFileSync.call(this, p, ...rest);
+    };
+    try {
+      // Several loads with no disk changes → sidecar should not be re-read.
+      store.load();
+      store.load();
+      store.load();
+    } finally {
+      fs.readFileSync = readFileSync;
+    }
+
+    expect(aliasReads).toBe(0);
+  });
+
+  it('re-reads _aliases.json when its mtime changes (external write)', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1' },
+      aliases: { x: 'a' },
+      confirm: {},
+    });
+    store.load();  // prime
+
+    // Simulate an external rewrite with a newer mtime using utimesSync for determinism.
+    const aliasesPath = path.join(dir, '_aliases.json');
+    const previousStat = fs.statSync(aliasesPath);
+    fs.writeFileSync(
+      aliasesPath,
+      JSON.stringify({ y: 'a' }, null, 2)
+    );
+    // +1000 ms ensures the bump is visible even on filesystems with 1-second mtime granularity.
+    const newerMtime = new Date(previousStat.mtimeMs + 1000);
+    fs.utimesSync(aliasesPath, newerMtime, newerMtime);
+
+    const reloaded = store.load();
+    expect(reloaded.aliases).toEqual({ y: 'a' });
+  });
+
+  it('load() returns defensive copies of sidecars so caller-mutation does not pollute the cache', () => {
+    // Regression: setAlias and friends call loadAliasMap, mutate the returned
+    // object in place, then call saveAliasMap with the mutated reference. If
+    // load() handed out the cached object by reference, the dirty-check in
+    // save() would see "cache === caller's data" via shallowEquals and skip
+    // the write — silently dropping the alias.
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1' },
+      aliases: { existing: 'a' },
+      confirm: {},
+    });
+
+    const first = store.load();
+    // Simulate a caller mutating loadAliasMap's return value.
+    (first.aliases as Record<string, string>)['added'] = 'a';
+
+    // Now save the mutated data. If the cache was shared by reference, the
+    // dirty-check would conclude "no change" and skip writing the new alias.
+    store.save(first);
+
+    // Fresh store reading straight from disk — the added alias must be there.
+    const fresh = makeStore(dir);
+    const reloaded = fresh.load();
+    expect(reloaded.aliases).toEqual({ existing: 'a', added: 'a' });
+  });
+
+  it('picks up a sidecar that appears after initial load (missing → present)', () => {
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'x.json'), JSON.stringify({ value: 'v' }));
+
+    const store = makeStore(dir);
+    let data = store.load();
+    expect(data.aliases).toEqual({});
+
+    // Write a sidecar that wasn't there on the first scan.
+    fs.writeFileSync(path.join(dir, '_aliases.json'), JSON.stringify({ z: 'x' }));
+
+    data = store.load();
+    expect(data.aliases).toEqual({ z: 'x' });
+  });
+});
+
+// ── Hand-edit warning README ───────────────────────────────────────────
+
+describe('_README.md hand-edit nudge', () => {
+  it('save() writes _README.md on first invocation', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+
+    expect(fs.existsSync(path.join(dir, '_README.md'))).toBe(false);
+
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    const readmePath = path.join(dir, '_README.md');
+    expect(fs.existsSync(readmePath)).toBe(true);
+    const contents = fs.readFileSync(readmePath, 'utf8');
+    expect(contents).toContain('do not hand-edit');
+  });
+
+  it('does not overwrite a user-customized _README.md', () => {
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    const custom = '# My custom store README\n';
+    fs.writeFileSync(path.join(dir, '_README.md'), custom);
+
+    const store = makeStore(dir);
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    const contents = fs.readFileSync(path.join(dir, '_README.md'), 'utf8');
+    expect(contents).toBe(custom);
+  });
+
+  it('_README.md is not picked up as an entry file', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    const data = store.load();
+    // Only the real entry "a" is visible.
+    expect(data.entries).toEqual({ a: '1' });
+  });
+
+  it('migration seeds _README.md alongside the migrated entries', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1' },
+      aliases: {},
+      confirm: {},
+    }));
+
+    migrateFileToDirectory(oldFile, newDir);
+
+    expect(fs.existsSync(path.join(newDir, '_README.md'))).toBe(true);
+  });
+});
