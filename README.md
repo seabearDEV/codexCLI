@@ -55,8 +55,8 @@ CodexCLI is a command-line tool and AI agent knowledge base. It stores structure
 - **Inline Editing**: Open entries in `$EDITOR` / `$VISUAL` for quick edits
 - **JSON Output**: Machine-readable `--json` flag on `get` and `find` for scripting
 - **Stdin Piping**: Pipe values into `set` from other commands
-- **Project-Scoped Data**: Opt-in `.codexcli.json` per project — project entries take precedence, fall through to global
-- **Smart Init**: `ccli init` scans your codebase, populates `.codexcli.json` with project/commands/files/deps/conventions/context entries, generates `CLAUDE.md`, and seeds the three-file knowledge convention
+- **Project-Scoped Data**: Opt-in `.codexcli/` per project — project entries take precedence, fall through to global
+- **Smart Init**: `ccli init` scans your codebase, populates `.codexcli/` with project/commands/files/deps/conventions/context entries, generates `CLAUDE.md`, and seeds the three-file knowledge convention
 - **Auto-Backup**: Automatic timestamped backups with configurable rotation (`max_backups` setting)
 - **File Locking**: Advisory locking prevents data corruption from concurrent access
 - **Shell Tab-Completion**: Full tab-completion for Bash and Zsh (commands, flags, keys, aliases)
@@ -172,7 +172,7 @@ After setting an entry, you'll be asked interactively whether it should require 
 
 ### Retrieving Data
 
-When inside a project directory (one with a `.codexcli.json`), `get` shows project entries by default. Use `-G` for global entries or `-A` for both. Outside a project, `get` shows global entries. Looking up a specific key always falls through from project to global automatically.
+When inside a project directory (one with a `.codexcli/` store), `get` shows project entries by default. Use `-G` for global entries or `-A` for both. Outside a project, `get` shows global entries. Looking up a specific key always falls through from project to global automatically.
 
 ```bash
 # List keys in the current scope
@@ -511,10 +511,10 @@ Available settings:
 
 ### Project-Scoped Data
 
-CodexCLI supports per-project data files that live alongside your code. The `.codexcli.json` file is designed to be committed to version control, creating a shared knowledge base that persists across sessions, team members, and AI agents.
+CodexCLI supports per-project knowledge stores that live alongside your code. The `.codexcli/` directory is designed to be committed to version control, creating a shared knowledge base that persists across sessions, team members, and AI agents. As of v1.10.0, each entry is its own JSON file inside the directory (`.codexcli/arch.storage.json`, `.codexcli/commands.build.json`, etc.) — this eliminates merge conflict churn when multiple devs add different entries on parallel branches. Use CLI or MCP tools to edit; hand-editing the wrapper files is unsupported.
 
 ```bash
-# Initialize a project — scans codebase, creates .codexcli.json and CLAUDE.md
+# Initialize a project — scans codebase, creates .codexcli/ and CLAUDE.md
 ccli init
 
 # Preview what init would create
@@ -523,7 +523,7 @@ ccli init --dry-run
 # Init without CLAUDE.md generation
 ccli init --no-claude
 
-# Init without codebase scan (empty .codexcli.json)
+# Init without codebase scan (empty .codexcli/)
 ccli init --no-scan
 
 # Store project knowledge
@@ -548,7 +548,7 @@ ccli get -A
 # Use -G to explicitly write to global while inside a project
 ccli set server.ip 192.168.1.100 -G
 
-# Remove the project file
+# Remove the project store
 ccli init --remove
 ```
 
@@ -556,7 +556,7 @@ ccli init --remove
 
 #### Recommended Schema
 
-> **Deep dive:** See the [Schema Guide](docs/schema-guide.md) for the full rationale behind the file structure, what makes a good entry, and a walkthrough of the codexCLI project's own `.codexcli.json` as a reference implementation.
+> **Deep dive:** See the [Schema Guide](docs/schema-guide.md) for the full rationale behind the file structure, what makes a good entry, and a walkthrough of the codexCLI project's own `.codexcli/` as a reference implementation.
 
 When using CodexCLI as a project knowledge base (especially with AI agents via MCP), we recommend organizing entries under these namespaces:
 
@@ -592,7 +592,7 @@ Every AI session has the same problem: the agent starts from zero, spends thousa
 
 Here's how it works in practice:
 
-1. **You run `ccli init`** in a new project. The CLI scans the codebase in milliseconds and creates a skeleton `.codexcli.json` with project metadata, commands, file paths, dependencies, and conventions it can detect from the filesystem.
+1. **You run `ccli init`** in a new project. The CLI scans the codebase in milliseconds and creates a skeleton `.codexcli/` with project metadata, commands, file paths, dependencies, and conventions it can detect from the filesystem.
 
 2. **First AI session begins.** The agent calls `codex_context`, sees the skeleton, and recognizes it's a fresh project (`context.initialized: scaffold`). Before starting your task, it reads the actual source code — entry points, core modules, config files — and populates the deep knowledge: architecture decisions in `arch.*`, non-obvious gotchas in `context.*`, and rich file descriptions in `files.*`. This deep analysis runs once.
 
@@ -602,11 +602,11 @@ Here's how it works in practice:
 
 The knowledge base grows with every session. The token cost per session drops. `ccli stats` shows you the trend: bootstrap rate, hit rate, estimated tokens saved, per-namespace coverage. The more you use it, the more efficient every agent becomes.
 
-Because the knowledge lives in `.codexcli.json` (a plain JSON file committed to your repo), it works across machines, across team members, and across AI tools. No vendor lock-in, no cloud dependency, no API keys. Just a file that gets smarter over time.
+Because the knowledge lives in `.codexcli/` (plain JSON files committed to your repo), it works across machines, across team members, and across AI tools. No vendor lock-in, no cloud dependency, no API keys. Just files that get smarter over time.
 
 ### Data Management
 
-All data (entries, aliases, confirm metadata) is stored in a single `data.json` file — `~/.codexcli/data.json` for global data, `.codexcli.json` for project-scoped data.
+All data (entries, aliases, confirm metadata) is stored in a directory with one JSON file per entry plus `_aliases.json` and `_confirm.json` sidecars — `~/.codexcli/store/` for global data, `.codexcli/` for project-scoped data. Pre-v1.10.0 unified `.codexcli.json` / `data.json` files are automatically migrated on first access and the old file is renamed to `.backup`.
 
 ```bash
 # Export data to a timestamped file
@@ -723,7 +723,7 @@ ccli lint --json
 ccli lint -G
 ```
 
-Default namespaces: `project`, `commands`, `arch`, `conventions`, `context`, `files`, `deps`, `system`. Add custom namespaces in `.codexcli.json`:
+Default namespaces: `project`, `commands`, `arch`, `conventions`, `context`, `files`, `deps`, `system`. Add custom namespaces in `.codexcli/`:
 
 ```json
 {
@@ -832,7 +832,7 @@ ccli --debug get server.production
 | `info` | | | Show version, stats, and storage paths |
 | `alias` | | `<subcommand>` | Manage key aliases (set, remove, list, rename) |
 | `confirm` | | `<subcommand>` | Manage run confirmation (set, remove, list) |
-| `init` | | | Initialize project (`.codexcli.json` + codebase scan + `CLAUDE.md`) |
+| `init` | | | Initialize project (`.codexcli/` + codebase scan + `CLAUDE.md`) |
 | `stale` | | `[days]` | Show entries not updated in N days (default 30) |
 | `lint` | | | Check entries against namespace schema (`--json`) |
 | `stats` | | | View MCP usage telemetry and trends (`--period`, `--detailed`, `--json`) |
@@ -870,7 +870,7 @@ claude mcp add codexcli -- ccli mcp-server
 claude mcp add codexcli --scope project -- ccli mcp-server --cwd .
 ```
 
-The `--scope project` makes the registration per-project in Claude Code, and `--cwd .` tells the MCP server to use the project root for `.codexcli.json` detection. You can also use the `CODEX_PROJECT_DIR` environment variable instead of `--cwd`.
+The `--scope project` makes the registration per-project in Claude Code, and `--cwd .` tells the MCP server to use the project root for `.codexcli/` detection. You can also use the `CODEX_PROJECT_DIR` environment variable instead of `--cwd`.
 
 **npm global install** (`npm install -g .`) — dev mode:
 
@@ -951,7 +951,7 @@ claude mcp add codexcli -- node /absolute/path/to/dist/mcp-server.js
 | `codex_stats` | View usage telemetry and [token savings](docs/token-savings.md) (hit rate, exploration cost avoided, per-namespace breakdown, trends) |
 | `codex_audit` | Query the audit log of data mutations (before/after diffs, agent identity, scope, success/fail) |
 
-All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli.json` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.
+All data-touching tools accept an optional `scope` parameter (`"project"` or `"global"`). When listing entries (no key), `codex_get` defaults to project-only if a `.codexcli/` exists — pass `all: true` to see both scopes. Single-key lookups fall through from project to global automatically.
 
 ### LLM Instructions
 
@@ -989,7 +989,7 @@ A successful response will include `"serverInfo":{"name":"codexcli"}` in the JSO
 
 | Document | Description |
 |---|---|
-| [Schema Guide](docs/schema-guide.md) | How to structure `.codexcli.json` — namespaces, file anatomy, good vs bad entries, reference examples |
+| [Schema Guide](docs/schema-guide.md) | How to structure your `.codexcli/` store — namespaces, file anatomy, good vs bad entries, reference examples |
 | [Token Savings](docs/token-savings.md) | How CodexCLI measures AI agent efficiency — every metric explained, estimation methodology, limitations |
 | [Roadmap](docs/ROADMAP.md) | Completed features, upcoming milestones, long-term vision |
 

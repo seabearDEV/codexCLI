@@ -301,7 +301,7 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
   console.log(color.gray('\nThis is a preview. No data was modified.'));
 }
 
-const PERSISTENCE_VALUE = '.codexcli.json = project knowledge (any agent). CLAUDE.md = Claude behavioral directives. MEMORY.md = personal user preferences. Rule: if another agent would benefit, it belongs in .codexcli.json.';
+const PERSISTENCE_VALUE = '.codexcli/ = project knowledge store (any agent, file-per-entry layout). CLAUDE.md = Claude behavioral directives. MEMORY.md = personal user preferences. Rule: if another agent would benefit, it belongs in .codexcli/.';
 
 export function handleProjectFile(options: {
   remove?: boolean;
