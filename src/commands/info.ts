@@ -5,7 +5,7 @@ import { version } from '../../package.json';
 import { getEntriesFlat } from '../storage';
 import { loadAliases } from '../alias';
 import { loadConfirmKeys } from '../confirm';
-import { getGlobalStoreDirPath, getConfigFilePath } from '../utils/paths';
+import { getGlobalStoreDirPath, getConfigFilePath, isDataDirectoryFromEnv } from '../utils/paths';
 import { findProjectFile } from '../store';
 import { color } from '../formatting';
 import { getBinaryName } from '../utils/binaryName';
@@ -29,7 +29,8 @@ export function showInfo(): void {
 
   console.log();
 
-  label('Data', getGlobalStoreDirPath());
+  const dataSource = isDataDirectoryFromEnv() ? color.gray(' (CODEX_DATA_DIR)') : '';
+  label('Data', getGlobalStoreDirPath() + dataSource);
   label('Config', getConfigFilePath());
   const projectFile = findProjectFile();
   label('Project', projectFile ?? color.gray('none'));

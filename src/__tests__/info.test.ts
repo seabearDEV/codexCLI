@@ -36,6 +36,7 @@ vi.mock('../utils/paths', () => ({
   getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
   getGlobalStoreDirPath: vi.fn(() => '/mock/store'),
+  isDataDirectoryFromEnv: vi.fn(() => false),
 }));
 
 vi.mock('fs', () => {

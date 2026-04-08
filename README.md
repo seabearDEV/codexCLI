@@ -7,6 +7,7 @@ A command-line knowledge base with built-in AI agent integration via MCP.
 - [Overview](#overview)
 - [Features](#features)
 - [Installation](#installation)
+- [Environment Variables](#environment-variables)
 - [Usage](#usage)
   - [Storing Data](#storing-data)
   - [Retrieving Data](#retrieving-data)
@@ -125,6 +126,24 @@ If `cclid` is not found after installing, verify that npm's global bin directory
 ```bash
 echo $PATH | grep -o "$(npm config get prefix)/bin"
 ```
+
+## Environment Variables
+
+CodexCLI honors a small set of environment variables for deployment-time configuration. All are optional — sensible defaults work for most users. (For interactive UI preferences like color and pager, see [Configuration](#configuration) under Usage.)
+
+| Variable | Purpose | Default |
+| --- | --- | --- |
+| `CODEX_DATA_DIR` | Override the global data directory. Must be an absolute path. All global state lives here: the entry store (`store/`), config, audit log, telemetry. | `~/.codexcli` |
+| `CODEX_PROJECT` | Explicit path to a `.codexcli/` directory, a legacy `.codexcli.json` file, or a containing directory. Fails closed if the path doesn't resolve — no `cwd` walk-up fallback. | unset (walk up from `cwd`) |
+| `CODEX_PROJECT_DIR` | MCP-server launcher hint — the directory the server should treat as the project root. Equivalent to passing `--cwd <dir>`. Applied via `setProjectRootOverride` (no `process.chdir`), so it works whether the server is run as a binary or imported. | unset |
+| `CODEX_NO_PROJECT` | Disable project-file lookup entirely. Set to any non-empty value (e.g. `1`) and `findProjectFile()` returns `null` regardless of `cwd` or `CODEX_PROJECT`. | unset |
+| `CODEX_AGENT_NAME` | Identifier recorded in the audit and telemetry logs for the calling agent. Used by `ccli stats` and `ccli audit` to break down activity per agent (Claude, Cursor, Copilot, etc.). | unset |
+
+### Notes
+
+- **`CODEX_DATA_DIR` must be absolute.** Relative paths (`./mydata`, `~/foo`) are rejected with a hard error rather than silently resolved against `process.cwd()`. Pass an expanded absolute path.
+- **Verify your data directory** at any time with `ccli info` — the `Data` line shows the resolved path and is annotated with `(CODEX_DATA_DIR)` when the env var is set.
+- **Pin the project root** for the MCP server in `.claude.json` by setting `"env": { "CODEX_PROJECT": "<repo path>" }` in the codexcli MCP block. This is more deterministic than relying on `cwd` walk-up.
 
 ## Usage
 
