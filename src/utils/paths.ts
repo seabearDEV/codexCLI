@@ -99,14 +99,22 @@ export function setProjectRootOverride(dir: string | null): void {
 }
 
 /**
- * Walk up from cwd to find a .codexcli.json project file.
- * Returns the absolute path if found, null otherwise.
+ * Walk up from cwd to find the project store. As of v1.10.0, this prefers
+ * a `.codexcli/` directory (new format) over a `.codexcli.json` file
+ * (legacy format). Returns the absolute path if either is found, null
+ * otherwise.
  *
  * Resolution order:
  *   1. CODEX_NO_PROJECT env var → disabled (returns null)
- *   2. CODEX_PROJECT env var → explicit path to a .codexcli.json file or its directory
+ *   2. CODEX_PROJECT env var → explicit path to a `.codexcli` directory,
+ *      `.codexcli.json` file, or a containing directory
  *   3. setProjectRootOverride() value (e.g. MCP client roots) → walk up from there
  *   4. process.cwd() → walk up from there
+ *
+ * Callers that need a directory specifically (store internals) should use
+ * `findProjectStoreDir()` instead. Callers that need to *remove* the project
+ * should use `fs.rmSync(path, { recursive: true, force: true })` which handles
+ * both file and directory returns uniformly.
  */
 export function findProjectFile(): string | null {
   if (projectFileCache !== null) {
@@ -119,22 +127,43 @@ export function findProjectFile(): string | null {
     return null;
   }
 
-  // Explicit env var override — file path or containing directory
+  // Explicit env var override — path to a .codexcli directory, .codexcli.json
+  // file, or a containing directory holding either.
   const envPath = process.env.CODEX_PROJECT;
   if (envPath) {
     const resolved = path.resolve(envPath);
-    let candidate = resolved;
+    // Direct hit: resolved IS a .codexcli directory
     try {
-      if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
-        candidate = path.join(resolved, '.codexcli.json');
+      if (
+        fs.existsSync(resolved) &&
+        fs.statSync(resolved).isDirectory() &&
+        path.basename(resolved) === '.codexcli'
+      ) {
+        projectFileCache = resolved;
+        return resolved;
       }
-    } catch {
-      // fall through; existsSync below will handle it
+    } catch { /* fall through */ }
+
+    // Direct hit: resolved IS a .codexcli.json file
+    if (fs.existsSync(resolved) && !isDirectorySafe(resolved)) {
+      projectFileCache = resolved;
+      return resolved;
     }
-    if (fs.existsSync(candidate)) {
-      projectFileCache = candidate;
-      return candidate;
+
+    // Containing directory: look for .codexcli/ or .codexcli.json inside it
+    if (fs.existsSync(resolved) && isDirectorySafe(resolved)) {
+      const dirCandidate = path.join(resolved, '.codexcli');
+      if (fs.existsSync(dirCandidate) && isDirectorySafe(dirCandidate)) {
+        projectFileCache = dirCandidate;
+        return dirCandidate;
+      }
+      const fileCandidate = path.join(resolved, '.codexcli.json');
+      if (fs.existsSync(fileCandidate)) {
+        projectFileCache = fileCandidate;
+        return fileCandidate;
+      }
     }
+
     // Env var was set but didn't resolve — treat as "no project" rather than
     // silently falling back to a different directory the user didn't ask for.
     projectFileCache = '';
@@ -152,10 +181,17 @@ export function findProjectFile(): string | null {
       return null;
     }
 
-    const candidate = path.join(dir, '.codexcli.json');
-    if (fs.existsSync(candidate)) {
-      projectFileCache = candidate;
-      return candidate;
+    // Prefer the new `.codexcli/` directory over the legacy `.codexcli.json` file.
+    const dirCandidate = path.join(dir, '.codexcli');
+    if (fs.existsSync(dirCandidate) && isDirectorySafe(dirCandidate)) {
+      projectFileCache = dirCandidate;
+      return dirCandidate;
+    }
+
+    const fileCandidate = path.join(dir, '.codexcli.json');
+    if (fs.existsSync(fileCandidate)) {
+      projectFileCache = fileCandidate;
+      return fileCandidate;
     }
 
     const parent = path.dirname(dir);
@@ -164,6 +200,15 @@ export function findProjectFile(): string | null {
       return null;
     }
     dir = parent;
+  }
+}
+
+/** Safe wrapper around fs.statSync(...).isDirectory() that returns false on error. */
+function isDirectorySafe(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
   }
 }
 

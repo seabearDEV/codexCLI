@@ -1,19 +1,22 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { writeDirectoryStore, readDirectoryStore } from './helpers/readStoreState';
 
 let tmpDir: string;
-let dataPath: string;
+let storeDir: string;
 
 vi.mock('../utils/paths', () => ({
   getDataDirectory: () => tmpDir,
   getUnifiedDataFilePath: () => path.join(tmpDir, 'data.json'),
   getAliasFilePath: () => path.join(tmpDir, 'aliases.json'),
   getConfirmFilePath: () => path.join(tmpDir, 'confirm.json'),
+  getGlobalStoreDirPath: () => path.join(tmpDir, 'store'),
   ensureDataDirectoryExists: () => {
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
   },
   findProjectFile: () => null,
+  findProjectStoreDir: () => null,
   clearProjectFileCache: () => {},
 }));
 
@@ -21,7 +24,7 @@ import { loadMeta, touchMeta, removeMeta, loadEntries, saveEntries, clearStoreCa
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-meta-'));
-  dataPath = path.join(tmpDir, 'data.json');
+  storeDir = path.join(tmpDir, 'store');
   clearStoreCaches();
 });
 
@@ -31,24 +34,21 @@ afterEach(() => {
 
 describe('store meta operations', () => {
   it('touchMeta writes a timestamp for the key', () => {
-    fs.writeFileSync(dataPath, JSON.stringify({ entries: { foo: 'bar' }, aliases: {}, confirm: {} }));
+    writeDirectoryStore(storeDir, { entries: { foo: 'bar' } });
     clearStoreCaches();
 
     touchMeta('foo', 'global');
 
-    const data = JSON.parse(fs.readFileSync(dataPath, 'utf8')) as Record<string, unknown>;
-    const meta = data._meta as Record<string, number>;
+    const meta = loadMeta('global');
     expect(meta.foo).toBeGreaterThan(0);
   });
 
   it('loadMeta returns stored timestamps', () => {
     const now = Date.now();
-    fs.writeFileSync(dataPath, JSON.stringify({
+    writeDirectoryStore(storeDir, {
       entries: { foo: 'bar' },
-      aliases: {},
-      confirm: {},
       _meta: { foo: now },
-    }));
+    });
     clearStoreCaches();
 
     const meta = loadMeta('global');
@@ -56,7 +56,7 @@ describe('store meta operations', () => {
   });
 
   it('loadMeta returns empty object when no _meta exists', () => {
-    fs.writeFileSync(dataPath, JSON.stringify({ entries: {}, aliases: {}, confirm: {} }));
+    writeDirectoryStore(storeDir, { entries: {} });
     clearStoreCaches();
 
     const meta = loadMeta('global');
@@ -64,12 +64,13 @@ describe('store meta operations', () => {
   });
 
   it('removeMeta deletes key and children', () => {
-    fs.writeFileSync(dataPath, JSON.stringify({
-      entries: {},
-      aliases: {},
-      confirm: {},
+    writeDirectoryStore(storeDir, {
+      entries: {
+        server: { ip: '1.2.3.4', port: '8080' },
+        other: 'value',
+      },
       _meta: { 'server': 100, 'server.ip': 200, 'server.port': 300, 'other': 400 },
-    }));
+    });
     clearStoreCaches();
 
     removeMeta('server', 'global');
@@ -83,30 +84,32 @@ describe('store meta operations', () => {
 
   it('_meta is preserved through save/load cycle', () => {
     const now = Date.now();
-    fs.writeFileSync(dataPath, JSON.stringify({
+    writeDirectoryStore(storeDir, {
       entries: { foo: 'bar' },
-      aliases: {},
-      confirm: {},
       _meta: { foo: now },
-    }));
+    });
     clearStoreCaches();
 
     const entries = loadEntries('global');
     entries.baz = 'qux';
     saveEntries(entries, 'global');
 
-    const data = JSON.parse(fs.readFileSync(dataPath, 'utf8')) as Record<string, unknown>;
-    expect((data._meta as Record<string, number>).foo).toBe(now);
+    const meta = loadMeta('global');
+    expect(meta.foo).toBe(now);
   });
 
-  it('_meta is not written when empty', () => {
-    fs.writeFileSync(dataPath, JSON.stringify({ entries: { foo: 'bar' }, aliases: {}, confirm: {} }));
+  it('meta is not written for untracked entries', () => {
+    writeDirectoryStore(storeDir, { entries: { foo: 'bar' } });
     clearStoreCaches();
 
+    // Save without a _meta map → the entry file should have no `meta` block
     saveEntries({ foo: 'baz' } as Record<string, unknown>, 'global');
 
-    const raw = fs.readFileSync(dataPath, 'utf8');
-    expect(raw).not.toContain('_meta');
+    const fooFile = JSON.parse(
+      fs.readFileSync(path.join(storeDir, 'foo.json'), 'utf8')
+    ) as { value: string; meta?: unknown };
+    expect(fooFile.value).toBe('baz');
+    expect(fooFile.meta).toBeUndefined();
   });
 });
 

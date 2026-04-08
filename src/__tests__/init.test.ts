@@ -5,8 +5,16 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { readDirectoryStore } from './helpers/readStoreState';
 
 let tmpDir: string;
+
+// v1.10.0: `ccli init` creates a `.codexcli/` directory, not a `.codexcli.json`
+// file. These helpers read the new layout and reconstitute the legacy shape.
+const readProjectData = (dir: string) =>
+  readDirectoryStore(path.join(dir, '.codexcli'));
+
+const projectStorePath = (dir: string) => path.join(dir, '.codexcli');
 
 // Resolve the CLI path relative to the project root (two levels up from __tests__)
 const cliPath = path.resolve(__dirname, '..', '..', 'dist', 'index.js');
@@ -40,16 +48,16 @@ afterEach(() => {
 });
 
 describe('ccli init — full flow', () => {
-  it('creates .codexcli.json with scanned entries', () => {
+  it('creates .codexcli/ with scanned entries', () => {
     const output = run('init');
     expect(output).toContain('Created:');
 
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
-    expect(data.entries.project.name).toBe('init-test');
-    expect(data.entries.project.stack).toContain('Node.js');
-    expect(data.entries.commands.build).toBe('npm run build');
-    expect(data.entries.files.entry).toContain('src/index.ts');
-    expect(data.entries.conventions.types).toContain('strict');
+    const data = readProjectData(tmpDir);
+    expect((data.entries as any).project.name).toBe('init-test');
+    expect((data.entries as any).project.stack).toContain('Node.js');
+    expect((data.entries as any).commands.build).toBe('npm run build');
+    expect((data.entries as any).files.entry).toContain('src/index.ts');
+    expect((data.entries as any).conventions.types).toContain('strict');
   });
 
   it('creates CLAUDE.md', () => {
@@ -62,17 +70,18 @@ describe('ccli init — full flow', () => {
 
   it('seeds conventions.persistence', () => {
     run('init');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
-    expect(data.entries.conventions.persistence).toContain('.codexcli.json');
-    expect(data.entries.conventions.persistence).toContain('CLAUDE.md');
-    expect(data.entries.conventions.persistence).toContain('MEMORY.md');
+    const data = readProjectData(tmpDir);
+    const persistence = (data.entries as any).conventions.persistence;
+    expect(persistence).toContain('.codexcli');
+    expect(persistence).toContain('CLAUDE.md');
+    expect(persistence).toContain('MEMORY.md');
   });
 
   it('detects deps from package.json', () => {
     run('init');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
-    expect(data.entries.deps.express).toContain('Express');
-    expect(data.entries.deps.vitest).toContain('Vitest');
+    const data = readProjectData(tmpDir);
+    expect((data.entries as any).deps.express).toContain('Express');
+    expect((data.entries as any).deps.vitest).toContain('Vitest');
   });
 });
 
@@ -80,37 +89,35 @@ describe('ccli init — idempotency', () => {
   it('running twice produces no duplicates', () => {
     run('init');
     const output2 = run('init');
-    // Second run: .codexcli.json exists, entries exist, CLAUDE.md exists
+    // Second run: .codexcli/ exists, entries exist, CLAUDE.md exists
     expect(output2).toContain('already exists');
   });
 
   it('second run does not modify existing entries', () => {
     run('init');
-    const first = fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8');
+    const first = readProjectData(tmpDir);
 
     run('init');
-    const second = fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8');
+    const second = readProjectData(tmpDir);
 
-    // Parse and compare entries (ignoring _meta timestamps)
-    const firstData = JSON.parse(first);
-    const secondData = JSON.parse(second);
-    delete firstData._meta;
-    delete secondData._meta;
-    expect(secondData).toEqual(firstData);
+    // Compare entries (ignoring _meta timestamps)
+    delete first._meta;
+    delete second._meta;
+    expect(second).toEqual(first);
   });
 });
 
 describe('ccli init — flags', () => {
   it('--no-scan skips codebase analysis', () => {
     run('init --no-scan');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
+    const data = readProjectData(tmpDir);
     // Entries should be empty (no scan)
     expect(data.entries).toEqual({});
   });
 
   it('--no-claude skips CLAUDE.md generation', () => {
     run('init --no-claude');
-    expect(fs.existsSync(path.join(tmpDir, '.codexcli.json'))).toBe(true);
+    expect(fs.existsSync(projectStorePath(tmpDir))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, 'CLAUDE.md'))).toBe(false);
   });
 
@@ -122,35 +129,35 @@ describe('ccli init — flags', () => {
     expect(claudeMd).not.toContain('custom content');
   });
 
-  it('--remove deletes .codexcli.json', () => {
+  it('--remove deletes .codexcli/', () => {
     run('init'); // create it first
-    expect(fs.existsSync(path.join(tmpDir, '.codexcli.json'))).toBe(true);
+    expect(fs.existsSync(projectStorePath(tmpDir))).toBe(true);
 
     run('init --remove');
-    expect(fs.existsSync(path.join(tmpDir, '.codexcli.json'))).toBe(false);
+    expect(fs.existsSync(projectStorePath(tmpDir))).toBe(false);
   });
 
   it('--scaffold still works (backward compat)', () => {
     run('init --scaffold');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
-    expect(data.entries.project.name).toBe('init-test');
+    const data = readProjectData(tmpDir);
+    expect((data.entries as any).project.name).toBe('init-test');
   });
 
   it('--dry-run previews without writing', () => {
     const output = run('init --dry-run');
     expect(output).toContain('Would scaffold');
     // Files should NOT be created
-    expect(fs.existsSync(path.join(tmpDir, '.codexcli.json'))).toBe(false);
+    expect(fs.existsSync(projectStorePath(tmpDir))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, 'CLAUDE.md'))).toBe(false);
   });
 });
 
 describe('ccli init — empty directory', () => {
-  it('creates .codexcli.json and CLAUDE.md even with no project files', () => {
+  it('creates .codexcli/ and CLAUDE.md even with no project files', () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-init-empty-'));
     try {
       run('init', emptyDir);
-      expect(fs.existsSync(path.join(emptyDir, '.codexcli.json'))).toBe(true);
+      expect(fs.existsSync(projectStorePath(emptyDir))).toBe(true);
       expect(fs.existsSync(path.join(emptyDir, 'CLAUDE.md'))).toBe(true);
     } finally {
       fs.rmSync(emptyDir, { recursive: true, force: true });

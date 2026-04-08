@@ -174,7 +174,9 @@ vi.mock('../utils/paths', () => ({
   getConfirmFilePath: vi.fn(() => '/mock/confirm.json'),
   getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
   getDataDirectory: vi.fn(() => '/mock'),
+  getGlobalStoreDirPath: vi.fn(() => '/mock/store'),
   findProjectFile: vi.fn(() => null),
+  findProjectStoreDir: vi.fn(() => null),
   clearProjectFileCache: vi.fn(),
 }));
 

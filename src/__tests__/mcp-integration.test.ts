@@ -9,15 +9,16 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { readStoreState, writeDirectoryStore } from './helpers/readStoreState';
 
 let tmpDir: string;
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-mcp-integ-'));
-  fs.writeFileSync(
-    path.join(tmpDir, 'data.json'),
-    JSON.stringify({ entries: {}, aliases: {}, confirm: {} })
-  );
+  // v1.10.0: seed an empty store directory directly
+  fs.mkdirSync(path.join(tmpDir, 'store'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'store', '_aliases.json'), '{}');
+  fs.writeFileSync(path.join(tmpDir, 'store', '_confirm.json'), '{}');
 });
 
 afterEach(() => {
@@ -93,7 +94,9 @@ function callMcpTool(tool: string, params: Record<string, unknown> = {}): { cont
 }
 
 function readDataFile(): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(path.join(tmpDir, 'data.json'), 'utf8'));
+  // v1.10.0: reads the file-per-entry store directory and reconstitutes
+  // the legacy UnifiedData shape the tests assert against.
+  return readStoreState(tmpDir) as Record<string, unknown>;
 }
 
 describe('MCP Integration (real I/O)', () => {
@@ -188,12 +191,12 @@ describe('MCP Integration (real I/O)', () => {
     });
 
     it('lists aliases from disk', () => {
-      // Pre-populate data file with an alias
-      const dataPath = path.join(tmpDir, 'data.json');
-      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-      data.entries.commands = { test: 'npm test' };
-      data.aliases = { tst: 'commands.test' };
-      fs.writeFileSync(dataPath, JSON.stringify(data));
+      // Pre-populate store directory with an alias (v1.10.0 format)
+      writeDirectoryStore(path.join(tmpDir, 'store'), {
+        entries: { commands: { test: 'npm test' } },
+        aliases: { tst: 'commands.test' },
+        confirm: {},
+      });
 
       const listResult = callMcpTool('codex_alias_list', {});
       expect(listResult.content[0].text).toContain('tst');
@@ -201,12 +204,12 @@ describe('MCP Integration (real I/O)', () => {
     });
 
     it('removes alias from disk', () => {
-      // Pre-populate
-      const dataPath = path.join(tmpDir, 'data.json');
-      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-      data.entries.x = { y: 'val' };
-      data.aliases = { xy: 'x.y' };
-      fs.writeFileSync(dataPath, JSON.stringify(data));
+      // Pre-populate store directory (v1.10.0 format)
+      writeDirectoryStore(path.join(tmpDir, 'store'), {
+        entries: { x: { y: 'val' } },
+        aliases: { xy: 'x.y' },
+        confirm: {},
+      });
 
       callMcpTool('codex_alias_remove', { alias: 'xy' });
 

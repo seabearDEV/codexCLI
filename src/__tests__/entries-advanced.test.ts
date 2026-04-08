@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { readStoreState } from './helpers/readStoreState';
 
 let tmpDir: string;
 
@@ -18,14 +19,18 @@ const run = (args: string) => {
   }).toString();
 };
 
-const readData = () => JSON.parse(fs.readFileSync(path.join(tmpDir, 'data.json'), 'utf8'));
+// v1.10.0: reads the file-per-entry store directory and reconstitutes the
+// legacy UnifiedData shape the tests assert against. Falls back to reading
+// a pre-migration data.json if the store dir doesn't exist yet.
+const readData = () => readStoreState(tmpDir);
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-entries-'));
-  fs.writeFileSync(
-    path.join(tmpDir, 'data.json'),
-    JSON.stringify({ entries: {}, aliases: {}, confirm: {} })
-  );
+  // Seed an empty store directory directly — equivalent to the old practice
+  // of writing an empty data.json, but in the v1.10.0 layout.
+  fs.mkdirSync(path.join(tmpDir, 'store'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'store', '_aliases.json'), '{}');
+  fs.writeFileSync(path.join(tmpDir, 'store', '_confirm.json'), '{}');
 });
 
 afterEach(() => {

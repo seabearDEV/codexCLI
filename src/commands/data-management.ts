@@ -12,7 +12,6 @@ import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
 import { findProjectFile, clearProjectFileCache } from '../store';
-import { saveJsonSorted } from '../utils/saveJsonSorted';
 import { getAuditPath } from '../utils/audit';
 import { getTelemetryPath, getMissPathsPath } from '../utils/telemetry';
 import { scanCodebase, ScaffoldEntry } from './scan';
@@ -313,25 +312,30 @@ export function handleProjectFile(options: {
   dryRun?: boolean;
 }): void {
   if (options.remove) {
-    const projectFile = findProjectFile();
-    if (!projectFile) {
-      printError('No .codexcli.json found in current directory tree.');
+    const projectPath = findProjectFile();
+    if (!projectPath) {
+      printError('No .codexcli project store found in current directory tree.');
       return;
     }
-    fs.unlinkSync(projectFile);
+    // findProjectFile may return either a legacy .codexcli.json file or a
+    // v1.10.0 .codexcli/ directory. rmSync handles both uniformly.
+    fs.rmSync(projectPath, { recursive: true, force: true });
     clearProjectFileCache();
-    printSuccess(`Removed: ${projectFile}`);
+    printSuccess(`Removed: ${projectPath}`);
     return;
   }
 
   const cwd = process.cwd();
-  const target = path.join(cwd, '.codexcli.json');
-  const existed = fs.existsSync(target);
+  const target = path.join(cwd, '.codexcli');
+  const existed = fs.existsSync(target) && fs.statSync(target).isDirectory();
 
-  // Create .codexcli.json if it doesn't exist
+  // Create .codexcli/ directory with empty sidecars if it doesn't exist
   if (!existed) {
     if (!options.dryRun) {
-      saveJsonSorted(target, { entries: {}, aliases: {}, confirm: {} });
+      fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+      // Seed empty sidecars so the store has a consistent initial state
+      fs.writeFileSync(path.join(target, '_aliases.json'), '{}\n', { mode: 0o600 });
+      fs.writeFileSync(path.join(target, '_confirm.json'), '{}\n', { mode: 0o600 });
       clearProjectFileCache();
     }
     printSuccess(`Created: ${target}`);

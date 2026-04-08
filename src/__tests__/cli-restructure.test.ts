@@ -6,8 +6,14 @@ import { execSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { readDirectoryStore } from './helpers/readStoreState';
 
 let tmpDir: string;
+
+// v1.10.0: project store is a `.codexcli/` directory. Read via helper that
+// reconstitutes the legacy UnifiedData shape.
+const readProjectData = (dir: string) =>
+  readDirectoryStore(path.join(dir, '.codexcli'));
 const cliPath = path.resolve(__dirname, '..', '..', 'dist', 'index.js');
 
 const run = (args: string) => {
@@ -55,7 +61,7 @@ afterEach(() => {
 describe('alias subcommand', () => {
   it('alias set creates an alias', () => {
     run('alias set b commands.build');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
+    const data = readProjectData(tmpDir) as any;
     expect(data.aliases.b).toBe('commands.build');
   });
 
@@ -69,14 +75,14 @@ describe('alias subcommand', () => {
   it('alias remove deletes an alias', () => {
     run('alias set b commands.build');
     run('alias remove b');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
+    const data = readProjectData(tmpDir) as any;
     expect(data.aliases.b).toBeUndefined();
   });
 
   it('alias rename renames an alias', () => {
     run('alias set b commands.build');
     run('alias rename b bld');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
+    const data = readProjectData(tmpDir) as any;
     expect(data.aliases.b).toBeUndefined();
     expect(data.aliases.bld).toBe('commands.build');
   });
@@ -92,7 +98,7 @@ describe('alias subcommand', () => {
 describe('confirm subcommand', () => {
   it('confirm set marks key as requiring confirmation', () => {
     run('confirm set commands.build');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
+    const data = readProjectData(tmpDir) as any;
     expect(data.confirm['commands.build']).toBe(true);
   });
 
@@ -105,7 +111,7 @@ describe('confirm subcommand', () => {
   it('confirm remove removes confirmation', () => {
     run('confirm set commands.build');
     run('confirm remove commands.build');
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
+    const data = readProjectData(tmpDir) as any;
     expect(data.confirm['commands.build']).toBeUndefined();
   });
 
@@ -190,7 +196,7 @@ describe('deprecation notices', () => {
     });
     // The deprecation goes to stderr which we can't easily capture with execSync
     // but we can verify the alias was still created (backward compat works)
-    const data = JSON.parse(fs.readFileSync(path.join(tmpDir, '.codexcli.json'), 'utf8'));
+    const data = readProjectData(tmpDir) as any;
     expect(data.aliases.dk).toBe('dep.key');
   });
 
@@ -201,7 +207,7 @@ describe('deprecation notices', () => {
     try {
       // --scaffold should still work but warn
       execSync(`node ${cliPath} init --scaffold --no-claude`, { cwd: freshDir, timeout: 10000 });
-      expect(fs.existsSync(path.join(freshDir, '.codexcli.json'))).toBe(true);
+      expect(fs.existsSync(path.join(freshDir, '.codexcli'))).toBe(true);
     } finally {
       fs.rmSync(freshDir, { recursive: true, force: true });
     }

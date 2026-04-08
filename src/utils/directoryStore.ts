@@ -67,9 +67,13 @@ export function entryFilePath(dir: string, key: string): string {
   return path.join(dir, key + ENTRY_FILE_SUFFIX);
 }
 
-/** Returns the lock path sibling to the store directory. */
-export function getStoreLockPath(dir: string): string {
-  return dir + '.lock';
+/**
+ * Returns the path passed to `withFileLock` for this store. The file-lock
+ * primitive appends `.lock` internally, so callers pass the store directory
+ * itself and the actual lock file ends up as a sibling at `<dir>.lock`.
+ */
+export function getStoreLockKey(dir: string): string {
+  return dir;
 }
 
 // ── Wrapper I/O ────────────────────────────────────────────────────────
@@ -271,7 +275,7 @@ export function createDirectoryStore(
     const dir = getDirPath();
     ensureDir();
 
-    withFileLock(getStoreLockPath(dir), () => {
+    withFileLock(getStoreLockKey(dir), () => {
       // 1. Flatten new entries to leaves (authoritative new state).
       const newFlat = flattenObject(data.entries as Record<string, unknown>);
 

@@ -7,7 +7,7 @@ import {
   parseEntryWrapper,
   serializeEntryWrapper,
   entryFilePath,
-  getStoreLockPath,
+  getStoreLockKey,
   type EntryWrapper,
 } from '../utils/directoryStore';
 import type { UnifiedData } from '../store';
@@ -468,8 +468,8 @@ describe('entryFilePath', () => {
   });
 });
 
-describe('getStoreLockPath', () => {
-  it('returns a sibling .lock path', () => {
-    expect(getStoreLockPath('/a/b/.codexcli')).toBe('/a/b/.codexcli.lock');
+describe('getStoreLockKey', () => {
+  it('returns the directory path unchanged (withFileLock appends .lock)', () => {
+    expect(getStoreLockKey('/a/b/.codexcli')).toBe('/a/b/.codexcli');
   });
 });
