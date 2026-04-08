@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-04-08
+
 ### ⚠️ Breaking Changes
 
 Three breaking items in v1.11. Each is small individually; review before upgrading if you script against the CLI.
