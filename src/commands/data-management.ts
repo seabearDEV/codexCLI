@@ -337,8 +337,9 @@ export function handleProjectFile(options: {
   // Check for the edge case where target exists but is not a directory
   // (e.g. a leftover legacy file). mkdirSync would throw EEXIST in that case.
   if (targetStat !== null && !targetStat.isDirectory()) {
+    const kind = targetStat.isFile() ? 'file' : targetStat.isSymbolicLink() ? 'symlink' : 'non-directory';
     printError(
-      `Cannot initialize: '${target}' already exists as a non-directory file. ` +
+      `Cannot initialize: '${target}' already exists as a ${kind}. ` +
       `Remove it manually before running 'ccli init'.`
     );
     return;

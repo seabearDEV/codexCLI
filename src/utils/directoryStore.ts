@@ -68,14 +68,16 @@ function keyFromFilename(name: string): string {
  *   - Is non-empty
  *   - Does not start with `_` (reserved for sidecars like `_aliases`, `_confirm`)
  *   - Contains no path separators (`/`, `\`) — keys are flat filenames, not paths
- *   - Has no empty segment or `..` segment when split on `.`
+ *   - Has no empty segment, `..` segment, or prototype-polluting name (`__proto__`,
+ *     `constructor`, `prototype`) when split on `.`
  */
 export function isValidEntryKey(key: string): boolean {
   if (!key || key.startsWith('_')) return false;
   if (key.includes('/') || key.includes('\\')) return false;
   const parts = key.split('.');
   for (const part of parts) {
-    if (!part || part === '..') return false;
+    if (!part || part === '..' ||
+        part === '__proto__' || part === 'constructor' || part === 'prototype') return false;
   }
   return true;
 }
