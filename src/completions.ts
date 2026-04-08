@@ -46,8 +46,6 @@ const FLAG_DESCRIPTIONS: Record<string, string> = {
   '--tree': 'Display as tree',
   '-t': 'Display as tree',
   '--plain': 'Plain text, no colors',
-  '--raw': 'Plain text, no colors (deprecated, use --plain)',
-  '-r': 'Plain text, no colors (deprecated, use --plain)',
   '-s': 'Show before interpolation',
   '--force': 'Skip confirmation',
   '-f': 'Skip confirmation',
@@ -100,8 +98,7 @@ const setDef: CommandDef = {
 const getDef: CommandDef = {
   flags: {
     '--tree': FLAG_DESCRIPTIONS['--tree'], '-t': FLAG_DESCRIPTIONS['-t'],
-    '--plain': FLAG_DESCRIPTIONS['--plain'],
-    '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
+    '--plain': FLAG_DESCRIPTIONS['--plain'], '-p': FLAG_DESCRIPTIONS['--plain'],
     '--source': FLAG_DESCRIPTIONS['--source'], '-s': FLAG_DESCRIPTIONS['-s'],
     '--decrypt': FLAG_DESCRIPTIONS['--decrypt'], '-d': FLAG_DESCRIPTIONS['-d'],
     '--copy': FLAG_DESCRIPTIONS['--copy'], '-c': FLAG_DESCRIPTIONS['-c'],
@@ -217,8 +214,7 @@ const CLI_TREE: Record<string, CommandDef> = {
   context: {
     flags: {
       '--tier': 'Context tier (essential, standard, full)', '-t': 'Context tier',
-      '--plain': FLAG_DESCRIPTIONS['--plain'],
-      '--raw': FLAG_DESCRIPTIONS['--raw'], '-r': FLAG_DESCRIPTIONS['-r'],
+      '--plain': FLAG_DESCRIPTIONS['--plain'], '-p': FLAG_DESCRIPTIONS['--plain'],
       '--json': 'Output as JSON', '-j': 'Output as JSON',
       '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
     },
@@ -255,7 +251,8 @@ const CLI_TREE: Record<string, CommandDef> = {
   stats: {
     flags: {
       '--period': 'Time period (7d, 30d, 90d, all)', '-p': 'Time period (7d, 30d, 90d, all)',
-      '--json': 'Output raw JSON',
+      '--detailed': 'Include namespace activity and breakdowns', '-D': 'Include namespace activity and breakdowns',
+      '--json': 'Output raw JSON', '-j': 'Output raw JSON',
     },
     argType: null,
     description: 'View usage telemetry',
@@ -265,6 +262,7 @@ const CLI_TREE: Record<string, CommandDef> = {
       '--period': 'Time period (7d, 30d, 90d, all)', '-p': 'Time period (7d, 30d, 90d, all)',
       '--writes': 'Show writes only', '-w': 'Show writes only',
       '--mcp': 'Show MCP operations only', '--cli': 'Show CLI operations only',
+      '--detailed': 'Show per-entry metrics', '-D': 'Show per-entry metrics',
       '--json': 'Output raw JSON', '-j': 'Output raw JSON',
       '--limit': 'Max entries to show', '-n': 'Max entries to show',
     },

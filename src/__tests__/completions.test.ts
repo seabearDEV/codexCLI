@@ -137,7 +137,7 @@ describe('Completions', () => {
       const results = getCompletions('ccli get -', 10);
       const v = values(results);
       expect(v).toContain('--tree');
-      expect(v).toContain('--raw');
+      expect(v).toContain('--plain');
       expect(v).not.toContain('--format');
     });
 
@@ -145,7 +145,7 @@ describe('Completions', () => {
       const results = getCompletions('ccli get ', 9);
       const v = values(results);
       expect(v).not.toContain('--tree');
-      expect(v).not.toContain('--raw');
+      expect(v).not.toContain('--plain');
     });
 
     it('returns flags with descriptions and group', () => {
@@ -160,10 +160,14 @@ describe('Completions', () => {
       expect(plainItem!.description).toBe('Plain text, no colors');
       expect(plainItem!.group).toBe('flags');
 
-      // --raw is kept as a hidden deprecated alias
-      const rawItem = findItem(results, '--raw');
-      expect(rawItem).toBeDefined();
-      expect(rawItem!.description).toBe('Plain text, no colors (deprecated, use --plain)');
+      // --plain has a -p short as of v1.11
+      const shortPlainItem = findItem(results, '-p');
+      expect(shortPlainItem).toBeDefined();
+      expect(shortPlainItem!.description).toBe('Plain text, no colors');
+
+      // --raw was removed in v1.11 (was deprecated since v1.9.1)
+      expect(findItem(results, '--raw')).toBeUndefined();
+      expect(findItem(results, '-r')).toBeUndefined();
     });
 
     it('returns flags for run command when typing a dash', () => {

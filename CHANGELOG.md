@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Removed
+
+- **`--raw` / `-r` on `get` and `context`** — deprecated since v1.9.1 (when it was renamed to `--plain` because the name `--raw` misleadingly implied "no processing" when its actual behavior was "no colors"). Removed entirely in v1.11. Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62) (part of the short-flag namespace audit).
+  - **Migration**: replace any scripted use of `ccli get foo --raw` or `ccli context --raw` with `--plain` (or the new `-p` short).
+  - The deprecation warning has been live since v1.9.1, so anyone running the deprecated form has had multiple minor versions of notice.
+
+### Changed
+
+- **Short-flag namespace audit (BREAKING)** — first comprehensive pass at the short-flag space since v1.0. Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62). Three flag moves, one orphan adoption, one consistency fix:
+  - **`get --plain` and `context --plain` gain `-p`** — the original audit trigger. `--plain` shipped without a short in v1.9.1 specifically because `-r` was occupied by the deprecated `--raw`; with `--raw` gone, `-p` is now free *and* obvious. Mnemonic wins over consistency.
+  - **`stats --json` gains `-j`** — every other JSON-emitting command (`get`, `find`, `context`, `stale`, `lint`, `audit`) already used `-j, --json`. `stats` was the lone exception. Pure consistency fix.
+  - **`stats --detailed` and `audit --detailed` move from `-d` to `-D`** — frees the lowercase `-d` to mean `--decrypt` unambiguously across all read commands (`get`, `run`, `edit`). The capital-letter convention mirrors `-G/-A/-P` for "broadeners". This is the only scripted-caller breakage in the audit: anyone passing `-d` to `ccli stats` or `ccli audit` will get a usage error.
+- **`GetOptions.raw` field renamed to `plain`** in `src/types.ts` and `ContextOptions.raw` → `plain` in `src/commands/context.ts`. Internal API change; downstream consumers in `src/commands/entries.ts`, `src/commands/context.ts`, and `src/formatting.ts` (`displayTree` / `formatTree`) updated to match.
+
 ### Added
 
 - **`CODEX_DATA_DIR` validation, provenance, and documentation** — the env var has always been honored by `getDataDirectory()`, but it was undocumented, unvalidated, and invisible. Three changes close those gaps:

@@ -31,7 +31,7 @@ export function filterEntriesByTier(
 export interface ContextOptions {
   tier?: string | undefined;
   global?: boolean | undefined;
-  raw?: boolean | undefined;
+  plain?: boolean | undefined;
   json?: boolean | undefined;
 }
 
@@ -45,7 +45,7 @@ export function showContext(options: ContextOptions = {}): void {
   const meta = scope === 'global' ? loadMeta('global') : loadMetaMerged();
 
   if (Object.keys(filtered).length === 0 && Object.keys(aliases).length === 0) {
-    if (!options.raw) {
+    if (!options.plain) {
       console.log(color.gray(`No entries stored. Add one with "${getBinaryName()} set <key> <value>"`));
     }
     return;
@@ -70,7 +70,7 @@ export function showContext(options: ContextOptions = {}): void {
     for (const [k, v] of Object.entries(filtered)) {
       const ageTag = getStalenessTag(k, meta);
       const displayVal = isEncrypted(v) ? '[encrypted]' : v;
-      if (options.raw) {
+      if (options.plain) {
         console.log(`${k}: ${displayVal}${ageTag}`);
       } else {
         console.log(`${color.cyan(k)}: ${displayVal}${ageTag ? color.yellow(ageTag) : ''}`);
@@ -80,13 +80,13 @@ export function showContext(options: ContextOptions = {}): void {
 
   if (Object.keys(aliases).length > 0) {
     console.log('');
-    if (!options.raw) {
+    if (!options.plain) {
       console.log(color.bold('Aliases:'));
     } else {
       console.log('Aliases:');
     }
     for (const [a, t] of Object.entries(aliases)) {
-      if (options.raw) {
+      if (options.plain) {
         console.log(`  ${a} -> ${t}`);
       } else {
         console.log(`  ${color.green(a)} ${color.gray('->')} ${color.yellow(t)}`);
@@ -98,6 +98,6 @@ export function showContext(options: ContextOptions = {}): void {
     const entryCount = Object.keys(filtered).length;
     console.log('');
     const msg = `[tier: ${tier} (${entryCount} entries) — use --tier full for complete context]`;
-    console.log(options.raw ? msg : color.gray(msg));
+    console.log(options.plain ? msg : color.gray(msg));
   }
 }

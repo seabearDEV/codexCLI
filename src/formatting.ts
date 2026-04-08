@@ -193,7 +193,7 @@ export function showExamples(): void {
   ex(`${b} ${g('get')} ${c('server')}`, '# Get everything under a namespace');
   ex(`${b} ${g('get')} ${y('-t')}`, '# Show all data as a tree');
   ex(`${b} ${g('get')} ${c('server')} ${y('--tree')}`, '# Show a namespace as a tree');
-  ex(`${b} ${g('get')} ${c('server.ip')} ${y('--raw')}`, '# Raw value, no formatting (for scripts)');
+  ex(`${b} ${g('get')} ${c('server.ip')} ${y('-p')}`, '# Plain text, no colors (for scripts)');
   ex(`${b} ${g('get')} ${c('api.key')} ${y('-d')}`, '# Decrypt an encrypted value');
   ex(`${b} ${g('get')} ${c('server.ip')} ${y('-c')}`, '# Copy value to clipboard');
 
@@ -263,7 +263,7 @@ export function showExamples(): void {
   ex(`${b} ${g('set')} ${c('paths.github')} "/Users/me/Projects/github.com"`, '# Store a base path');
   ex(`${b} ${g('set')} ${c('paths.myproject')} "cd \\$\{paths.github}/myproject"`, '# Reference it with ${key}');
   ex(`${b} ${g('get')} ${c('paths.myproject')}`, '# Resolves: cd /Users/me/Projects/github.com/myproject');
-  ex(`${b} ${g('get')} ${c('paths.myproject')} ${y('--raw')}`, '# Plain text, no colors (for scripting)');
+  ex(`${b} ${g('get')} ${c('paths.myproject')} ${y('-p')}`, '# Plain text, no colors (for scripting)');
   ex(`${b} ${g('run')} ${c('paths.myproject')} ${y('--dry -y')}`, '# Preview interpolated command');
   ex(`${b} ${g('set')} ${c('paths.myproject')} ${y('-p')}`, '# Use --prompt to avoid escaping ${}');
 
@@ -290,7 +290,7 @@ export function formatTree(
   prefix = '',
   path = '',
   colorize?: boolean,
-  raw = false,
+  plain = false,
   searchTerm?: string,
   source = false,
   keysOnly = false,
@@ -317,7 +317,7 @@ export function formatTree(
       lines.push(`${fullPrefix}${displayKey}${aliasDisplay}`);
       if (maxDepth === undefined || currentDepth < maxDepth) {
         const childPrefix = prefix + (isLast ? ' '.repeat(4) : '│   ');
-        lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, raw, searchTerm, source, keysOnly, maxDepth, currentDepth + 1));
+        lines.push(formatTree(value as Record<string, unknown>, keyToAliasMap, childPrefix, fullPath, colorEnabled, plain, searchTerm, source, keysOnly, maxDepth, currentDepth + 1));
       }
     } else if (keysOnly || (maxDepth !== undefined && currentDepth <= maxDepth)) {
       lines.push(`${fullPrefix}${displayKey}${aliasDisplay}`);
@@ -327,7 +327,7 @@ export function formatTree(
       if (!source && !isEncrypted(rawValue)) {
         try { resolved = interpolate(rawValue); } catch { /* use raw */ }
       }
-      const masked = isEncrypted(rawValue) ? '[encrypted]' : (raw ? resolved : interpretEscapes(resolved));
+      const masked = isEncrypted(rawValue) ? '[encrypted]' : (plain ? resolved : interpretEscapes(resolved));
       const valueLines = masked.split('\n');
       const continuationPrefix = prefix + (isLast ? '    ' : '│   ') + '  ';
 
@@ -352,7 +352,7 @@ export function formatTree(
 /**
  * Display data in a tree format (prints to stdout)
  */
-export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string> = {}, prefix = '', path = '', raw = false, searchTerm?: string, source = false, keysOnly = false, maxDepth?: number): void {
-  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, raw, searchTerm, source, keysOnly, maxDepth));
+export function displayTree(data: Record<string, unknown>, keyToAliasMap: Record<string, string> = {}, prefix = '', path = '', plain = false, searchTerm?: string, source = false, keysOnly = false, maxDepth?: number): void {
+  console.log(formatTree(data, keyToAliasMap, prefix, path, undefined, plain, searchTerm, source, keysOnly, maxDepth));
 }
 

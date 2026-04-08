@@ -125,13 +125,13 @@ describe('confirm subcommand', () => {
 
 describe('context command', () => {
   it('shows stored entries', () => {
-    const result = run('context --raw');
+    const result = run('context --plain');
     expect(result).toContain('project.name');
     expect(result).toContain('test-project');
   });
 
   it('--tier essential filters to project/commands/conventions', () => {
-    const result = run('context --raw --tier essential');
+    const result = run('context --plain --tier essential');
     expect(result).toContain('project.name');
     expect(result).toContain('commands.build');
     expect(result).toContain('conventions.');
@@ -140,7 +140,7 @@ describe('context command', () => {
   });
 
   it('--tier full shows everything including deps', () => {
-    const result = run('context --raw --tier full');
+    const result = run('context --plain --tier full');
     expect(result).toContain('project.name');
     expect(result).toContain('deps.');
     expect(result).toContain('conventions.persistence');
@@ -156,7 +156,7 @@ describe('context command', () => {
   });
 
   it('shows tier footer for non-full tiers', () => {
-    const result = run('context --raw --tier standard');
+    const result = run('context --plain --tier standard');
     expect(result).toContain('[tier: standard');
   });
 });
