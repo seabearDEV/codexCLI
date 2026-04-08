@@ -473,3 +473,176 @@ describe('getStoreLockKey', () => {
     expect(getStoreLockKey('/a/b/.codexcli')).toBe('/a/b/.codexcli');
   });
 });
+
+// ── Epoch seqlock (torn-read protection) ──────────────────────────────
+
+function readEpochFile(dir: string): number {
+  const raw = fs.readFileSync(path.join(dir, '_epoch.json'), 'utf8');
+  return (JSON.parse(raw) as { epoch: number }).epoch;
+}
+
+describe('epoch seqlock', () => {
+  it('first save bumps epoch from 0 to 2 (stable even)', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    expect(readEpochFile(dir)).toBe(2);
+  });
+
+  it('subsequent saves advance epoch by 2 each time', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+    expect(readEpochFile(dir)).toBe(2);
+
+    store.save({ entries: { a: '2' }, aliases: {}, confirm: {} });
+    expect(readEpochFile(dir)).toBe(4);
+
+    store.save({ entries: { a: '3' }, aliases: {}, confirm: {} });
+    expect(readEpochFile(dir)).toBe(6);
+  });
+
+  it('load() tolerates a missing epoch file (legacy dirs without _epoch.json)', () => {
+    // Simulate a store directory that was created before the epoch file existed.
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(
+      path.join(dir, 'only.json'),
+      JSON.stringify({ value: 'preserved' })
+    );
+
+    const store = makeStore(dir);
+    const data = store.load();
+    expect(data.entries).toEqual({ only: 'preserved' });
+  });
+
+  it('load() recovers from a bogus/garbled epoch file', () => {
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, '_epoch.json'), 'not json');
+    fs.writeFileSync(
+      path.join(dir, 'x.json'),
+      JSON.stringify({ value: 'still readable' })
+    );
+
+    const store = makeStore(dir);
+    const data = store.load();
+    expect(data.entries).toEqual({ x: 'still readable' });
+  });
+
+  it('load() returns a consistent snapshot when epoch is even and unchanged across scan', () => {
+    // This is the happy path: no concurrent writer, load() completes on attempt 0.
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1', b: '2' },
+      aliases: { x: 'a' },
+      confirm: { a: true },
+      _meta: { a: 100, b: 200 },
+    });
+
+    const fresh = makeStore(dir);
+    const loaded = fresh.load();
+
+    expect(loaded.entries).toEqual({ a: '1', b: '2' });
+    expect(loaded.aliases).toEqual({ x: 'a' });
+    expect(loaded.confirm).toEqual({ a: true });
+  });
+
+  it('load() detects an odd (in-progress) epoch and still returns best-effort data', () => {
+    // Simulate a crashed writer that left an odd epoch on disk. load() should
+    // exhaust retries, log via debug, and return whatever it can scan —
+    // rather than hanging or throwing.
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    // Stamp an odd epoch to simulate a crashed mid-commit writer.
+    fs.writeFileSync(path.join(dir, '_epoch.json'), JSON.stringify({ epoch: 7 }) + '\n');
+
+    const fresh = makeStore(dir);
+    const loaded = fresh.load();
+
+    // We should still get the entry data that was durably written.
+    expect(loaded.entries).toEqual({ a: '1' });
+  });
+});
+
+// ── Migration lock (concurrent first-run) ──────────────────────────────
+
+describe('migrateFileToDirectory concurrency', () => {
+  it('is safe to call twice in a row (second call is already-present)', () => {
+    // Sequential calls exercise the same idempotency guarantee the lock
+    // provides for concurrent callers: the winner migrates, the loser
+    // finds the directory already populated.
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1', b: '2' },
+      aliases: {},
+      confirm: {},
+      _meta: { a: 100, b: 200 },
+    }));
+
+    const first = migrateFileToDirectory(oldFile, newDir);
+    expect(first.status).toBe('migrated');
+    expect(first.entryCount).toBe(2);
+
+    // The "lingering old file" cleanup branch runs if the old file reappears,
+    // so put it back to verify the second call takes the already-present path.
+    fs.writeFileSync(oldFile, JSON.stringify({ entries: { a: '1' } }));
+    const second = migrateFileToDirectory(oldFile, newDir);
+    expect(second.status).toBe('already-present');
+    // Old file was renamed to .backup as cleanup.
+    expect(fs.existsSync(oldFile)).toBe(false);
+  });
+
+  it('seeds _epoch.json at 0 during migration', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1' },
+      aliases: {},
+      confirm: {},
+    }));
+
+    migrateFileToDirectory(oldFile, newDir);
+
+    expect(fs.existsSync(path.join(newDir, '_epoch.json'))).toBe(true);
+    expect(readEpochFile(newDir)).toBe(0);
+  });
+
+  it('first save after migration bumps epoch to 2', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1' },
+      aliases: {},
+      confirm: {},
+    }));
+
+    migrateFileToDirectory(oldFile, newDir);
+    const store = makeStore(newDir);
+    store.save({
+      entries: { a: '1', b: 'new' },
+      aliases: {},
+      confirm: {},
+    });
+
+    expect(readEpochFile(newDir)).toBe(2);
+  });
+
+  it('removes the tmp dir on a throwing migration, leaving no partial state', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    // Malformed JSON causes migrateFileToDirectory to throw before the tmp→final rename.
+    fs.writeFileSync(oldFile, '{corrupt');
+
+    expect(() => migrateFileToDirectory(oldFile, newDir)).toThrow();
+    expect(fs.existsSync(newDir)).toBe(false);
+    expect(fs.existsSync(newDir + '.tmp')).toBe(false);
+  });
+});

@@ -50,7 +50,22 @@ interface CachedEntry {
 
 const ALIASES_FILE = '_aliases.json';
 const CONFIRM_FILE = '_confirm.json';
+const EPOCH_FILE = '_epoch.json';
 const ENTRY_FILE_SUFFIX = '.json';
+
+/**
+ * Maximum number of retries for the seqlock loop in load(). In practice,
+ * writes are short (sub-millisecond for small saves), so a handful of retries
+ * is more than enough to ride out even pathologically overlapping writes.
+ * After exhausting retries we return a best-effort snapshot and log via debug.
+ */
+const MAX_LOAD_RETRIES = 3;
+
+/**
+ * Small shared buffer for Atomics.wait()-based sleeps during the load()
+ * retry loop. Reused across all store instances to avoid per-call allocation.
+ */
+const _loadRetrySleep = new Int32Array(new SharedArrayBuffer(4));
 
 /** True if a filename in the store directory represents an entry (not a sidecar). */
 function isEntryFilename(name: string): boolean {
@@ -162,6 +177,48 @@ function isENOENT(err: unknown): boolean {
     'code' in err &&
     (err as { code: string }).code === 'ENOENT'
   );
+}
+
+// ── Epoch (seqlock for torn-read detection) ───────────────────────────
+//
+// The store uses a seqlock pattern to let readers (load()) detect that
+// they overlapped a writer (save()) without taking the writer lock.
+//
+// Convention:
+//   - Even epoch  = stable state, no writer in progress.
+//   - Odd epoch   = writer mid-commit. Readers must not trust the on-disk
+//                   state while they observe an odd epoch.
+//
+// save() bumps epoch to odd before touching any files, then to the next
+// even value after all writes complete — both bumps happen under the
+// directory lock. Readers snapshot the epoch before and after scanning;
+// a match on an even value guarantees no writer committed during the scan.
+//
+// The epoch file is `_epoch.json` at the store directory root. The `_`
+// prefix means `isEntryFilename` already excludes it from entry scans.
+
+/**
+ * Read the commit epoch from `_epoch.json`. Returns 0 when the file is
+ * missing, unparseable, or shaped wrong — these are all treated as "no
+ * writer has ever run," which is the correct initial state (the first
+ * save will bump through 1 → 2 and establish the invariant).
+ */
+function readEpoch(dir: string): number {
+  try {
+    const raw = fs.readFileSync(path.join(dir, EPOCH_FILE), 'utf8');
+    const parsed = JSON.parse(raw) as { epoch?: unknown };
+    if (typeof parsed.epoch === 'number' && Number.isFinite(parsed.epoch)) {
+      return parsed.epoch;
+    }
+    return 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** Atomically write the commit epoch to `_epoch.json`. */
+function writeEpoch(dir: string, epoch: number): void {
+  atomicWriteFileSync(path.join(dir, EPOCH_FILE), JSON.stringify({ epoch }) + '\n');
 }
 
 // ── Equality helpers ───────────────────────────────────────────────────
@@ -286,7 +343,38 @@ export function createDirectoryStore(
   }
 
   function load(): UnifiedData {
-    scanAndSync();
+    const dir = getDirPath();
+
+    // Seqlock retry: snapshot the epoch before scanning, scan, then re-read
+    // the epoch. If a writer committed during the scan (or is mid-commit
+    // when we start), the epochs will differ or the "before" read will be
+    // odd — retry in either case. Bounded to MAX_LOAD_RETRIES so we never
+    // spin indefinitely under heavy write contention.
+    for (let attempt = 0; attempt <= MAX_LOAD_RETRIES; attempt++) {
+      const before = readEpoch(dir);
+      if (before % 2 !== 0) {
+        // Writer is mid-commit. Back off briefly and retry.
+        if (attempt < MAX_LOAD_RETRIES) {
+          Atomics.wait(_loadRetrySleep, 0, 0, 1 << attempt); // 1ms, 2ms, 4ms, 8ms
+          continue;
+        }
+        debug(
+          `Store epoch ${before} is odd after ${MAX_LOAD_RETRIES + 1} attempts — ` +
+          `returning possibly-torn snapshot from ${dir}`
+        );
+      }
+      scanAndSync();
+      const after = readEpoch(dir);
+      if (before === after) break;
+      if (attempt === MAX_LOAD_RETRIES) {
+        debug(
+          `Store epoch changed ${before} -> ${after} across load scan after ` +
+          `${MAX_LOAD_RETRIES + 1} attempts — returning possibly-torn snapshot from ${dir}`
+        );
+        break;
+      }
+      // otherwise: loop and retry with a fresh scan
+    }
 
     // Assemble the nested `entries` tree from the flat per-key cache.
     const flat: Record<string, CodexValue> = {};
@@ -315,6 +403,14 @@ export function createDirectoryStore(
     ensureDir();
 
     withFileLock(getStoreLockKey(dir), () => {
+      // 0. Begin commit: bump epoch to the next odd value. Readers that
+      //    observe an odd epoch loop in their seqlock retry until we finish.
+      //    readEpoch() returns 0 if the file is missing, so the first save
+      //    on a fresh store transitions 0 → 1 → 2.
+      const startEpoch = readEpoch(dir);
+      const inProgressEpoch = startEpoch + (startEpoch % 2 === 0 ? 1 : 2);
+      writeEpoch(dir, inProgressEpoch);
+
       // 1. Flatten new entries to leaves (authoritative new state).
       const newFlat = flattenObject(data.entries as Record<string, unknown>);
 
@@ -338,9 +434,8 @@ export function createDirectoryStore(
       }
 
       // 4. Apply deltas. Each atomicWriteFileSync is individually atomic;
-      //    within the directory lock, multi-file writes are serialized against
-      //    other writers (other readers may observe a partial state, but each
-      //    individual file read is atomic so they see consistent values).
+      //    concurrent readers detect mid-commit state via the odd epoch we
+      //    wrote in step 0 and retry their scan in load().
       for (const key of toDelete) {
         try {
           fs.unlinkSync(entryFilePath(dir, key));
@@ -380,6 +475,10 @@ export function createDirectoryStore(
         );
         confirmCache = { ...data.confirm };
       }
+
+      // 6. End commit: bump epoch to the next even value. Any reader that
+      //    snapshots the epoch from here on will see a stable, committed state.
+      writeEpoch(dir, inProgressEpoch + 1);
     });
   }
 
@@ -414,10 +513,32 @@ export interface DirectoryMigrationResult {
  * in the Phase 1 comment). Untracked entries (no `_meta` timestamp) migrate
  * with no `meta` block, preserving the `[untracked]` staleness label.
  *
- * No locking: migration runs on first store access in a given session, before
- * any concurrent writers would exist.
+ * Concurrency: wrapped in `withFileLock` using the same lock key as the
+ * steady-state store (`<newDirPath>.lock`). This serializes concurrent
+ * first-run migrations — the second process waits, then observes the new
+ * directory and returns `already-present`. It also guarantees that a
+ * migration never races a normal `save()` on the same store.
+ *
+ * If the parent directory of `newDirPath` doesn't exist yet (e.g., pristine
+ * install before `~/.codexcli/` has been created), lock acquisition will
+ * fail and `withFileLock` will fall through to running unlocked. This is
+ * still safe: there's nothing to race with on a truly-fresh install.
  */
 export function migrateFileToDirectory(
+  oldFilePath: string,
+  newDirPath: string
+): DirectoryMigrationResult {
+  return withFileLock(getStoreLockKey(newDirPath), () =>
+    migrateFileToDirectoryLocked(oldFilePath, newDirPath)
+  );
+}
+
+/**
+ * Core migration body. Invoked from {@link migrateFileToDirectory} while
+ * holding the store lock. Not exported — callers should always go through
+ * the locked entry point.
+ */
+function migrateFileToDirectoryLocked(
   oldFilePath: string,
   newDirPath: string
 ): DirectoryMigrationResult {
@@ -501,6 +622,11 @@ export function migrateFileToDirectory(
     // "aliases: {}" vs "aliases: never-existed").
     atomicWriteFileSync(path.join(tmpDirPath, ALIASES_FILE), serializeSidecar(aliases));
     atomicWriteFileSync(path.join(tmpDirPath, CONFIRM_FILE), serializeSidecar(confirm));
+
+    // Seed the epoch at 0 (stable/even). The first post-migration save()
+    // will bump it to 1 → 2, and readers running concurrently with that
+    // first save will correctly detect the in-progress commit.
+    writeEpoch(tmpDirPath, 0);
 
     // Atomic swap: rename the fully-written tmp directory to the final path.
     fs.renameSync(tmpDirPath, newDirPath);
