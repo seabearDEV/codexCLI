@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { getDataDirectory, findProjectFile } from './paths';
+import { getSessionId } from './session';
 
 export interface TelemetryEntry {
   ts: number;
@@ -19,12 +19,10 @@ export interface TelemetryEntry {
   agent?: string | undefined;
 }
 
-// One session ID per MCP server process
-const sessionId = crypto.randomBytes(4).toString('hex');
-
-export function getSessionId(): string {
-  return sessionId;
-}
+// Re-export for backward compatibility — anything that previously imported
+// getSessionId from telemetry continues to work, but the canonical source is
+// now src/utils/session.ts (shared with audit).
+export { getSessionId } from './session';
 
 const pendingWrites: Promise<void>[] = [];
 
@@ -350,7 +348,7 @@ export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 
   const entry: TelemetryEntry = {
     ts: Date.now(),
     tool,
-    session: sessionId,
+    session: getSessionId(),
     op: classifyOp(tool),
     ns: extractNamespace(key),
     src: source,

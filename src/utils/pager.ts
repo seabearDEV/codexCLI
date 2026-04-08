@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import { addResponseBytes } from './responseMeasure';
 
 /**
  * Buffers all stdout output produced by `fn`, then either writes it directly
@@ -66,13 +67,25 @@ export async function withPager(fn: () => void | Promise<void>): Promise<void> {
       stdio: ['pipe', process.stdout, process.stderr],
     });
 
+    let spawnFailed = false;
+
     child.on('error', () => {
-      // If pager fails (e.g. less not found), fall back to direct output
+      // Pager spawn failed; fall back to direct output. `originalWrite` is
+      // the CLI instrumentation hook, which calls `addResponseBytes`
+      // automatically — so no explicit count is needed here.
+      spawnFailed = true;
       originalWrite.call(process.stdout, buffer);
       resolve();
     });
 
     child.on('close', () => {
+      // Pager ran to completion. Bytes went through an OS pipe (not
+      // stdout.write), so the instrumentation hook never saw them — count
+      // explicitly. Skip when a spawn error already fired; in that case
+      // `originalWrite` (the hook) counted the bytes on the fallback path.
+      if (!spawnFailed) {
+        addResponseBytes(Buffer.byteLength(buffer, 'utf8'));
+      }
       resolve();
     });
 

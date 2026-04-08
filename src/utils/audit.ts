@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
 import { getDataDirectory, findProjectFile } from './paths';
 import { classifyOp } from './telemetry';
 import { isEncrypted } from './crypto';
+import { getSessionId } from './session';
 
 export interface AuditEntry {
   ts: number;
@@ -43,8 +43,6 @@ export interface AuditQueryOptions {
   limit?: number | undefined;
 }
 
-const sessionId = crypto.randomBytes(4).toString('hex');
-
 const pendingWrites: Promise<void>[] = [];
 
 export function getAuditPath(): string {
@@ -81,7 +79,7 @@ export function logAudit(partial: Omit<AuditEntry, 'ts' | 'session' | 'agent' | 
   const entry: AuditEntry = {
     ...partial,
     ts: Date.now(),
-    session: sessionId,
+    session: getSessionId(),
     project: projectFile ? path.dirname(projectFile) : undefined,
     agent: process.env.CODEX_AGENT_NAME ?? undefined,
   };
