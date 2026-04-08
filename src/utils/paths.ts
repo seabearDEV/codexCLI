@@ -64,7 +64,7 @@ export function getDataDirectory(): string {
   if (!dataDirWritabilityWarned) {
     try {
       if (fs.existsSync(dataDirectoryCache)) {
-        fs.accessSync(dataDirectoryCache, fs.constants.W_OK);
+        fs.accessSync(dataDirectoryCache, fs.constants.W_OK | fs.constants.X_OK);
       }
     } catch {
       process.stderr.write(
