@@ -14,6 +14,7 @@
     "arch.staleness": 1775347257904,
     "arch.storage": 1775347244612,
     "arch.store": 1775358827551,
+    "arch.storeLayout": 1775609487958,
     "arch.telemetry": 1775500435763,
     "arch.tokenSavings": 1775517276576,
     "commands.build": 1775526064911,
@@ -34,6 +35,7 @@
     "conventions.atomicWrites": 1775347269392,
     "conventions.commits": 1775526068051,
     "conventions.debug": 1775347270745,
+    "conventions.editSurface": 1775609186846,
     "conventions.output": 1775347266674,
     "conventions.persistence": 1775359536319,
     "conventions.tests": 1775347268052,
@@ -112,7 +114,8 @@
       "audit": "JSONL at ~/.codexcli/audit.jsonl. Captures before/after values, success/fail, scope, agent identity, enriched metrics (duration, responseSize, hit/miss, redundant, entryCount). CLI reads (get, search, stale) also logged. codex_audit (MCP) + ccli audit (CLI) to query with --detailed. Encrypted values masked, passwords redacted. CLI uses sync writes to guarantee log durability on process exit.",
       "tokenSavings": "Observed miss-path costing replaces static EXPLORATION_COST multipliers. Three layers: (1) miss-path windows track exploration cost when codex_get misses, (2) calibrated cost map uses median of observed miss-paths per namespace with static fallback when <5 samples, (3) net savings = gross exploration avoided − delivery cost (responseSize of all read hits). MissPath struct: { ts, session, namespace, key, toolCalls, explorationBytes, resolution }. Resolution types: writeback (clean), moved_on, timeout. Bootstrap savings use entry-count proxy with calibrated per-namespace costs.",
       "missPathTracking": "MissWindowTracker in telemetry.ts: pure state machine tracking exploration cost when codex_get misses. Opens window on hit:false, closes on writeback (codex_set to same ns), moved_on (any hit), or timeout (5min). Persists to miss-paths.jsonl. MCP server wires tracker in wrapper finally block + flushes on beforeExit. getExplorationCost() returns observed median (>=5 writeback samples) or falls back to static EXPLORATION_COST map. computeStats() reports: deliveryCostTokens (bytes served / 4), netTokensSaved (gross - delivery), calibration map (observed vs static per namespace).",
-      "projectResolution": "findProjectFile() resolution order (src/utils/paths.ts): 1) CODEX_NO_PROJECT env → disabled, 2) CODEX_PROJECT env → explicit .codexcli.json file or containing dir; fails closed if missing (no cwd fallback), 3) setProjectRootOverride() programmatic override (set by MCP server from client roots and from CODEX_PROJECT_DIR/--cwd launcher hints), 4) walk up from process.cwd(). MCP server captures roots via listRoots() after connect; falls back silently if client doesn't support roots. Result is cached; clearProjectFileCache() resets."
+      "projectResolution": "findProjectFile() resolution order (src/utils/paths.ts): 1) CODEX_NO_PROJECT env → disabled, 2) CODEX_PROJECT env → explicit .codexcli.json file or containing dir; fails closed if missing (no cwd fallback), 3) setProjectRootOverride() programmatic override (set by MCP server from client roots and from CODEX_PROJECT_DIR/--cwd launcher hints), 4) walk up from process.cwd(). MCP server captures roots via listRoots() after connect; falls back silently if client doesn't support roots. Result is cached; clearProjectFileCache() resets.",
+      "storeLayout": "Planned for v1.10.0 (tracked in #54): file-per-entry layout. Each entry lives in .codexcli/<namespace>.<name>.json with shape {value, meta:{updated, ...}}. Sidecars: .codexcli/_aliases.json, .codexcli/_confirm.json. Replaces single .codexcli.json (auto-migrated, old file renamed to .backup). In-memory shape returned by store.ts is preserved — consumers above the store layer don't change. Rationale: eliminates _meta sibling-key fragility (rename desync), reduces multi-dev merge conflicts to only same-key concurrent edits, and meta becomes per-entry-extensible without schema migrations. Hand-editing files unsupported (see conventions.editSurface)."
     },
     "conventions": {
       "types": "tsconfig has exactOptionalPropertyTypes: true — optional interface fields need | undefined",
@@ -121,7 +124,8 @@
       "atomicWrites": "All file writes use saveJsonSorted -> withFileLock -> atomicWriteFileSync (tmp file + rename)",
       "debug": "Always use process.env.DEBUG === 'true' (strict equality). Never use truthy check.",
       "persistence": ".codexcli.json = project knowledge (any agent needs it). CLAUDE.md = Claude behavior directives (how to use codex, not what it contains). MEMORY.md = personal user preferences only (commit style, interaction prefs). Rule: if another agent would benefit, it goes in .codexcli.json.",
-      "commits": "Conventional commits: fix:, feat:, docs:, test:, refactor:. Version tags (v1.9.0) on release commits. Keep subject under 70 chars, use body for detail."
+      "commits": "Conventional commits: fix:, feat:, docs:, test:, refactor:. Version tags (v1.9.0) on release commits. Keep subject under 70 chars, use body for detail.",
+      "editSurface": "Supported edit paths for codex data: ccli (CLI), MCP tools, future UI. Direct editing of .codexcli.json or .codexcli/*.json is unsupported — you will desync metadata (timestamps, future verified/agent fields) and break staleness signals. The wrapper format {value, meta} assumes only the official tools touch it; raw edits skip the meta updates the tools handle automatically."
     },
     "context": {
       "migration": "Auto-migrates old 3-file format to unified data.json on first access. Old files renamed to .backup.",
