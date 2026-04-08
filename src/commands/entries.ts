@@ -270,7 +270,7 @@ export async function setEntry(key: string, value: string | undefined, force = f
 function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<string, string>, options: GetOptions): void {
   // Keys-only mode: no key specified and --values not set
   if (!options.values) {
-    if (options.raw) {
+    if (options.plain) {
       for (const k of Object.keys(flat)) {
         console.log(k);
       }
@@ -284,7 +284,7 @@ function displayFlatEntries(flat: Record<string, string>, aliasMap: Record<strin
     ? flat as Record<string, CodexValue>
     : interpolateObject(flat as Record<string, CodexValue>);
 
-  if (options.raw) {
+  if (options.plain) {
     for (const [k, v] of Object.entries(entries)) {
       const strVal = typeof v === 'string' ? v : JSON.stringify(v);
       console.log(`${k}: ${isEncrypted(strVal) ? '[encrypted]' : strVal}`);
@@ -313,7 +313,7 @@ function displayScopedEntries(scope: 'project' | 'global', aliasMap: Record<stri
   const data = loadData(scope);
 
   if (Object.keys(data).length === 0) {
-    if (!options.raw) {
+    if (!options.plain) {
       console.log(color.bold(`${label}:`));
       console.log(color.gray('  No entries'));
       console.log('');
@@ -321,12 +321,12 @@ function displayScopedEntries(scope: 'project' | 'global', aliasMap: Record<stri
     return;
   }
 
-  if (!options.raw) {
+  if (!options.plain) {
     console.log(color.bold(`${label}:`));
   }
 
   if (options.tree) {
-    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
+    displayTree(data, aliasMap, '', '', !!options.plain, undefined, !!options.source, !options.values, options.depth);
   } else {
     displayFlatEntries(flattenObject(data, '', options.depth), aliasMap, options);
   }
@@ -335,14 +335,14 @@ function displayScopedEntries(scope: 'project' | 'global', aliasMap: Record<stri
 
 function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (Object.keys(data).length === 0) {
-    if (options.raw) return;
+    if (options.plain) return;
     console.log(color.gray(`No entries found. Add one with "${getBinaryName()} set <key> <value>"`));
     console.log('');
     return;
   }
 
   if (options.tree) {
-    displayTree(data, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
+    displayTree(data, aliasMap, '', '', !!options.plain, undefined, !!options.source, !options.values, options.depth);
     return;
   }
 
@@ -351,7 +351,7 @@ function displayAllEntries(data: Record<string, CodexValue>, aliasMap: Record<st
 
 function displaySubtree(key: string, value: Record<string, CodexValue>, aliasMap: Record<string, string>, options: GetOptions): void {
   if (options.tree) {
-    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.raw, undefined, !!options.source, !options.values, options.depth);
+    displayTree({ [key]: value } as Record<string, unknown>, aliasMap, '', '', !!options.plain, undefined, !!options.source, !options.values, options.depth);
     return;
   }
 
@@ -478,7 +478,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
         printError(`Failed to copy: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-    if (options.raw) {
+    if (options.plain) {
       console.log(decryptedDisplay);
     } else {
       displayEntries({ [key]: decryptedDisplay }, aliasMap);
@@ -509,7 +509,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
     }
   }
 
-  if (options.raw) {
+  if (options.plain) {
     console.log(isEncrypted(strValue) ? '[encrypted]' : displayValue);
     return;
   }

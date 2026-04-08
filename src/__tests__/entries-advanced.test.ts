@@ -295,12 +295,12 @@ describe('entries advanced', () => {
     });
   });
 
-  // ── Get with --raw flag ────────────────────────────────────────────
+  // ── Get with --plain flag ────────────────────────────────────────────
 
-  describe('get --raw', () => {
+  describe('get --plain', () => {
     it('outputs plain value without formatting', () => {
       run('set --force raw.test "plain value"');
-      const result = run('get raw.test --raw');
+      const result = run('get raw.test --plain');
       expect(result.trim()).toBe('plain value');
     });
 
@@ -308,7 +308,7 @@ describe('entries advanced', () => {
       // We can't easily test encrypt via CLI without interactive prompt,
       // but we can verify that the flag exists
       run('set --force raw.plain "visible"');
-      const result = run('get raw.plain --raw');
+      const result = run('get raw.plain --plain');
       expect(result.trim()).toBe('visible');
     });
   });

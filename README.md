@@ -224,8 +224,8 @@ ccli get --tree
 ccli get --tree --values   # tree with values
 ccli get --tree -k 2       # tree limited to 2 levels
 
-# Output raw value without colors (for scripting)
-ccli get server.production.ip --raw
+# Output plain text without colors (for scripting)
+ccli get server.production.ip -p
 
 # Show stored value before interpolation
 ccli get paths.myproject --source
@@ -682,7 +682,7 @@ ccli context --tier full
 ccli context --json
 
 # Plain text without colors
-ccli context --raw
+ccli context -p
 ```
 
 ### Run Confirmation

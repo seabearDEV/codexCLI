@@ -1095,8 +1095,8 @@ describe('Commands', () => {
       expect(console.log).toHaveBeenCalled();
     });
 
-    it('outputs raw value with --raw option', () => {
-      getEntry('server.production.ip', { raw: true });
+    it('outputs raw value with --plain option', () => {
+      getEntry('server.production.ip', { plain: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const showedRaw = logCalls.some(call =>
@@ -1105,8 +1105,8 @@ describe('Commands', () => {
       expect(showedRaw).toBe(true);
     });
 
-    it('outputs all entries as plain key: value lines with --raw --values', () => {
-      getEntry(undefined, { raw: true, values: true });
+    it('outputs all entries as plain key: value lines with --plain --values', () => {
+      getEntry(undefined, { plain: true, values: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const output = logCalls.map(c => c[0]).join('\n');
@@ -1117,8 +1117,8 @@ describe('Commands', () => {
       expect(output).not.toMatch(/\x1b\[/);
     });
 
-    it('outputs subtree entries as plain key: value lines with --raw --values', () => {
-      getEntry('server', { raw: true, values: true });
+    it('outputs subtree entries as plain key: value lines with --plain --values', () => {
+      getEntry('server', { plain: true, values: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const output = logCalls.map(c => c[0]).join('\n');
@@ -1128,10 +1128,10 @@ describe('Commands', () => {
       expect(output).not.toMatch(/\x1b\[/);
     });
 
-    it('outputs nothing for empty data with --raw', () => {
+    it('outputs nothing for empty data with --plain', () => {
       storeState.entries = {};
 
-      getEntry(undefined, { raw: true });
+      getEntry(undefined, { plain: true });
 
       expect(console.log).not.toHaveBeenCalled();
     });
@@ -1140,7 +1140,7 @@ describe('Commands', () => {
       const encryptedVal = encryptValue('secret', 'pass');
       storeState.entries = { api: { key: encryptedVal, name: 'public' } };
 
-      getEntry('api', { raw: true, values: true });
+      getEntry('api', { plain: true, values: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const output = logCalls.map(c => c[0]).join('\n');
@@ -1642,11 +1642,11 @@ describe('Commands', () => {
       expect(showedDecrypted).toBe(true);
     });
 
-    it('outputs [encrypted] with --raw on encrypted value', async () => {
+    it('outputs [encrypted] with --plain on encrypted value', async () => {
       const encryptedVal = encryptValue('secret-data', 'mypass');
       storeState.entries = { api: { key: encryptedVal } };
 
-      await getEntry('api.key', { raw: true });
+      await getEntry('api.key', { plain: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const showedMasked = logCalls.some(call =>
@@ -1660,12 +1660,12 @@ describe('Commands', () => {
       expect(leakedCiphertext).toBe(false);
     });
 
-    it('outputs raw decrypted value with --raw --decrypt', async () => {
+    it('outputs raw decrypted value with --plain --decrypt', async () => {
       const encryptedVal = encryptValue('secret-data', 'mypass');
       storeState.entries = { api: { key: encryptedVal } };
       (askPassword as Mock).mockResolvedValueOnce('mypass');
 
-      await getEntry('api.key', { raw: true, decrypt: true });
+      await getEntry('api.key', { plain: true, decrypt: true });
 
       const logCalls = (console.log as Mock).mock.calls;
       const showedRawDecrypted = logCalls.some(call =>
