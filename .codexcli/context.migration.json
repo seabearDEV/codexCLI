@@ -1,0 +1,7 @@
+{
+  "value": "Two-stage migration chain runs on first store access: (1) legacy 3-file format (entries.json + aliases.json + confirm.json) -> unified data.json via migrateToUnifiedFile (pre-v1.10.0, in src/store.ts). (2) unified data.json -> file-per-entry directory via migrateFileToDirectory (v1.10.0+, in src/utils/directoryStore.ts). Both stages idempotent. Old files renamed to .backup. Stage 2 uses atomic tmp-dir-rename for crash safety — writes to .codexcli.tmp/ then renames to .codexcli/ atomically.",
+  "meta": {
+    "created": 1775617725088,
+    "updated": 1775617725088
+  }
+}

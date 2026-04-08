@@ -1,0 +1,7 @@
+{
+  "value": "zod ^4 — runtime schema validation. Used for MCP tool input validation and config parsing.",
+  "meta": {
+    "created": 1775361268065,
+    "updated": 1775361268065
+  }
+}

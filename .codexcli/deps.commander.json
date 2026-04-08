@@ -1,0 +1,7 @@
+{
+  "value": "commander ^13 — CLI framework. Handles arg parsing, subcommands, help generation. Every command has a short alias registered via Commander.",
+  "meta": {
+    "created": 1775361265842,
+    "updated": 1775361265842
+  }
+}

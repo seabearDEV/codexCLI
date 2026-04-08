@@ -1,0 +1,7 @@
+{
+  "value": "MCP server resolves the project file via arch.projectResolution (CODEX_PROJECT env → MCP client roots → cwd walk-up). Old CODEX_PROJECT_DIR and --cwd launcher hints still work but now apply via setProjectRootOverride, not process.chdir, and work whether the server is run as a binary or imported. Pin deterministically by setting \"env\": { \"CODEX_PROJECT\": \"<repo path>\" } in the codexcli MCP block of .claude.json.",
+  "meta": {
+    "created": 1775530709022,
+    "updated": 1775530709022
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "value": "Use cclid (dev) / cclid-mcp (MCP dev) for local testing — never ccli in dev. Release: git tag triggers CI.",
+  "meta": {
+    "created": 1775358827618,
+    "updated": 1775358827618
+  }
+}

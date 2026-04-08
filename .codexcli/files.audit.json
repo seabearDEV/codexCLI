@@ -1,0 +1,7 @@
+{
+  "value": "src/utils/audit.ts — logAudit, loadAuditLog, queryAuditLog, sanitizeValue/Params, JSONL append",
+  "meta": {
+    "created": 1775356700889,
+    "updated": 1775356700889
+  }
+}

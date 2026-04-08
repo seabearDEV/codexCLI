@@ -1,0 +1,7 @@
+{
+  "value": "ScopedStore with mtime caching, auto-migration from old format, atomic writes (tmp file + rename with file locking).",
+  "meta": {
+    "created": 1775358827551,
+    "updated": 1775358827551
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "value": "Commander.js CLI. Core CRUD: set/s, get/g, run/r, find/f, edit/e, copy/cp, rename/rn, remove/rm. Subcommand groups: alias (set/remove/list/rename), confirm (set/remove/list), config, data. Top-level: context, info, stale, lint, stats, audit. Hidden: search (alias for find). Deprecated (still functional, hidden): -a flags on set/get/remove/rename (use alias subcommand instead); --raw on get and context (renamed to --plain in v1.9.1).",
+  "meta": {
+    "created": 1775530717052,
+    "updated": 1775530717052
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "value": "Supports value refs (dollar-brace syntax), exec refs (dollar-paren syntax), fallback defaults (:-), and required checks (:?). Backslash-escape emits literals (backslash consumed on output). Recursive with circular-ref detection. --source flag skips interpolation on get; --plain only strips colors (--raw is a deprecated alias for --plain).",
+  "meta": {
+    "created": 1775530712709,
+    "updated": 1775530712709
+  }
+}

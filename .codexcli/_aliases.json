@@ -1,0 +1,11 @@
+{
+  "chk": "commands.check",
+  "cln": "commands.clean",
+  "dev": "context.devWorkflow",
+  "goals": "project.goals",
+  "mcp": "arch.mcp",
+  "persist": "conventions.persistence",
+  "rel": "commands.release",
+  "store": "arch.store",
+  "tests": "conventions.tests"
+}

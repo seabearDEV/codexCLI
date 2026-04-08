@@ -1,0 +1,7 @@
+{
+  "value": "v1.10.0 file-per-entry directory store (src/utils/directoryStore.ts): each entry at .codexcli/<dotted-key>.json as {value, meta:{created, updated}} wrapper. Sidecars _aliases.json and _confirm.json. Project scope at .codexcli/, global at ~/.codexcli/store/. Legacy .codexcli.json (project) and ~/.codexcli/data.json (global) auto-migrated on first access.",
+  "meta": {
+    "created": 1775617722903,
+    "updated": 1775617722903
+  }
+}

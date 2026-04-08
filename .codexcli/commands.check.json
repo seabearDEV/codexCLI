@@ -1,0 +1,7 @@
+{
+  "value": "npm run build && npm run lint && npm test",
+  "meta": {
+    "created": 1775353132791,
+    "updated": 1775353132791
+  }
+}

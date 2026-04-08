@@ -1,0 +1,7 @@
+{
+  "value": "JSONL at ~/.codexcli/audit.jsonl. Captures before/after values, success/fail, scope, agent identity, enriched metrics (duration, responseSize, hit/miss, redundant, entryCount). CLI reads (get, search, stale) also logged. codex_audit (MCP) + ccli audit (CLI) to query with --detailed. Encrypted values masked, passwords redacted. CLI uses sync writes to guarantee log durability on process exit.",
+  "meta": {
+    "created": 1775497218448,
+    "updated": 1775497218448
+  }
+}

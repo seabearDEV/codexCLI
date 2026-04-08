@@ -1,0 +1,7 @@
+{
+  "value": "Conventional commits: fix:, feat:, docs:, test:, refactor:. Version tags (v1.9.0) on release commits. Keep subject under 70 chars, use body for detail.",
+  "meta": {
+    "created": 1775526068051,
+    "updated": 1775526068051
+  }
+}

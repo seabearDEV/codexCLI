@@ -1,0 +1,7 @@
+{
+  "value": "All file writes use saveJsonSorted -> withFileLock -> atomicWriteFileSync (tmp file + rename)",
+  "meta": {
+    "created": 1775347269392,
+    "updated": 1775347269392
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "value": "src/store.ts — ScopedStore class, mtime caching, auto-migration, meta timestamps, atomic writes via file locking",
+  "meta": {
+    "created": 1775356692683,
+    "updated": 1775356692683
+  }
+}

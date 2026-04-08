@@ -1,0 +1,7 @@
+{
+  "value": "Short-flag space is inconsistent across commands and needs a holistic audit in an upcoming release. Symptom that triggered this: --plain shipped without a short flag in v1.9.1 because -p was already taken by --preview elsewhere, and -P felt awkward as a one-off. Don't add new short flags piecemeal — wait for the audit so the whole namespace gets reorganized at once.",
+  "meta": {
+    "created": 1775530720179,
+    "updated": 1775530720179
+  }
+}

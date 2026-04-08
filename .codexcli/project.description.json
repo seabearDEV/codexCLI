@@ -1,0 +1,7 @@
+{
+  "value": "Persistent, structured knowledge store for software projects. CLI + MCP server. Agents bootstrap full project context in one call instead of re-exploring the codebase.",
+  "meta": {
+    "created": 1775347231858,
+    "updated": 1775347231858
+  }
+}

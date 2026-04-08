@@ -1,0 +1,7 @@
+{
+  "value": "JSONL append at ~/.codexcli/telemetry.jsonl. Tracks tool, session, op type, namespace, source (mcp/cli), scope, agent (CODEX_AGENT_NAME). Enriched with duration, hit/miss, redundant, responseSize. codex_stats computes: delivery floor (bytes/4), exploration estimate (namespace-weighted multipliers for tool calls avoided), redundant write savings, per-namespace breakdown, trending metrics, and per-agent breakdowns. EXPLORATION_COST map exported from telemetry.ts for transparency.",
+  "meta": {
+    "created": 1775500435763,
+    "updated": 1775500435763
+  }
+}

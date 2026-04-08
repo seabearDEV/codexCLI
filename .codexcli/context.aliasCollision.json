@@ -1,0 +1,7 @@
+{
+  "value": "Alias always wins in resolveKey — no way to bypass and access an entry with the same name as an alias. Known limitation.",
+  "meta": {
+    "created": 1775356765156,
+    "updated": 1775356765156
+  }
+}

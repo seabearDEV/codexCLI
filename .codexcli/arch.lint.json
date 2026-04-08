@@ -1,0 +1,7 @@
+{
+  "value": "Validates entries against recommended namespace schema. Custom namespaces via _schema.namespaces in .codexcli.json.",
+  "meta": {
+    "created": 1775347259273,
+    "updated": 1775347259273
+  }
+}
