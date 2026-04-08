@@ -696,14 +696,15 @@ describe('sidecar mtime cache', () => {
     });
     store.load();  // prime
 
-    // Simulate an external rewrite with a newer mtime.
-    // Spin briefly so the mtime actually advances on coarse-grained filesystems.
-    const target = Date.now() + 20;
-    while (Date.now() < target) { /* spin */ }
+    // Simulate an external rewrite with a newer mtime using utimesSync for determinism.
+    const aliasesPath = path.join(dir, '_aliases.json');
+    const previousStat = fs.statSync(aliasesPath);
     fs.writeFileSync(
-      path.join(dir, '_aliases.json'),
+      aliasesPath,
       JSON.stringify({ y: 'a' }, null, 2)
     );
+    const newerMtime = new Date(previousStat.mtimeMs + 1000);
+    fs.utimesSync(aliasesPath, newerMtime, newerMtime);
 
     const reloaded = store.load();
     expect(reloaded.aliases).toEqual({ y: 'a' });

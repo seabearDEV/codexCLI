@@ -246,7 +246,9 @@ function readEpoch(dir: string): number {
   try {
     const raw = fs.readFileSync(path.join(dir, EPOCH_FILE), 'utf8');
     const parsed = JSON.parse(raw) as { epoch?: unknown };
-    if (typeof parsed.epoch === 'number' && Number.isFinite(parsed.epoch)) {
+    if (typeof parsed.epoch === 'number'
+      && Number.isSafeInteger(parsed.epoch)
+      && parsed.epoch >= 0) {
       return parsed.epoch;
     }
     return 0;
@@ -266,16 +268,15 @@ function writeEpoch(dir: string, epoch: number): void {
  * filesystem, permissions) is logged via debug and swallowed so the store
  * itself keeps working.
  *
- * We check with existsSync rather than overwriting unconditionally so a
- * user who customized the wording (or replaced it with a symlink) isn't
- * stomped on every save.
+ * Use an atomic no-clobber create so a README that appears concurrently
+ * (for example, a user-customized file) is preserved rather than replaced.
  */
 function ensureReadme(dir: string): void {
   const readmePath = path.join(dir, README_FILE);
   try {
-    if (fs.existsSync(readmePath)) return;
-    atomicWriteFileSync(readmePath, README_CONTENT);
+    fs.writeFileSync(readmePath, README_CONTENT, { flag: 'wx' });
   } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'EEXIST') return;
     debug(`Failed to write ${README_FILE} in ${dir}: ${String(err)}`);
   }
 }
