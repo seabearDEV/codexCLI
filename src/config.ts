@@ -73,10 +73,10 @@ export function loadConfig(): Config {
     // File doesn't exist — create with defaults
     if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'ENOENT') {
       saveConfig(defaultConfig);
-      return defaultConfig;
+      return { ...defaultConfig };
     }
     console.error('Error loading configuration:', error);
-    return defaultConfig;
+    return { ...defaultConfig };
   }
 }
 
@@ -87,7 +87,7 @@ export function saveConfig(config: Config): void {
     const configPath = getConfigFilePath();
     atomicWriteFileSync(configPath, JSON.stringify(config, null, 2));
     const mtime = fs.statSync(configPath).mtimeMs;
-    configCache = config;
+    configCache = { ...config };
     configCacheMtime = mtime;
   } catch (error) {
     console.error('Error saving configuration:', error);
