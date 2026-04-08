@@ -89,12 +89,22 @@ function setNested(obj: Record<string, unknown>, key: string, value: unknown): v
   let current = obj;
   for (let i = 0; i < parts.length - 1; i++) {
     const part = parts[i];
-    if (current[part] === undefined || typeof current[part] !== 'object') {
-      current[part] = {};
+    // Guard against prototype pollution via well-known dangerous property names.
+    if (part === '__proto__' || part === 'constructor' || part === 'prototype') return;
+    const next = current[part];
+    if (next === null || next === undefined || typeof next !== 'object') {
+      // Use Object.create(null) so intermediate objects have no prototype to pollute.
+      const fresh = Object.create(null) as Record<string, unknown>;
+      current[part] = fresh;
+      current = fresh;
+    } else {
+      current = next as Record<string, unknown>;
     }
-    current = current[part] as Record<string, unknown>;
   }
-  current[parts[parts.length - 1]] = value;
+  const lastPart = parts[parts.length - 1];
+  if (lastPart !== '__proto__' && lastPart !== 'constructor' && lastPart !== 'prototype') {
+    current[lastPart] = value;
+  }
 }
 
 /**

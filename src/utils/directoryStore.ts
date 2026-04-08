@@ -62,9 +62,42 @@ function keyFromFilename(name: string): string {
   return name.slice(0, -ENTRY_FILE_SUFFIX.length);
 }
 
-/** Converts a dotted key to its entry file path within the store directory. */
+/**
+ * Returns true if the key is safe to use as a flat entry filename.
+ * A valid key:
+ *   - Is non-empty
+ *   - Does not start with `_` (reserved for sidecars like `_aliases`, `_confirm`)
+ *   - Contains no path separators (`/`, `\`) — keys are flat filenames, not paths
+ *   - Has no empty segment or `..` segment when split on `.`
+ */
+export function isValidEntryKey(key: string): boolean {
+  if (!key || key.startsWith('_')) return false;
+  if (key.includes('/') || key.includes('\\')) return false;
+  const parts = key.split('.');
+  for (const part of parts) {
+    if (!part || part === '..') return false;
+  }
+  return true;
+}
+
+/**
+ * Converts a dotted key to its entry file path within the store directory.
+ * Throws if the key is invalid (would escape the store directory or collide
+ * with a reserved sidecar name).
+ */
 export function entryFilePath(dir: string, key: string): string {
-  return path.join(dir, key + ENTRY_FILE_SUFFIX);
+  if (!isValidEntryKey(key)) {
+    throw new Error(`Invalid store key: ${JSON.stringify(key)}`);
+  }
+  const filePath = path.join(dir, key + ENTRY_FILE_SUFFIX);
+  // Defense in depth: ensure the resolved path stays inside the store directory.
+  const resolvedDir = path.resolve(dir);
+  const resolvedFile = path.resolve(filePath);
+  const relative = path.relative(resolvedDir, resolvedFile);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Key resolves outside store directory: ${JSON.stringify(key)}`);
+  }
+  return filePath;
 }
 
 /**
@@ -220,6 +253,10 @@ export function createDirectoryStore(
         continue;
       }
       const key = keyFromFilename(file);
+      if (!isValidEntryKey(key)) {
+        debug(`Skipping entry file with unsafe key: ${file}`);
+        continue;
+      }
       seen.add(key);
       const cached = entryCache.get(key);
       if (cached?.mtimeMs === mtimeMs) continue;
@@ -344,15 +381,7 @@ export function createDirectoryStore(
     });
   }
 
-  function prime(): void {
-    // No-op: the new migration path writes the directory directly and lets the
-    // next load() scan fresh. `prime` is kept only to satisfy the ScopedStore
-    // interface during the transition; it will be removed with the old
-    // createScopedStore in a later commit. (TypeScript allows a zero-arg
-    // implementation to satisfy a typed signature with extra positional args.)
-  }
-
-  return { load, save, clear, prime };
+  return { load, save, clear };
 }
 
 // ── Migration ──────────────────────────────────────────────────────────
@@ -436,25 +465,48 @@ export function migrateFileToDirectory(
   const confirm = (parsed.confirm ?? {}) as Record<string, true>;
   const meta = (parsed._meta ?? {}) as Record<string, number>;
 
-  // Create the new directory (0o700 matches existing ensureDataDirectoryExists).
-  fs.mkdirSync(newDirPath, { recursive: true, mode: 0o700 });
+  // Write to a sibling temporary directory first, then atomically rename it to
+  // newDirPath. This ensures that a crash or power loss mid-migration never
+  // leaves a partially-populated newDirPath that would be treated as authoritative
+  // on the next run (the existsSync guard at the top would skip migration if it
+  // found a partially-written newDirPath).
+  const tmpDirPath = newDirPath + '.tmp';
+
+  // Clean up any leftover tmp dir from a previous failed attempt.
+  if (fs.existsSync(tmpDirPath)) {
+    fs.rmSync(tmpDirPath, { recursive: true, force: true });
+  }
+  fs.mkdirSync(tmpDirPath, { recursive: true, mode: 0o700 });
 
   // Write each entry as a wrapper file.
   const flat = flattenObject(entries as Record<string, unknown>);
   let entryCount = 0;
-  for (const [key, value] of Object.entries(flat)) {
-    const updated = meta[key];
-    const wrapper: EntryWrapper = updated !== undefined
-      ? { value, meta: { created: updated, updated } }
-      : { value };  // untracked entries stay bare
-    atomicWriteFileSync(entryFilePath(newDirPath, key), serializeEntryWrapper(wrapper));
-    entryCount++;
-  }
+  try {
+    for (const [key, value] of Object.entries(flat)) {
+      if (!isValidEntryKey(key)) {
+        debug(`Skipping entry with invalid key during migration: ${JSON.stringify(key)}`);
+        continue;
+      }
+      const updated = meta[key];
+      const wrapper: EntryWrapper = updated !== undefined
+        ? { value, meta: { created: updated, updated } }
+        : { value };  // untracked entries stay bare
+      atomicWriteFileSync(entryFilePath(tmpDirPath, key), serializeEntryWrapper(wrapper));
+      entryCount++;
+    }
 
-  // Write sidecars (even if empty — lets the store unambiguously report
-  // "aliases: {}" vs "aliases: never-existed").
-  atomicWriteFileSync(path.join(newDirPath, ALIASES_FILE), serializeSidecar(aliases));
-  atomicWriteFileSync(path.join(newDirPath, CONFIRM_FILE), serializeSidecar(confirm));
+    // Write sidecars (even if empty — lets the store unambiguously report
+    // "aliases: {}" vs "aliases: never-existed").
+    atomicWriteFileSync(path.join(tmpDirPath, ALIASES_FILE), serializeSidecar(aliases));
+    atomicWriteFileSync(path.join(tmpDirPath, CONFIRM_FILE), serializeSidecar(confirm));
+
+    // Atomic swap: rename the fully-written tmp directory to the final path.
+    fs.renameSync(tmpDirPath, newDirPath);
+  } catch (err) {
+    // Clean up the incomplete tmp directory so the next run can retry.
+    try { fs.rmSync(tmpDirPath, { recursive: true, force: true }); } catch { /* best-effort */ }
+    throw err;
+  }
 
   // Rename old file to .backup (idempotent if a prior .backup exists: overwrite it).
   const backupPath = oldFilePath + '.backup';

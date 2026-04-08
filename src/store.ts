@@ -36,7 +36,6 @@ export interface ScopedStore {
   load(): UnifiedData;
   save(data: UnifiedData): void;
   clear(): void;
-  prime(data: UnifiedData, mtime: number): void;
 }
 
 // ── Global store singleton ─────────────────────────────────────────────
@@ -76,6 +75,16 @@ function getGlobalStore(): ScopedStore {
         migrateFileToDirectory(getUnifiedDataFilePath(), getGlobalStoreDirPath());
       } catch (err) {
         debug(`Unified→directory migration error (global): ${String(err)}`);
+        // If migration failed and the store directory doesn't exist, the user's
+        // existing data.json would be invisible to the directory store. Warn so
+        // the failure is actionable rather than silently presenting an empty store.
+        if (!fs.existsSync(getGlobalStoreDirPath())) {
+          console.warn(
+            `[codexCLI] Warning: store migration failed and no store directory was created. ` +
+            `Your existing data may be inaccessible until migration succeeds. ` +
+            `Error: ${String(err)}`
+          );
+        }
       }
       migrationDone = true;
     }

@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Removed
 
 - **`createScopedStore` factory** in `src/store.ts` — replaced entirely by `createDirectoryStore` in `src/utils/directoryStore.ts`. Public API (`loadEntries`, `saveEntries`, `loadMeta`, etc.) is unchanged; only the private implementation behind it.
-- **`ScopedStore.prime()`** — only used by the legacy migration cache, not needed by the new migration path.
+- **`ScopedStore.prime()`** — removed from the interface and implementation. It was a no-op carried forward from the legacy migration cache; the new migration path writes the directory directly and does not need it.
 
 ## [1.9.2] - 2026-04-07
 

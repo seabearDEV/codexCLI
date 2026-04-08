@@ -153,3 +153,7 @@ data/
 telemetry.jsonl
 audit.jsonl
 
+# Project store (file-per-entry layout migration artifacts)
+.codexcli/
+.codexcli.json.backup
+

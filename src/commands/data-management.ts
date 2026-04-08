@@ -327,7 +327,24 @@ export function handleProjectFile(options: {
 
   const cwd = process.cwd();
   const target = path.join(cwd, '.codexcli');
-  const existed = fs.existsSync(target) && fs.statSync(target).isDirectory();
+
+  // Single stat call to determine the target's state.
+  let targetStat: ReturnType<typeof fs.statSync> | null = null;
+  try {
+    targetStat = fs.statSync(target);
+  } catch { /* ENOENT — target doesn't exist yet */ }
+
+  // Check for the edge case where target exists but is not a directory
+  // (e.g. a leftover legacy file). mkdirSync would throw EEXIST in that case.
+  if (targetStat !== null && !targetStat.isDirectory()) {
+    printError(
+      `Cannot initialize: '${target}' already exists as a non-directory file. ` +
+      `Remove it manually before running 'ccli init'.`
+    );
+    return;
+  }
+
+  const existed = targetStat !== null;
 
   // Create .codexcli/ directory with empty sidecars if it doesn't exist
   if (!existed) {
