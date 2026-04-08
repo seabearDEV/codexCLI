@@ -1136,7 +1136,7 @@ describe('Commands', () => {
       expect(console.log).not.toHaveBeenCalled();
     });
 
-    it('masks encrypted values in raw subtree output with --values', () => {
+    it('masks encrypted values in plain subtree output with --values', () => {
       const encryptedVal = encryptValue('secret', 'pass');
       storeState.entries = { api: { key: encryptedVal, name: 'public' } };
 
@@ -1660,7 +1660,7 @@ describe('Commands', () => {
       expect(leakedCiphertext).toBe(false);
     });
 
-    it('outputs raw decrypted value with --plain --decrypt', async () => {
+    it('outputs plain decrypted value with --plain --decrypt', async () => {
       const encryptedVal = encryptValue('secret-data', 'mypass');
       storeState.entries = { api: { key: encryptedVal } };
       (askPassword as Mock).mockResolvedValueOnce('mypass');
@@ -1668,10 +1668,10 @@ describe('Commands', () => {
       await getEntry('api.key', { plain: true, decrypt: true });
 
       const logCalls = (console.log as Mock).mock.calls;
-      const showedRawDecrypted = logCalls.some(call =>
+      const showedPlainDecrypted = logCalls.some(call =>
         call.some((arg: unknown) => arg === 'secret-data')
       );
-      expect(showedRawDecrypted).toBe(true);
+      expect(showedPlainDecrypted).toBe(true);
     });
   });
 
