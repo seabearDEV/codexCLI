@@ -639,10 +639,13 @@ export interface DirectoryMigrationResult {
  * directory and returns `already-present`. It also guarantees that a
  * migration never races a normal `save()` on the same store.
  *
- * If the parent directory of `newDirPath` doesn't exist yet (e.g., pristine
- * install before `~/.codexcli/` has been created), lock acquisition will
- * fail and `withFileLock` will fall through to running unlocked. This is
- * still safe: there's nothing to race with on a truly-fresh install.
+ * The parent directory of `newDirPath` is guaranteed to exist before this
+ * is called: for the global store, `getGlobalStore()` runs
+ * `ensureDataDirectoryExists()` first; for the project store, the parent
+ * is the project root which the user creates explicitly via `ccli init`.
+ * If the parent is somehow missing, `withFileLock` will throw under the
+ * v1.11 fail-closed semantics (set `CODEX_DISABLE_LOCKING=1` for tests
+ * that intentionally exercise the unlocked path).
  */
 export function migrateFileToDirectory(
   oldFilePath: string,

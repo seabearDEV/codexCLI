@@ -37,7 +37,14 @@ export function loadConfig(): Config {
     if (configCache !== null && configCacheMtime !== null) {
       try {
         if (fs.statSync(configPath).mtimeMs === configCacheMtime) {
-          return configCache;
+          // Defensive shallow copy: setConfigSetting() and friends call
+          // loadConfig(), mutate the returned object in place, then call
+          // saveConfig() with the mutated reference. Returning the cached
+          // object directly would let those mutations leak into the cache
+          // and contaminate other in-process readers between the mutation
+          // and the next mtime-triggered re-read. Same hazard PR #58 fixed
+          // for sidecar caches in directoryStore.ts.
+          return { ...configCache };
         }
       } catch {
         // File was removed; invalidate cache and fall through
@@ -59,7 +66,9 @@ export function loadConfig(): Config {
     configCache = result;
     configCacheMtime = currentMtime;
 
-    return result;
+    // Defensive shallow copy on the freshly-built result for the same
+    // reason as the cached path above.
+    return { ...result };
   } catch (error) {
     // File doesn't exist — create with defaults
     if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'ENOENT') {

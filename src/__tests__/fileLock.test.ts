@@ -49,18 +49,40 @@ describe('withFileLock', () => {
     expect(fs.existsSync(lockPath)).toBe(false);
   });
 
-  it('still executes function when lock acquisition fails (fallback)', () => {
+  it('throws when lock acquisition fails (fail-closed default)', () => {
     // Create a non-stale lock (mtime = now) to force all retries to fail
     const lockPath = testFile + '.lock';
     fs.writeFileSync(lockPath, String(process.pid));
     // Keep mtime fresh so it won't be considered stale
 
-    // withFileLock should fall back to running without lock
-    const result = withFileLock(testFile, () => 'fallback');
-    expect(result).toBe('fallback');
+    // Without CODEX_DISABLE_LOCKING set, withFileLock fails closed
+    const previousEnv = process.env.CODEX_DISABLE_LOCKING;
+    delete process.env.CODEX_DISABLE_LOCKING;
+    try {
+      expect(() => withFileLock(testFile, () => 'should not run'))
+        .toThrow(/Unable to acquire lock/);
+    } finally {
+      if (previousEnv !== undefined) process.env.CODEX_DISABLE_LOCKING = previousEnv;
+      fs.unlinkSync(lockPath);
+    }
+  });
 
-    // Clean up
-    fs.unlinkSync(lockPath);
+  it('falls back to lockless execution when CODEX_DISABLE_LOCKING=1', () => {
+    // Same setup: a non-stale lock that all retries will fail to break
+    const lockPath = testFile + '.lock';
+    fs.writeFileSync(lockPath, String(process.pid));
+
+    const previousEnv = process.env.CODEX_DISABLE_LOCKING;
+    process.env.CODEX_DISABLE_LOCKING = '1';
+    try {
+      // With the env var set, the closure runs anyway (test escape hatch)
+      const result = withFileLock(testFile, () => 'fallback');
+      expect(result).toBe('fallback');
+    } finally {
+      if (previousEnv !== undefined) process.env.CODEX_DISABLE_LOCKING = previousEnv;
+      else delete process.env.CODEX_DISABLE_LOCKING;
+      fs.unlinkSync(lockPath);
+    }
   });
 
   it('creates lock file with PID content', () => {
