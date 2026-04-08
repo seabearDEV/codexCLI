@@ -207,5 +207,106 @@ describe('paths utilities', () => {
       const { getUnifiedDataFilePath, getDataDirectory } = await import('../utils/paths');
       expect(getUnifiedDataFilePath()).toBe(path.join(getDataDirectory(), 'data.json'));
     });
+
+    it('getGlobalStoreDirPath returns store subdirectory inside data directory', async () => {
+      vi.resetModules();
+      const { getGlobalStoreDirPath, getDataDirectory } = await import('../utils/paths');
+      expect(getGlobalStoreDirPath()).toBe(path.join(getDataDirectory(), 'store'));
+    });
+  });
+
+  describe('findProjectStoreDir', () => {
+    it('returns null when CODEX_NO_PROJECT is set', async () => {
+      vi.resetModules();
+      const originalNoProject = process.env.CODEX_NO_PROJECT;
+      process.env.CODEX_NO_PROJECT = '1';
+
+      try {
+        const { findProjectStoreDir, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectStoreDir()).toBeNull();
+      } finally {
+        if (originalNoProject !== undefined) {
+          process.env.CODEX_NO_PROJECT = originalNoProject;
+        } else {
+          delete process.env.CODEX_NO_PROJECT;
+        }
+      }
+    });
+
+    it('honors CODEX_PROJECT pointing at a .codexcli directory', async () => {
+      const projectDir = path.join(tmpDir, '.codexcli');
+      fs.mkdirSync(projectDir);
+      vi.resetModules();
+      const original = process.env.CODEX_PROJECT;
+      process.env.CODEX_PROJECT = projectDir;
+      try {
+        const { findProjectStoreDir, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectStoreDir()).toBe(projectDir);
+      } finally {
+        if (original !== undefined) process.env.CODEX_PROJECT = original;
+        else delete process.env.CODEX_PROJECT;
+      }
+    });
+
+    it('honors CODEX_PROJECT pointing at a containing directory', async () => {
+      fs.mkdirSync(path.join(tmpDir, '.codexcli'));
+      vi.resetModules();
+      const original = process.env.CODEX_PROJECT;
+      process.env.CODEX_PROJECT = tmpDir;
+      try {
+        const { findProjectStoreDir, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectStoreDir()).toBe(path.join(tmpDir, '.codexcli'));
+      } finally {
+        if (original !== undefined) process.env.CODEX_PROJECT = original;
+        else delete process.env.CODEX_PROJECT;
+      }
+    });
+
+    it('fails closed when CODEX_PROJECT does not resolve to a directory', async () => {
+      vi.resetModules();
+      const original = process.env.CODEX_PROJECT;
+      process.env.CODEX_PROJECT = path.join(tmpDir, 'nonexistent');
+      try {
+        const { findProjectStoreDir, clearProjectFileCache } = await import('../utils/paths');
+        clearProjectFileCache();
+        expect(findProjectStoreDir()).toBeNull();
+      } finally {
+        if (original !== undefined) process.env.CODEX_PROJECT = original;
+        else delete process.env.CODEX_PROJECT;
+      }
+    });
+
+    it('walks up from setProjectRootOverride to find .codexcli directory', async () => {
+      const nested = path.join(tmpDir, 'a', 'b', 'c');
+      fs.mkdirSync(nested, { recursive: true });
+      fs.mkdirSync(path.join(tmpDir, '.codexcli'));
+
+      vi.resetModules();
+      const { findProjectStoreDir, clearProjectFileCache, setProjectRootOverride } = await import('../utils/paths');
+      clearProjectFileCache();
+      setProjectRootOverride(nested);
+      try {
+        expect(findProjectStoreDir()).toBe(path.join(tmpDir, '.codexcli'));
+      } finally {
+        setProjectRootOverride(null);
+      }
+    });
+
+    it('does not match a file named .codexcli (only directories)', async () => {
+      fs.writeFileSync(path.join(tmpDir, '.codexcli'), 'not a dir');
+
+      vi.resetModules();
+      const { findProjectStoreDir, clearProjectFileCache, setProjectRootOverride } = await import('../utils/paths');
+      clearProjectFileCache();
+      setProjectRootOverride(tmpDir);
+      try {
+        expect(findProjectStoreDir()).toBeNull();
+      } finally {
+        setProjectRootOverride(null);
+      }
+    });
   });
 });

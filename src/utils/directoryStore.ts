@@ -350,3 +350,115 @@ export function createDirectoryStore(
 
   return { load, save, clear, prime };
 }
+
+// ── Migration ──────────────────────────────────────────────────────────
+
+/** Result of a migration attempt. */
+export interface DirectoryMigrationResult {
+  /**
+   * - `no-op`: neither the old file nor the new directory exists (fresh install)
+   * - `already-present`: the new directory already exists (nothing to do)
+   * - `migrated`: successfully converted the old file to the new directory layout
+   */
+  status: 'no-op' | 'already-present' | 'migrated';
+  entryCount: number;
+  backupPath?: string;
+}
+
+/**
+ * Migrate a unified-format store file to the file-per-entry directory layout.
+ *
+ * - If `newDirPath` already exists as a directory: no-op (returns `already-present`).
+ *   If `oldFilePath` also exists alongside it, rename it to `.backup` as cleanup.
+ * - If `oldFilePath` does not exist: no-op (returns `no-op`).
+ * - Otherwise: read the unified file, write per-entry wrapper files and sidecars
+ *   into `newDirPath`, then rename the old file to `<oldFilePath>.backup`.
+ *
+ * The migration preserves each entry's `_meta.updated` timestamp as
+ * `meta.created` AND `meta.updated` in the new wrapper (see design decision #9
+ * in the Phase 1 comment). Untracked entries (no `_meta` timestamp) migrate
+ * with no `meta` block, preserving the `[untracked]` staleness label.
+ *
+ * No locking: migration runs on first store access in a given session, before
+ * any concurrent writers would exist.
+ */
+export function migrateFileToDirectory(
+  oldFilePath: string,
+  newDirPath: string
+): DirectoryMigrationResult {
+  // If the new directory already exists, it's authoritative. Clean up the
+  // old file if it somehow lingers (e.g., aborted prior migration).
+  if (fs.existsSync(newDirPath)) {
+    try {
+      const stat = fs.statSync(newDirPath);
+      if (!stat.isDirectory()) {
+        throw new Error(
+          `Expected ${newDirPath} to be a directory, but found a file. ` +
+          `Resolve this conflict manually before upgrading.`
+        );
+      }
+    } catch (err) {
+      if (!isENOENT(err)) throw err;
+    }
+    if (fs.existsSync(oldFilePath)) {
+      try {
+        fs.renameSync(oldFilePath, oldFilePath + '.backup');
+        debug(`Cleaned up lingering ${oldFilePath} after previous migration`);
+      } catch (err) {
+        debug(`Failed to clean up ${oldFilePath}: ${String(err)}`);
+      }
+    }
+    return { status: 'already-present', entryCount: 0 };
+  }
+
+  if (!fs.existsSync(oldFilePath)) {
+    return { status: 'no-op', entryCount: 0 };
+  }
+
+  // Read and parse the old unified file.
+  let parsed: Record<string, unknown>;
+  try {
+    const raw = fs.readFileSync(oldFilePath, 'utf8');
+    parsed = (raw?.trim() ? JSON.parse(raw) : {}) as Record<string, unknown>;
+  } catch (err) {
+    throw new Error(
+      `Failed to parse old store file ${oldFilePath}: ${String(err)}. ` +
+      `Fix the JSON manually or delete the file before upgrading.`
+    );
+  }
+
+  const entries = (parsed.entries ?? {}) as CodexData;
+  const aliases = (parsed.aliases ?? {}) as Record<string, string>;
+  const confirm = (parsed.confirm ?? {}) as Record<string, true>;
+  const meta = (parsed._meta ?? {}) as Record<string, number>;
+
+  // Create the new directory (0o700 matches existing ensureDataDirectoryExists).
+  fs.mkdirSync(newDirPath, { recursive: true, mode: 0o700 });
+
+  // Write each entry as a wrapper file.
+  const flat = flattenObject(entries as Record<string, unknown>);
+  let entryCount = 0;
+  for (const [key, value] of Object.entries(flat)) {
+    const updated = meta[key];
+    const wrapper: EntryWrapper = updated !== undefined
+      ? { value, meta: { created: updated, updated } }
+      : { value };  // untracked entries stay bare
+    atomicWriteFileSync(entryFilePath(newDirPath, key), serializeEntryWrapper(wrapper));
+    entryCount++;
+  }
+
+  // Write sidecars (even if empty — lets the store unambiguously report
+  // "aliases: {}" vs "aliases: never-existed").
+  atomicWriteFileSync(path.join(newDirPath, ALIASES_FILE), serializeSidecar(aliases));
+  atomicWriteFileSync(path.join(newDirPath, CONFIRM_FILE), serializeSidecar(confirm));
+
+  // Rename old file to .backup (idempotent if a prior .backup exists: overwrite it).
+  const backupPath = oldFilePath + '.backup';
+  try {
+    if (fs.existsSync(backupPath)) fs.unlinkSync(backupPath);
+  } catch { /* best-effort */ }
+  fs.renameSync(oldFilePath, backupPath);
+
+  debug(`Migrated ${entryCount} entries from ${oldFilePath} to ${newDirPath}`);
+  return { status: 'migrated', entryCount, backupPath };
+}
