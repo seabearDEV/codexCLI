@@ -646,3 +646,165 @@ describe('migrateFileToDirectory concurrency', () => {
     expect(fs.existsSync(newDir + '.tmp')).toBe(false);
   });
 });
+
+// ── Sidecar mtime tracking ─────────────────────────────────────────────
+
+describe('sidecar mtime cache', () => {
+  it('does not re-read _aliases.json when its mtime is unchanged', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1' },
+      aliases: { x: 'a' },
+      confirm: {},
+    });
+
+    // Prime the cache.
+    store.load();
+
+    // Spy on fs.readFileSync after priming, counting reads of the aliases sidecar.
+    const readFileSync = fs.readFileSync;
+    let aliasReads = 0;
+    const aliasPath = path.join(dir, '_aliases.json');
+    // @ts-expect-error -- intentional test-only monkey patch
+    fs.readFileSync = function spyRead(p: fs.PathOrFileDescriptor, ...rest: unknown[]) {
+      if (typeof p === 'string' && path.resolve(p) === path.resolve(aliasPath)) {
+        aliasReads++;
+      }
+      // @ts-expect-error -- spread through to the real impl
+      return readFileSync.call(this, p, ...rest);
+    };
+    try {
+      // Several loads with no disk changes → sidecar should not be re-read.
+      store.load();
+      store.load();
+      store.load();
+    } finally {
+      fs.readFileSync = readFileSync;
+    }
+
+    expect(aliasReads).toBe(0);
+  });
+
+  it('re-reads _aliases.json when its mtime changes (external write)', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1' },
+      aliases: { x: 'a' },
+      confirm: {},
+    });
+    store.load();  // prime
+
+    // Simulate an external rewrite with a newer mtime.
+    // Spin briefly so the mtime actually advances on coarse-grained filesystems.
+    const target = Date.now() + 20;
+    while (Date.now() < target) { /* spin */ }
+    fs.writeFileSync(
+      path.join(dir, '_aliases.json'),
+      JSON.stringify({ y: 'a' }, null, 2)
+    );
+
+    const reloaded = store.load();
+    expect(reloaded.aliases).toEqual({ y: 'a' });
+  });
+
+  it('load() returns defensive copies of sidecars so caller-mutation does not pollute the cache', () => {
+    // Regression: setAlias and friends call loadAliasMap, mutate the returned
+    // object in place, then call saveAliasMap with the mutated reference. If
+    // load() handed out the cached object by reference, the dirty-check in
+    // save() would see "cache === caller's data" via shallowEquals and skip
+    // the write — silently dropping the alias.
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({
+      entries: { a: '1' },
+      aliases: { existing: 'a' },
+      confirm: {},
+    });
+
+    const first = store.load();
+    // Simulate a caller mutating loadAliasMap's return value.
+    (first.aliases as Record<string, string>)['added'] = 'a';
+
+    // Now save the mutated data. If the cache was shared by reference, the
+    // dirty-check would conclude "no change" and skip writing the new alias.
+    store.save(first);
+
+    // Fresh store reading straight from disk — the added alias must be there.
+    const fresh = makeStore(dir);
+    const reloaded = fresh.load();
+    expect(reloaded.aliases).toEqual({ existing: 'a', added: 'a' });
+  });
+
+  it('picks up a sidecar that appears after initial load (missing → present)', () => {
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    fs.writeFileSync(path.join(dir, 'x.json'), JSON.stringify({ value: 'v' }));
+
+    const store = makeStore(dir);
+    let data = store.load();
+    expect(data.aliases).toEqual({});
+
+    // Write a sidecar that wasn't there on the first scan.
+    fs.writeFileSync(path.join(dir, '_aliases.json'), JSON.stringify({ z: 'x' }));
+
+    data = store.load();
+    expect(data.aliases).toEqual({ z: 'x' });
+  });
+});
+
+// ── Hand-edit warning README ───────────────────────────────────────────
+
+describe('_README.md hand-edit nudge', () => {
+  it('save() writes _README.md on first invocation', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+
+    expect(fs.existsSync(path.join(dir, '_README.md'))).toBe(false);
+
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    const readmePath = path.join(dir, '_README.md');
+    expect(fs.existsSync(readmePath)).toBe(true);
+    const contents = fs.readFileSync(readmePath, 'utf8');
+    expect(contents).toContain('do not hand-edit');
+  });
+
+  it('does not overwrite a user-customized _README.md', () => {
+    const dir = path.join(tmpRoot, 'store');
+    fs.mkdirSync(dir);
+    const custom = '# My custom store README\n';
+    fs.writeFileSync(path.join(dir, '_README.md'), custom);
+
+    const store = makeStore(dir);
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    const contents = fs.readFileSync(path.join(dir, '_README.md'), 'utf8');
+    expect(contents).toBe(custom);
+  });
+
+  it('_README.md is not picked up as an entry file', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    const data = store.load();
+    // Only the real entry "a" is visible.
+    expect(data.entries).toEqual({ a: '1' });
+  });
+
+  it('migration seeds _README.md alongside the migrated entries', () => {
+    const oldFile = path.join(tmpRoot, '.codexcli.json');
+    const newDir = path.join(tmpRoot, '.codexcli');
+    fs.writeFileSync(oldFile, JSON.stringify({
+      entries: { a: '1' },
+      aliases: {},
+      confirm: {},
+    }));
+
+    migrateFileToDirectory(oldFile, newDir);
+
+    expect(fs.existsSync(path.join(newDir, '_README.md'))).toBe(true);
+  });
+});

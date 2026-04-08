@@ -46,12 +46,51 @@ interface CachedEntry {
   mtimeMs: number;
 }
 
+/**
+ * Cached state of one sidecar file (_aliases.json, _confirm.json).
+ * `mtimeMs` of `-1` means "observed as missing" — used so that a later
+ * fs.stat of a real mtime compares unequal and triggers a re-read.
+ */
+interface CachedSidecar<T> {
+  data: T;
+  mtimeMs: number;
+}
+
 // ── File layout helpers ────────────────────────────────────────────────
 
 const ALIASES_FILE = '_aliases.json';
 const CONFIRM_FILE = '_confirm.json';
 const EPOCH_FILE = '_epoch.json';
+const README_FILE = '_README.md';
 const ENTRY_FILE_SUFFIX = '.json';
+
+/**
+ * Hand-edit warning written to `<store>/_README.md` on store creation. The
+ * `_` prefix means isEntryFilename ignores it; it exists purely as an
+ * in-context nudge for developers browsing the directory who might
+ * otherwise be tempted to open an entry file and tweak it. See the codex
+ * entry `conventions.editSurface` for the rationale.
+ */
+const README_CONTENT = `# codexCLI store — do not hand-edit
+
+This directory is managed by codexCLI. Each \`*.json\` file is a single
+store entry written through the CLI or MCP tools. Sidecar files starting
+with \`_\` (this README, \`_aliases.json\`, \`_confirm.json\`, \`_epoch.json\`)
+are internal bookkeeping.
+
+**Edit via one of:**
+
+- \`ccli set <key> <value>\` (and the rest of the CLI)
+- The codexCLI MCP tools (\`codex_set\`, \`codex_get\`, etc.)
+- A future UI
+
+Direct edits to these files desync per-entry metadata (created/updated
+timestamps, future verified/agent fields) and silently break staleness
+signals. The wrapper format \`{ value, meta }\` assumes only the official
+tools touch it.
+
+If you need to bulk-import or restructure, do it through the CLI.
+`;
 
 /**
  * Maximum number of retries for the seqlock loop in load(). In practice,
@@ -221,6 +260,26 @@ function writeEpoch(dir: string, epoch: number): void {
   atomicWriteFileSync(path.join(dir, EPOCH_FILE), JSON.stringify({ epoch }) + '\n');
 }
 
+/**
+ * Write the hand-edit warning README to the store directory if it doesn't
+ * already exist. Idempotent and best-effort: a failure to write (read-only
+ * filesystem, permissions) is logged via debug and swallowed so the store
+ * itself keeps working.
+ *
+ * We check with existsSync rather than overwriting unconditionally so a
+ * user who customized the wording (or replaced it with a symlink) isn't
+ * stomped on every save.
+ */
+function ensureReadme(dir: string): void {
+  const readmePath = path.join(dir, README_FILE);
+  try {
+    if (fs.existsSync(readmePath)) return;
+    atomicWriteFileSync(readmePath, README_CONTENT);
+  } catch (err) {
+    debug(`Failed to write ${README_FILE} in ${dir}: ${String(err)}`);
+  }
+}
+
 // ── Equality helpers ───────────────────────────────────────────────────
 
 /**
@@ -270,14 +329,45 @@ export function createDirectoryStore(
   // Per-entry cache, keyed by dotted key. Each entry records its file mtime
   // so we can detect external writes between load() calls.
   const entryCache = new Map<string, CachedEntry>();
-  // Sidecar caches — small, not mtime-tracked, refreshed on every scanAndSync().
-  let aliasesCache: Record<string, string> | null = null;
-  let confirmCache: Record<string, true> | null = null;
+  // Sidecar caches — mtime-tracked so scanAndSync() can skip the re-read when
+  // nothing changed. A cached sentinel mtime of `-1` means "observed as
+  // missing"; any real fs.stat mtime compares unequal, so we'll pick up a
+  // sidecar that appears later without a stale-read hazard.
+  let aliasesCache: CachedSidecar<Record<string, string>> | null = null;
+  let confirmCache: CachedSidecar<Record<string, true>> | null = null;
 
   function clear(): void {
     entryCache.clear();
     aliasesCache = null;
     confirmCache = null;
+  }
+
+  /**
+   * Stat a sidecar file and return either its current data (cached or
+   * re-read) or an empty-object fallback if it's missing. Updates the
+   * passed-in cache slot in place by returning the new CachedSidecar;
+   * callers assign the result back.
+   */
+  function refreshSidecar<T extends Record<string, unknown>>(
+    filePath: string,
+    cached: CachedSidecar<T> | null
+  ): CachedSidecar<T> {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(filePath);
+    } catch (err) {
+      if (isENOENT(err)) {
+        // File missing. If we already had a "missing" sentinel, keep it;
+        // otherwise install one so future scans can detect a new sidecar.
+        return cached?.mtimeMs === -1 ? cached : { data: {} as T, mtimeMs: -1 };
+      }
+      throw err;
+    }
+    if (cached?.mtimeMs === stat.mtimeMs) {
+      return cached;
+    }
+    const data = readSidecar<T>(filePath);
+    return { data, mtimeMs: stat.mtimeMs };
   }
 
   /**
@@ -294,8 +384,8 @@ export function createDirectoryStore(
     } catch (err) {
       if (isENOENT(err)) {
         entryCache.clear();
-        aliasesCache = {};
-        confirmCache = {};
+        aliasesCache = { data: {}, mtimeMs: -1 };
+        confirmCache = { data: {}, mtimeMs: -1 };
         return;
       }
       throw err;
@@ -337,9 +427,17 @@ export function createDirectoryStore(
       if (!seen.has(key)) entryCache.delete(key);
     }
 
-    // Refresh sidecar caches. Small files, re-read on every scan.
-    aliasesCache = readSidecar<Record<string, string>>(path.join(dir, ALIASES_FILE));
-    confirmCache = readSidecar<Record<string, true>>(path.join(dir, CONFIRM_FILE));
+    // Refresh sidecar caches. refreshSidecar stats first and re-parses only
+    // if the mtime changed, so an unchanged sidecar costs a single stat()
+    // instead of a stat + read + JSON.parse.
+    aliasesCache = refreshSidecar<Record<string, string>>(
+      path.join(dir, ALIASES_FILE),
+      aliasesCache
+    );
+    confirmCache = refreshSidecar<Record<string, true>>(
+      path.join(dir, CONFIRM_FILE),
+      confirmCache
+    );
   }
 
   function load(): UnifiedData {
@@ -387,10 +485,18 @@ export function createDirectoryStore(
     }
     const entries = expandFlatKeys(flat) as CodexData;
 
+    // Defensive shallow copies: callers (e.g. setAlias) load the map, mutate
+    // it in place, then call save with the mutated reference. Under the old
+    // (non-mtime-cached) sidecar path, this was safe because every scanAndSync
+    // reassigned `aliasesCache` to a fresh JSON.parse result — the caller's
+    // mutated copy was no longer the cache. Now that we reuse the cache
+    // across scans when mtime is unchanged, we have to hand out copies so
+    // caller mutation doesn't silently pollute the cache (which would make
+    // the dirty-check in save() return "no change" and skip the write).
     const result: UnifiedData = {
       entries,
-      aliases: aliasesCache ?? {},
-      confirm: confirmCache ?? {},
+      aliases: { ...(aliasesCache?.data ?? {}) },
+      confirm: { ...(confirmCache?.data ?? {}) },
     };
     if (Object.keys(meta).length > 0) {
       result._meta = meta;
@@ -401,6 +507,7 @@ export function createDirectoryStore(
   function save(data: UnifiedData): void {
     const dir = getDirPath();
     ensureDir();
+    ensureReadme(dir);
 
     withFileLock(getStoreLockKey(dir), () => {
       // 0. Begin commit: bump epoch to the next odd value. Readers that
@@ -460,20 +567,17 @@ export function createDirectoryStore(
         entryCache.set(key, { wrapper, mtimeMs });
       }
 
-      // 5. Sidecars — rewrite only if changed.
-      if (!aliasesCache || !shallowEquals(aliasesCache, data.aliases)) {
-        atomicWriteFileSync(
-          path.join(dir, ALIASES_FILE),
-          serializeSidecar(data.aliases)
-        );
-        aliasesCache = { ...data.aliases };
+      // 5. Sidecars — rewrite only if changed. After a write, pick up the
+      //    new mtime from statSync so future scans can skip the re-read.
+      if (!aliasesCache || aliasesCache.mtimeMs === -1 || !shallowEquals(aliasesCache.data, data.aliases)) {
+        const aliasPath = path.join(dir, ALIASES_FILE);
+        atomicWriteFileSync(aliasPath, serializeSidecar(data.aliases));
+        aliasesCache = { data: { ...data.aliases }, mtimeMs: fs.statSync(aliasPath).mtimeMs };
       }
-      if (!confirmCache || !shallowEquals(confirmCache, data.confirm)) {
-        atomicWriteFileSync(
-          path.join(dir, CONFIRM_FILE),
-          serializeSidecar(data.confirm)
-        );
-        confirmCache = { ...data.confirm };
+      if (!confirmCache || confirmCache.mtimeMs === -1 || !shallowEquals(confirmCache.data, data.confirm)) {
+        const confirmPath = path.join(dir, CONFIRM_FILE);
+        atomicWriteFileSync(confirmPath, serializeSidecar(data.confirm));
+        confirmCache = { data: { ...data.confirm }, mtimeMs: fs.statSync(confirmPath).mtimeMs };
       }
 
       // 6. End commit: bump epoch to the next even value. Any reader that
@@ -627,6 +731,10 @@ function migrateFileToDirectoryLocked(
     // will bump it to 1 → 2, and readers running concurrently with that
     // first save will correctly detect the in-progress commit.
     writeEpoch(tmpDirPath, 0);
+
+    // Seed the hand-edit warning README alongside the data files, so the
+    // migrated directory gets the same nudge a fresh store does.
+    ensureReadme(tmpDirPath);
 
     // Atomic swap: rename the fully-written tmp directory to the final path.
     fs.renameSync(tmpDirPath, newDirPath);
