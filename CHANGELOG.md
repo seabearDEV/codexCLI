@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-04-07
+
+### Fixed
+
+- **MCP scope fallback was silent** — when no `.codexcli.json` could be resolved (client doesn't advertise `roots` and `CODEX_PROJECT` isn't pinned), `codex_set` with no explicit `scope` would silently fall through to the global store, so project-specific writes landed in the user's global store with no indication. `codex_context` now leads with `[project: <path>]` or a `[project: NONE — ...]` banner so agents know up-front where writes will land. `codex_set` now appends `Wrote to: project|global` on every write, plus a remediation hint (`pin CODEX_PROJECT or pass scope:"project" explicitly`) when an unscoped write fell through to global. Both changes are additive — no schema changes.
+
 ## [1.9.1] - 2026-04-07
 
 ### Added
