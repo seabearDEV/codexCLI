@@ -810,3 +810,57 @@ describe('_README.md hand-edit nudge', () => {
     expect(fs.existsSync(path.join(newDir, '_README.md'))).toBe(true);
   });
 });
+
+// ── Lock failure propagation (v1.11 fail-closed) ───────────────────────
+
+describe('save() under lock failure', () => {
+  it('throws when lock acquisition fails (fail-closed default)', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    // Prime the store so the directory exists.
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    // Plant a fresh non-stale lock at the sibling path so all retries fail.
+    const lockPath = getStoreLockKey(dir) + '.lock';
+    fs.writeFileSync(lockPath, '99999');
+    // mtime defaults to now → not stale → acquireLock exhausts retries
+
+    const previousEnv = process.env.CODEX_DISABLE_LOCKING;
+    delete process.env.CODEX_DISABLE_LOCKING;
+    try {
+      expect(() =>
+        store.save({ entries: { a: '2' }, aliases: {}, confirm: {} })
+      ).toThrow(/Unable to acquire lock/);
+      // The thrown error means the second save did NOT clobber the first.
+      // Verify by reading from a fresh store: the original value is intact.
+      const fresh = makeStore(dir);
+      expect(fresh.load().entries).toEqual({ a: '1' });
+    } finally {
+      if (previousEnv !== undefined) process.env.CODEX_DISABLE_LOCKING = previousEnv;
+      try { fs.unlinkSync(lockPath); } catch { /* may not exist */ }
+    }
+  });
+
+  it('falls back to lockless save when CODEX_DISABLE_LOCKING=1', () => {
+    const dir = path.join(tmpRoot, 'store');
+    const store = makeStore(dir);
+    store.save({ entries: { a: '1' }, aliases: {}, confirm: {} });
+
+    // Same lock-blocking setup as the test above.
+    const lockPath = getStoreLockKey(dir) + '.lock';
+    fs.writeFileSync(lockPath, '99999');
+
+    const previousEnv = process.env.CODEX_DISABLE_LOCKING;
+    process.env.CODEX_DISABLE_LOCKING = '1';
+    try {
+      // With the env var set, the save proceeds despite the blocking lock.
+      store.save({ entries: { a: '2' }, aliases: {}, confirm: {} });
+      const fresh = makeStore(dir);
+      expect(fresh.load().entries).toEqual({ a: '2' });
+    } finally {
+      if (previousEnv !== undefined) process.env.CODEX_DISABLE_LOCKING = previousEnv;
+      else delete process.env.CODEX_DISABLE_LOCKING;
+      try { fs.unlinkSync(lockPath); } catch { /* may not exist */ }
+    }
+  });
+});

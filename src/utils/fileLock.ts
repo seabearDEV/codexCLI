@@ -66,7 +66,22 @@ function releaseLock(filePath: string): void {
 
 /**
  * Execute a function while holding a file lock.
- * Falls back to running without a lock if locking fails (e.g., in test environments).
+ *
+ * **Default (production) behavior: fail closed.** If lock acquisition fails
+ * (after the bounded retry loop in `acquireLock`), the error propagates and
+ * the closure does NOT run. This is the safe choice — running unlocked
+ * exposes per-entry writes to clobbering between concurrent processes, since
+ * the seqlock added in v1.10.x only protects readers from torn states, not
+ * writers from racing each other.
+ *
+ * **Test escape hatch: `CODEX_DISABLE_LOCKING=1`.** Set this env var to fall
+ * back to running the closure unlocked when lock acquisition fails. This
+ * preserves the pre-v1.11 silent-fallback behavior for tests that intentionally
+ * exercise contended-lock scenarios. The env var is read fresh on every call,
+ * so tests can flip it on and off without restarting the process.
+ *
+ * Production code should never set `CODEX_DISABLE_LOCKING`. There are no
+ * known production environments where lock acquisition is expected to fail.
  */
 export function withFileLock<T>(filePath: string, fn: () => T): T {
   let locked = false;
@@ -74,7 +89,11 @@ export function withFileLock<T>(filePath: string, fn: () => T): T {
     acquireLock(filePath);
     locked = true;
   } catch (err) {
-    debug(`Lock acquisition failed for ${filePath}, proceeding without lock: ${String(err)}`);
+    if (process.env.CODEX_DISABLE_LOCKING === '1') {
+      debug(`Lock acquisition failed for ${filePath}, CODEX_DISABLE_LOCKING=1 set — proceeding without lock: ${String(err)}`);
+    } else {
+      throw err;
+    }
   }
   try {
     return fn();

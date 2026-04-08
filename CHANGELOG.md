@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+### Changed
+
+- **`withFileLock` fails closed in production (BREAKING for any caller relying on the silent fallback)** — `src/utils/fileLock.ts` previously caught all `acquireLock` failures and silently ran the closure unlocked. The seqlock added in v1.10.x protected readers from torn states but did *not* protect writers from clobbering each other under the silent fallback path. Closes [#61](https://github.com/seabearDEV/codexCLI/issues/61).
+  - **New default**: lock acquisition failures throw and propagate. Audit confirmed all three production call sites (`directoryStore.save()`, `migrateFileToDirectory()`, `saveJsonSorted()`) have a guaranteed-existing parent directory before they invoke `withFileLock`, so the new throw never fires in normal operation.
+  - **Test escape hatch**: set `CODEX_DISABLE_LOCKING=1` to restore the pre-v1.11 silent-fallback behavior. Read fresh on every call so tests can flip it on/off without restarting the process. Documented in the README env-var section as test-only.
+  - **Stale doc removed**: the JSDoc on `migrateFileToDirectory` previously said "lock acquisition will fail and `withFileLock` will fall through to running unlocked" — that path was already mitigated by PR #64's `ensureDataDirectoryExists()` call in `getGlobalStore()`. Updated to reflect the new fail-closed semantics.
+- **`loadConfig()` returns defensive shallow copies of the cached `Config`** — same hazard PR #58 fixed for sidecar caches in `directoryStore.ts`, found during the defensive shallow-cache audit folded into this PR. `setConfigSetting()` calls `loadConfig()`, mutates the result in place, then calls `saveConfig()` with the mutated reference; under the previous shared-reference behavior, the in-memory cache would be polluted by those mutations between the write and the next mtime-triggered re-read. Strictly defensive — no observable user-facing bug, but closes the same class of latent bug.
+
 ### Removed
 
 - **`--raw` / `-r` on `get` and `context`** — deprecated since v1.9.1 (when it was renamed to `--plain` because the name `--raw` misleadingly implied "no processing" when its actual behavior was "no colors"). Removed entirely in v1.11. Closes [#62](https://github.com/seabearDEV/codexCLI/issues/62) (part of the short-flag namespace audit).

@@ -138,6 +138,7 @@ CodexCLI honors a small set of environment variables for deployment-time configu
 | `CODEX_PROJECT_DIR` | MCP-server launcher hint — the directory the server should treat as the project root. Equivalent to passing `--cwd <dir>`. Applied via `setProjectRootOverride` (no `process.chdir`), so it works whether the server is run as a binary or imported. | unset |
 | `CODEX_NO_PROJECT` | Disable project-file lookup entirely. Set to any non-empty value (e.g. `1`) and `findProjectFile()` returns `null` regardless of `cwd` or `CODEX_PROJECT`. | unset |
 | `CODEX_AGENT_NAME` | Identifier recorded in the audit and telemetry logs for the calling agent. Used by `ccli stats` and `ccli audit` to break down activity per agent (Claude, Cursor, Copilot, etc.). | unset |
+| `CODEX_DISABLE_LOCKING` | **Test-only.** When set to `1`, `withFileLock` falls back to running its closure without acquiring the file lock if lock acquisition fails. The default (production) behavior since v1.11 is to fail closed and propagate the lock error. Production code should never set this — there are no known production environments where lock acquisition is expected to fail. Tests that intentionally exercise contended-lock scenarios use this opt-out instead. | unset |
 
 ### Notes
 
