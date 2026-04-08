@@ -703,6 +703,7 @@ describe('sidecar mtime cache', () => {
       aliasesPath,
       JSON.stringify({ y: 'a' }, null, 2)
     );
+    // +1000 ms ensures the bump is visible even on filesystems with 1-second mtime granularity.
     const newerMtime = new Date(previousStat.mtimeMs + 1000);
     fs.utimesSync(aliasesPath, newerMtime, newerMtime);
 
