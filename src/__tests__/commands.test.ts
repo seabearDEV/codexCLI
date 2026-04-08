@@ -1095,14 +1095,14 @@ describe('Commands', () => {
       expect(console.log).toHaveBeenCalled();
     });
 
-    it('outputs raw value with --plain option', () => {
+    it('outputs plain value with --plain option', () => {
       getEntry('server.production.ip', { plain: true });
 
       const logCalls = (console.log as Mock).mock.calls;
-      const showedRaw = logCalls.some(call =>
+      const showedPlain = logCalls.some(call =>
         call.some((arg: unknown) => arg === '192.168.1.100')
       );
-      expect(showedRaw).toBe(true);
+      expect(showedPlain).toBe(true);
     });
 
     it('outputs all entries as plain key: value lines with --plain --values', () => {
