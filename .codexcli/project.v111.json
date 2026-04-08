@@ -1,0 +1,7 @@
+{
+  "value": "v1.11.0 quality release. Tracked via GitHub milestone v1.11.0 (https://github.com/seabearDEV/codexCLI/milestone/1). Scope: (1) Tier 1 doc fixes — store epoch retry comments + sidecar README clarification, merged in 3077055; (2) withFileLock fail-closed in production with CODEX_DISABLE_LOCKING=1 opt-out for tests + lockless-fallback test coverage + defensive shallow-cache audit; (3) Short-flag namespace audit, rip-and-replace, single CHANGELOG entry; (4) CODEX_DATA_DIR polish — README env-var section, absolute-path validation, ccli info provenance annotation, clearDataDirectoryCache() export. Sequencing: PR1=CODEX_DATA_DIR (smallest), PR2=short-flags, PR3=withFileLock+cache sweep. Out of scope: hand-edit drift detection (defer to v1.12+), any new features.",
+  "meta": {
+    "created": 1775666874095,
+    "updated": 1775666874095
+  }
+}
