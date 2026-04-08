@@ -153,7 +153,9 @@ data/
 telemetry.jsonl
 audit.jsonl
 
-# Project store (file-per-entry layout migration artifacts)
-.codexcli/
+# Legacy migration artifact — kept out of the committed store.
+# The `.codexcli/` directory itself is intentionally NOT ignored: it's the
+# project knowledge store and is meant to be committed (this is the whole
+# dogfooding premise of the project).
 .codexcli.json.backup
 
