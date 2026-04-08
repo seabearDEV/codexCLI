@@ -9,7 +9,7 @@ import { debug } from './utils/debug';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-interface UnifiedData {
+export interface UnifiedData {
   entries: CodexData;
   aliases: Record<string, string>;
   confirm: Record<string, true>;
@@ -21,7 +21,7 @@ export type Scope = 'project' | 'global' | 'auto';
 
 // ── ScopedStore ────────────────────────────────────────────────────────
 
-interface ScopedStore {
+export interface ScopedStore {
   load(): UnifiedData;
   save(data: UnifiedData): void;
   clear(): void;
