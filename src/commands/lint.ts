@@ -2,6 +2,7 @@ import { getEntriesFlat, Scope } from '../storage';
 import { color } from '../formatting';
 import { findProjectFile } from '../store';
 import fs from 'fs';
+import path from 'path';
 
 const DEFAULT_NAMESPACES = ['project', 'commands', 'arch', 'conventions', 'context', 'files', 'deps', 'system'];
 
@@ -9,6 +10,11 @@ function loadCustomSchema(): string[] | null {
   const projectFile = findProjectFile();
   if (!projectFile) return null;
   try {
+    // In v1.10.0, findProjectFile() returns a directory path when the new layout
+    // is in use (.codexcli/ directory). Detect this by basename — the directory
+    // has no extension, while the legacy file ends in .json.
+    // The _schema feature is not implemented for the directory layout yet.
+    if (path.basename(projectFile) === '.codexcli') return null;
     const raw = JSON.parse(fs.readFileSync(projectFile, 'utf8')) as Record<string, unknown>;
     const schema = raw._schema as { namespaces?: string[] } | undefined;
     return schema?.namespaces ?? null;

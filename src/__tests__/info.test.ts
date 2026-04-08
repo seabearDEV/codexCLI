@@ -35,6 +35,7 @@ vi.mock('../store', () => ({
 vi.mock('../utils/paths', () => ({
   getUnifiedDataFilePath: vi.fn(() => '/mock/data.json'),
   getConfigFilePath: vi.fn(() => '/mock/config.json'),
+  getGlobalStoreDirPath: vi.fn(() => '/mock/store'),
 }));
 
 vi.mock('fs', () => {
@@ -82,7 +83,7 @@ describe('showInfo', () => {
   it('shows storage paths', () => {
     showInfo();
     const output = getOutput();
-    expect(output).toContain('data.json');
+    expect(output).toContain('/mock/store');
     expect(output).toContain('config.json');
   });
 

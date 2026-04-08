@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { writeDirectoryStore, readDirectoryStore } from './helpers/readStoreState';
 
 let tmpDir: string;
+let storeDir: string;
 let dataPath: string;
 
 vi.mock('../utils/paths', () => ({
@@ -10,10 +12,12 @@ vi.mock('../utils/paths', () => ({
   getUnifiedDataFilePath: () => path.join(tmpDir, 'data.json'),
   getAliasFilePath: () => path.join(tmpDir, 'aliases.json'),
   getConfirmFilePath: () => path.join(tmpDir, 'confirm.json'),
+  getGlobalStoreDirPath: () => path.join(tmpDir, 'store'),
   ensureDataDirectoryExists: () => {
     if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
   },
   findProjectFile: () => null,
+  findProjectStoreDir: () => null,
   clearProjectFileCache: () => {},
 }));
 
@@ -28,6 +32,7 @@ import {
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-store-'));
+  storeDir = path.join(tmpDir, 'store');
   dataPath = path.join(tmpDir, 'data.json');
   clearStoreCaches();
 });
@@ -36,14 +41,20 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-// ── Helper ────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────
+//
+// v1.10.0: `writeData`/`readData` interact with the new file-per-entry store
+// directory so tests can continue asserting against a legacy-shaped object
+// without caring about the wrapper-file format. Tests that specifically
+// exercise the legacy→directory migration path write raw `data.json` directly
+// (bypassing these helpers) and assert against the resulting store directory.
 
 function writeData(data: Record<string, unknown>): void {
-  fs.writeFileSync(dataPath, JSON.stringify(data));
+  writeDirectoryStore(storeDir, data);
 }
 
 function readData(): Record<string, unknown> {
-  return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+  return readDirectoryStore(storeDir) as Record<string, unknown>;
 }
 
 // ── ScopedStore: load/save cycle ─────────────────────────────────────
@@ -89,7 +100,8 @@ describe('ScopedStore load/save cycle', () => {
     clearStoreCaches();
 
     saveAliasMap({ zulu: 'z.key', alpha: 'a.key' }, 'global');
-    const raw = fs.readFileSync(dataPath, 'utf8');
+    // v1.10.0: aliases now live in a sidecar `_aliases.json` inside store/
+    const raw = fs.readFileSync(path.join(storeDir, '_aliases.json'), 'utf8');
     const alphaIdx = raw.indexOf('"alpha"');
     const zuluIdx = raw.indexOf('"zulu"');
     expect(alphaIdx).toBeLessThan(zuluIdx);
@@ -103,9 +115,13 @@ describe('mtime caching', () => {
     writeData({ entries: { x: '1' }, aliases: {}, confirm: {} });
     clearStoreCaches();
 
+    // v1.10.0: the directory store assembles a fresh UnifiedData object on
+    // each load(), so reference equality no longer holds. What matters is
+    // that repeated loads return structurally equal data without re-reading
+    // entry files whose mtimes haven't changed.
     const first = loadEntries('global');
     const second = loadEntries('global');
-    expect(first).toBe(second); // same reference = cache hit
+    expect(second).toEqual(first);
   });
 
   it('invalidates cache when file is externally modified', () => {
@@ -114,13 +130,13 @@ describe('mtime caching', () => {
 
     loadEntries('global');
 
-    // External modification (simulate another process)
-    const newContent = JSON.stringify({ entries: { x: '2' }, aliases: {}, confirm: {} });
-    // Need a different mtime — touch after a small delay
-    const originalMtime = fs.statSync(dataPath).mtimeMs;
-    // Force different mtime
-    fs.writeFileSync(dataPath, newContent);
-    const fd = fs.openSync(dataPath, 'r+');
+    // External modification (simulate another process) — write a new wrapper
+    // to the entry file with a different mtime. The per-file mtime cache
+    // should detect the change on the next load().
+    const entryPath = path.join(storeDir, 'x.json');
+    const originalMtime = fs.statSync(entryPath).mtimeMs;
+    fs.writeFileSync(entryPath, JSON.stringify({ value: '2' }));
+    const fd = fs.openSync(entryPath, 'r+');
     fs.futimesSync(fd, new Date(), new Date(originalMtime + 1000));
     fs.closeSync(fd);
 
@@ -186,14 +202,18 @@ describe('error recovery', () => {
   });
 
   it('treats file without entries key as legacy and migrates it', () => {
-    // A file without an "entries" key is treated as legacy (entries-only format)
-    // The entire content becomes the entries
-    writeData({ aliases: { x: 'y' }, confirm: {} });
+    // A unified file without an "entries" key is treated as legacy
+    // (entries-only format from the pre-unified era). The entire content
+    // becomes the entries. The v1.10.0 migration then converts the resulting
+    // unified file to the per-entry directory layout in a second step. Note
+    // that the flatten→unflatten roundtrip prunes empty subtrees like
+    // `confirm: {}`, so only string-leaf branches survive — this matches the
+    // documented file-per-entry semantics.
+    fs.writeFileSync(dataPath, JSON.stringify({ aliases: { x: 'y' }, confirm: {} }));
     clearStoreCaches();
 
     const entries = loadEntries('global');
-    // Legacy migration wraps the entire content as entries
-    expect(entries).toEqual({ aliases: { x: 'y' }, confirm: {} });
+    expect(entries).toEqual({ aliases: { x: 'y' } });
   });
 });
 
@@ -240,15 +260,20 @@ describe('meta operations', () => {
   });
 
   it('saveEntriesAndRemoveMeta removes key and children', () => {
+    // v1.10.0: meta lives inside entry wrapper files, so there's no such
+    // thing as "meta for a key that has no entry". Every meta key must have
+    // a corresponding leaf entry. Added `other` as a real leaf so its meta
+    // has a home.
     writeData({
-      entries: { srv: { ip: '1' } },
+      entries: { srv: { ip: '1' }, other: 'val' },
       aliases: {},
       confirm: {},
-      _meta: { 'srv': 100, 'srv.ip': 200, 'other': 300 },
+      _meta: { 'srv.ip': 200, 'other': 300 },
     });
     clearStoreCaches();
 
-    saveEntriesAndRemoveMeta({}, 'srv', 'global');
+    // Keep `other` in the new entries state so its meta is preserved
+    saveEntriesAndRemoveMeta({ other: 'val' }, 'srv', 'global');
 
     const meta = loadMeta('global');
     expect(meta['srv']).toBeUndefined();
@@ -309,7 +334,8 @@ describe('merged accessors (global-only, no project)', () => {
   });
 
   it('loadMetaMerged returns global meta when no project', () => {
-    writeData({ entries: {}, aliases: {}, confirm: {}, _meta: { k: 123 } });
+    // v1.10.0: meta lives inside entry files, so `k` needs a real entry.
+    writeData({ entries: { k: 'v' }, aliases: {}, confirm: {}, _meta: { k: 123 } });
     clearStoreCaches();
 
     expect(loadMetaMerged()).toEqual({ k: 123 });

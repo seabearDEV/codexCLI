@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-04-07
+
+### Changed
+
+- **File-per-entry store layout** — `.codexcli.json` (project) and `~/.codexcli/data.json` (global) are replaced by a `.codexcli/` directory (project) and `~/.codexcli/store/` directory (global). Each entry lives in its own file as `<dotted-key>.json` with a `{value, meta: {created, updated}}` wrapper. Store-level state lives in sidecar files `_aliases.json` and `_confirm.json`. Automatic, idempotent migration runs on first access after upgrade; old files are renamed to `.backup`. No user-visible CLI or MCP changes — the in-memory shape returned by every store-layer function is identical. Closes [#54](https://github.com/seabearDEV/codexCLI/issues/54).
+  - **Why**: the old single-file layout produced merge conflicts for multi-dev projects whenever two developers added different entries on parallel branches — both writes touched the same JSON region and git textual merge fought them. Per-entry files eliminate that entire class of conflicts: git merges the directory file-by-file, so different-key concurrent edits no longer conflict at all, and same-key edits (the rare case where you actually want a human looking) remain visible in the diff.
+  - **`meta.created` from day one** — every entry wrapper gets both `meta.created` (set on first write, preserved across updates) and `meta.updated` (bumped on every write). Migrated entries preserve the legacy `_meta[key]` timestamp as both fields; entries that had no legacy timestamp migrate as `[untracked]` (no `meta` block) so `ccli stale` continues to surface them accurately.
+  - **Hand-editing is unsupported** — the wrapper format assumes only the CLI, MCP tools, or a future UI touch the files. Direct edits desync per-entry metadata (staleness, future provenance fields) and break the wrapper contract. Documented as `conventions.editSurface` in the codex.
+  - **Dirty-tracking save()** — only files whose wrapper changed are rewritten, so single-entry updates touch exactly one file instead of rewriting all N.
+  - **Bulk-op atomicity** — `reset --entries` and `import --replace` build the new state in a sibling `.codexcli.tmp/` directory and swap atomically via double-rename; failure mid-swap leaves the old state intact and is self-cleaned on next startup.
+  - **`autoBackup`** now recursively copies the new store directory via `fs.cpSync`, plus any lingering legacy files as fallback.
+  - **`ccli init`** creates a `.codexcli/` directory (not a file) and seeds empty `_aliases.json` / `_confirm.json` sidecars. `ccli init --remove` and `ccli project --remove` use `fs.rmSync` which handles both the new directory and legacy file uniformly.
+
+### Added
+
+- **`findProjectStoreDir()`** in `src/utils/paths.ts` — purpose-built resolver that walks up looking for a `.codexcli/` directory specifically, used by store internals. `findProjectFile()` remains as the general-purpose "does a project exist, where is it?" query and now recognizes both the new directory and the legacy file, preferring the directory when both exist.
+- **`getGlobalStoreDirPath()`** in `src/utils/paths.ts` — returns `~/.codexcli/store/`, the v1.10.0 global store location.
+- **Design decision entries in the codex** — `arch.storeLayout` captures the decision and rationale; `conventions.editSurface` codifies the "CLI / MCP / future UI only" rule. Future sessions inherit both without relitigating.
+
+### Removed
+
+- **`createScopedStore` factory** in `src/store.ts` — replaced entirely by `createDirectoryStore` in `src/utils/directoryStore.ts`. Public API (`loadEntries`, `saveEntries`, `loadMeta`, etc.) is unchanged; only the private implementation behind it.
+- **`ScopedStore.prime()`** — removed from the interface and implementation. It was a no-op carried forward from the legacy migration cache; the new migration path writes the directory directly and does not need it.
+
 ## [1.9.2] - 2026-04-07
 
 ### Fixed

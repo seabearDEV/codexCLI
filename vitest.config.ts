@@ -9,6 +9,7 @@ export default defineConfig({
     env: { CODEX_DATA_DIR: path.join(os.tmpdir(), 'codexcli-vitest') },
     root: './src',
     include: ['**/__tests__/**/*.ts', '**/*.{test,spec}.ts'],
+    exclude: ['**/__tests__/helpers/**'],
     coverage: {
       provider: 'v8',
       reportsDirectory: '../coverage',

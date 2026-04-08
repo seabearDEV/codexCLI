@@ -21,10 +21,20 @@ export function createAutoBackup(label: string): string | null {
     const backupSubDir = path.join(backupDir, `${label}-${timestamp}`);
     fs.mkdirSync(backupSubDir, { mode: 0o700 });
 
-    const filesToBackup = ['data.json', 'entries.json', 'aliases.json', 'confirm.json'];
     let backedUp = 0;
 
-    for (const file of filesToBackup) {
+    // v1.10.0 store directory — copied recursively
+    const storeDir = path.join(dataDir, 'store');
+    if (fs.existsSync(storeDir) && fs.statSync(storeDir).isDirectory()) {
+      const destStore = path.join(backupSubDir, 'store');
+      fs.cpSync(storeDir, destStore, { recursive: true });
+      backedUp++;
+    }
+
+    // Legacy files — may still exist pre-migration or as .backup artifacts
+    // post-migration. Back them up alongside the new store directory.
+    const legacyFiles = ['data.json', 'entries.json', 'aliases.json', 'confirm.json'];
+    for (const file of legacyFiles) {
       const src = path.join(dataDir, file);
       if (fs.existsSync(src)) {
         const dest = path.join(backupSubDir, file);

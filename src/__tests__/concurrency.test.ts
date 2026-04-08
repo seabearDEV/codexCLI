@@ -8,6 +8,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { execSync, fork } from 'child_process';
+import { readStoreState } from './helpers/readStoreState';
 
 let tmpDir: string;
 
@@ -203,11 +204,14 @@ for (let i = 0; i < 20; i++) {
   });
 
   it('stale lock is automatically broken', () => {
-    const dataPath = path.join(tmpDir, 'data.json');
-    fs.writeFileSync(dataPath, JSON.stringify({ entries: {}, aliases: {}, confirm: {} }));
+    // v1.10.0: seed the new store directory and use its sibling .lock path
+    const storeDir = path.join(tmpDir, 'store');
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, '_aliases.json'), '{}');
+    fs.writeFileSync(path.join(storeDir, '_confirm.json'), '{}');
 
-    // Create a "stale" lock (mtime 20s ago)
-    const lockPath = dataPath + '.lock';
+    // Create a "stale" lock (mtime 20s ago) at the sibling lock path
+    const lockPath = storeDir + '.lock';
     fs.writeFileSync(lockPath, '99999');
     const past = new Date(Date.now() - 20000);
     fs.utimesSync(lockPath, past, past);
@@ -222,15 +226,18 @@ for (let i = 0; i < 20; i++) {
     expect(fs.existsSync(lockPath)).toBe(false);
 
     // Data should be written
-    const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    const data = readStoreState(tmpDir) as any;
     expect(data.entries.stale?.lock?.test).toBe('it works');
   });
 });
 
 describe('concurrent CLI invocations', () => {
   it('parallel set commands all succeed', () => {
-    const dataPath = path.join(tmpDir, 'data.json');
-    fs.writeFileSync(dataPath, JSON.stringify({ entries: {}, aliases: {}, confirm: {} }));
+    // v1.10.0: seed the new store directory
+    const storeDir = path.join(tmpDir, 'store');
+    fs.mkdirSync(storeDir, { recursive: true });
+    fs.writeFileSync(path.join(storeDir, '_aliases.json'), '{}');
+    fs.writeFileSync(path.join(storeDir, '_confirm.json'), '{}');
 
     const COMMANDS = 8;
     const promises: Promise<string>[] = [];
@@ -266,7 +273,7 @@ describe('concurrent CLI invocations', () => {
     }
 
     // Verify all entries exist
-    const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    const data = readStoreState(tmpDir) as any;
     for (let i = 0; i < COMMANDS; i++) {
       expect(data.entries.parallel[`key${i}`]).toBe(`value${i}`);
     }

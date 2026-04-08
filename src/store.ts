@@ -1,15 +1,26 @@
 import fs from 'fs';
 import path from 'path';
 import { CodexData } from './types';
-import { getUnifiedDataFilePath, getDataDirectory, getAliasFilePath, getConfirmFilePath, ensureDataDirectoryExists, findProjectFile, clearProjectFileCache } from './utils/paths';
+import {
+  getUnifiedDataFilePath,
+  getDataDirectory,
+  getAliasFilePath,
+  getConfirmFilePath,
+  getGlobalStoreDirPath,
+  ensureDataDirectoryExists,
+  findProjectFile,
+  findProjectStoreDir,
+  clearProjectFileCache,
+} from './utils/paths';
 
 export { findProjectFile, clearProjectFileCache } from './utils/paths';
 import { saveJsonSorted } from './utils/saveJsonSorted';
+import { createDirectoryStore, migrateFileToDirectory } from './utils/directoryStore';
 import { debug } from './utils/debug';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
-interface UnifiedData {
+export interface UnifiedData {
   entries: CodexData;
   aliases: Record<string, string>;
   confirm: Record<string, true>;
@@ -21,108 +32,63 @@ export type Scope = 'project' | 'global' | 'auto';
 
 // ── ScopedStore ────────────────────────────────────────────────────────
 
-interface ScopedStore {
+export interface ScopedStore {
   load(): UnifiedData;
   save(data: UnifiedData): void;
   clear(): void;
-  prime(data: UnifiedData, mtime: number): void;
-}
-
-function createScopedStore(getFilePath: () => string, ensureDir: () => void): ScopedStore {
-  let cache: UnifiedData | null = null;
-  let cacheMtime: number | null = null;
-
-  function clear(): void {
-    cache = null;
-    cacheMtime = null;
-  }
-
-  function load(): UnifiedData {
-    const filePath = getFilePath();
-
-    // Fast path: mtime cache hit
-    if (cache !== null && cacheMtime !== null) {
-      try {
-        if (fs.statSync(filePath).mtimeMs === cacheMtime) {
-          return cache;
-        }
-      } catch {
-        clear();
-      }
-    }
-
-    try {
-      const currentMtime = fs.statSync(filePath).mtimeMs;
-      const raw = fs.readFileSync(filePath, 'utf8');
-      const parsed = (raw?.trim() ? JSON.parse(raw) : {}) as Record<string, unknown>;
-
-      const result: UnifiedData = {
-        entries: (parsed.entries ?? {}) as CodexData,
-        aliases: (parsed.aliases ?? {}) as Record<string, string>,
-        confirm: (parsed.confirm ?? {}) as Record<string, true>,
-        _meta: (parsed._meta ?? undefined) as Record<string, number> | undefined,
-      };
-
-      cache = result;
-      cacheMtime = currentMtime;
-      return result;
-    } catch (error) {
-      // File doesn't exist — return empty data
-      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'ENOENT') {
-        return { entries: {}, aliases: {}, confirm: {} };
-      }
-      if (!(error instanceof SyntaxError && error.message.includes('Unexpected end'))) {
-        console.error('Error loading data:', error);
-      }
-      return { entries: {}, aliases: {}, confirm: {} };
-    }
-  }
-
-  function save(data: UnifiedData): void {
-    const filePath = getFilePath();
-    try {
-      ensureDir();
-      // Sort each section's keys before saving
-      const sorted: Record<string, unknown> = {
-        aliases: Object.fromEntries(Object.entries(data.aliases).sort(([a], [b]) => a.localeCompare(b))),
-        confirm: Object.fromEntries(Object.entries(data.confirm).sort(([a], [b]) => a.localeCompare(b))),
-        entries: data.entries, // entries are nested — saveJsonSorted handles top-level sort
-      };
-      if (data._meta && Object.keys(data._meta).length > 0) {
-        sorted._meta = Object.fromEntries(Object.entries(data._meta).sort(([a], [b]) => a.localeCompare(b)));
-      }
-      saveJsonSorted(filePath, sorted);
-      const mtime = fs.statSync(filePath).mtimeMs;
-      cache = data;
-      cacheMtime = mtime;
-    } catch (error) {
-      console.error('Error saving data:', error);
-    }
-  }
-
-  function prime(data: UnifiedData, mtime: number): void {
-    cache = data;
-    cacheMtime = mtime;
-  }
-
-  return { load, save, clear, prime };
 }
 
 // ── Global store singleton ─────────────────────────────────────────────
+//
+// Note: the old `createScopedStore` factory (single-file, mtime-cached) was
+// removed when the file-per-entry layout landed. The store is now always a
+// directory (`createDirectoryStore`). The legacy file migration path remains
+// below — `migrateToUnifiedFile` handles pre-v1.0 layouts, then
+// `migrateFileToDirectory` converts the unified file into the directory.
 
 let globalStore: ScopedStore | null = null;
 let migrationDone = false;
 
+/** Ensure the v1.10.0 global store directory exists. */
+function ensureGlobalStoreDirExists(): void {
+  ensureDataDirectoryExists();  // parent (~/.codexcli/) must exist first
+  const storeDir = getGlobalStoreDirPath();
+  if (!fs.existsSync(storeDir)) {
+    fs.mkdirSync(storeDir, { recursive: true, mode: 0o700 });
+  }
+}
+
 function getGlobalStore(): ScopedStore {
   if (!globalStore) {
-    globalStore = createScopedStore(getUnifiedDataFilePath, ensureDataDirectoryExists);
     if (!migrationDone) {
-      const primed = migrateToUnifiedFile();
-      if (primed) {
-        globalStore.prime(primed.data, primed.mtime);
+      // Two-stage migration chain:
+      //   1. Legacy → unified: handles pre-v1.0 data (entries.json + aliases.json + confirm.json)
+      //      and the pre-rename data.json format. Produces a unified .codexcli/data.json.
+      //   2. Unified → directory (v1.10.0): converts the unified file to the file-per-entry
+      //      layout at ~/.codexcli/store/. This is the new canonical layout.
+      try {
+        migrateToUnifiedFile();
+      } catch (err) {
+        debug(`Legacy→unified migration error: ${String(err)}`);
+      }
+      try {
+        migrateFileToDirectory(getUnifiedDataFilePath(), getGlobalStoreDirPath());
+      } catch (err) {
+        debug(`Unified→directory migration error (global): ${String(err)}`);
+        // If migration failed and the store directory doesn't exist, the user's
+        // existing data.json would be invisible to the directory store. Warn so
+        // the failure is actionable rather than silently presenting an empty store.
+        if (!fs.existsSync(getGlobalStoreDirPath())) {
+          console.warn(
+            `[codexCLI] Warning: store migration failed and no store directory was created. ` +
+            `Your existing data may be inaccessible until migration succeeds. ` +
+            `Error: ${String(err)}`
+          );
+        }
       }
       migrationDone = true;
     }
+    globalStore = createDirectoryStore(getGlobalStoreDirPath, ensureGlobalStoreDirExists);
   }
   return globalStore;
 }
@@ -130,32 +96,51 @@ function getGlobalStore(): ScopedStore {
 // ── Project store singleton ────────────────────────────────────────────
 
 let projectStore: ScopedStore | null = null;
-let projectStorePath: string | null = null;
+let projectStoreDirPath: string | null = null;
 
 function getProjectStore(): ScopedStore | null {
-  const projectFile = findProjectFile();
-  if (!projectFile) {
+  // v1.10.0 on-demand migration: if no `.codexcli/` directory is found but a
+  // legacy `.codexcli.json` file exists at the same logical location, convert
+  // it in place before resolving the store.
+  let projectDir = findProjectStoreDir();
+
+  if (!projectDir) {
+    const legacyPath = findProjectFile();
+    // findProjectFile may return either a file or a directory. We only want to
+    // trigger migration if it's specifically a legacy `.codexcli.json` file.
+    if (legacyPath && path.basename(legacyPath) === '.codexcli.json') {
+      const newDir = path.join(path.dirname(legacyPath), '.codexcli');
+      try {
+        const result = migrateFileToDirectory(legacyPath, newDir);
+        if (result.status === 'migrated') {
+          debug(`Migrated project store: ${legacyPath} -> ${newDir}`);
+        }
+        clearProjectFileCache();
+        projectDir = findProjectStoreDir();
+      } catch (err) {
+        debug(`Project store migration failed for ${legacyPath}: ${String(err)}`);
+      }
+    }
+  }
+
+  if (!projectDir) {
     projectStore = null;
-    projectStorePath = null;
+    projectStoreDirPath = null;
     return null;
   }
 
-  // If the path changed (shouldn't normally happen within one process), recreate
-  if (projectStorePath !== projectFile) {
-    let dirEnsured = false;
-    projectStore = createScopedStore(
-      () => projectFile,
+  // Recreate the store if the resolved directory changed (rare within one process).
+  if (projectStoreDirPath !== projectDir) {
+    const resolved = projectDir;  // local const so closures capture a non-null string
+    projectStore = createDirectoryStore(
+      () => resolved,
       () => {
-        if (!dirEnsured) {
-          const dir = path.dirname(projectFile);
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-          }
-          dirEnsured = true;
+        if (!fs.existsSync(resolved)) {
+          fs.mkdirSync(resolved, { recursive: true, mode: 0o700 });
         }
       }
     );
-    projectStorePath = projectFile;
+    projectStoreDirPath = resolved;
   }
 
   return projectStore;
@@ -249,7 +234,7 @@ export function clearStoreCaches(): void {
   // Reset singletons so migration re-runs on next access
   globalStore = null;
   projectStore = null;
-  projectStorePath = null;
+  projectStoreDirPath = null;
   migrationDone = false;
   clearProjectFileCache();
 }

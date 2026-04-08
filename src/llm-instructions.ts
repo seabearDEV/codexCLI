@@ -19,8 +19,8 @@ SCHEMA (recommended namespaces):
 - deps.*         — notable dependencies and why they are used
 
 SCOPE:
-- If a .codexcli.json project file exists, reads/writes default to the project scope.
-- Use scope: "global" to target the user's personal global store (~/.codexcli/data.json).
+- If a .codexcli/ project store directory exists, reads/writes default to the project scope.
+- Use scope: "global" to target the user's personal global store (~/.codexcli/store/).
 - codex_get with no key shows project entries by default. Pass all: true to see both scopes.
 
 TOOLS (19 total):
@@ -62,9 +62,9 @@ FRESHNESS:
 - Run codex_stale after codex_context to audit knowledge freshness when starting a new task.
 
 PREFER MCP TOOLS:
-- Always interact with the data store via MCP tools (codex_get, codex_set, codex_search, etc.) rather than reading .codexcli.json directly.
+- Always interact with the data store via MCP tools (codex_get, codex_set, codex_search, etc.) rather than reading .codexcli/*.json directly.
 - Direct file reads bypass audit logging, alias resolution, interpolation, and scope fallthrough.
-- The only reason to read .codexcli.json directly is debugging the MCP server itself.
+- Hand-editing .codexcli/*.json files is unsupported — it desyncs per-entry meta (staleness timestamps) and breaks the wrapper format. Use the CLI or MCP tools.
 
 EFFECTIVE USAGE:
 - Always call codex_context as your FIRST tool call to bootstrap session knowledge.

@@ -12,7 +12,6 @@ import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
 import { findProjectFile, clearProjectFileCache } from '../store';
-import { saveJsonSorted } from '../utils/saveJsonSorted';
 import { getAuditPath } from '../utils/audit';
 import { getTelemetryPath, getMissPathsPath } from '../utils/telemetry';
 import { scanCodebase, ScaffoldEntry } from './scan';
@@ -302,7 +301,7 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
   console.log(color.gray('\nThis is a preview. No data was modified.'));
 }
 
-const PERSISTENCE_VALUE = '.codexcli.json = project knowledge (any agent). CLAUDE.md = Claude behavioral directives. MEMORY.md = personal user preferences. Rule: if another agent would benefit, it belongs in .codexcli.json.';
+const PERSISTENCE_VALUE = '.codexcli/ = project knowledge store (any agent, file-per-entry layout). CLAUDE.md = Claude behavioral directives. MEMORY.md = personal user preferences. Rule: if another agent would benefit, it belongs in .codexcli/.';
 
 export function handleProjectFile(options: {
   remove?: boolean;
@@ -313,25 +312,48 @@ export function handleProjectFile(options: {
   dryRun?: boolean;
 }): void {
   if (options.remove) {
-    const projectFile = findProjectFile();
-    if (!projectFile) {
-      printError('No .codexcli.json found in current directory tree.');
+    const projectPath = findProjectFile();
+    if (!projectPath) {
+      printError('No .codexcli project store found in current directory tree.');
       return;
     }
-    fs.unlinkSync(projectFile);
+    // findProjectFile may return either a legacy .codexcli.json file or a
+    // v1.10.0 .codexcli/ directory. rmSync handles both uniformly.
+    fs.rmSync(projectPath, { recursive: true, force: true });
     clearProjectFileCache();
-    printSuccess(`Removed: ${projectFile}`);
+    printSuccess(`Removed: ${projectPath}`);
     return;
   }
 
   const cwd = process.cwd();
-  const target = path.join(cwd, '.codexcli.json');
-  const existed = fs.existsSync(target);
+  const target = path.join(cwd, '.codexcli');
 
-  // Create .codexcli.json if it doesn't exist
+  // Single stat call to determine the target's state.
+  let targetStat: ReturnType<typeof fs.statSync> | null = null;
+  try {
+    targetStat = fs.statSync(target);
+  } catch { /* ENOENT — target doesn't exist yet */ }
+
+  // Check for the edge case where target exists but is not a directory
+  // (e.g. a leftover legacy file). mkdirSync would throw EEXIST in that case.
+  if (targetStat !== null && !targetStat.isDirectory()) {
+    const kind = targetStat.isFile() ? 'file' : targetStat.isSymbolicLink() ? 'symlink' : 'non-directory';
+    printError(
+      `Cannot initialize: '${target}' already exists as a ${kind}. ` +
+      `Remove it manually before running 'ccli init'.`
+    );
+    return;
+  }
+
+  const existed = targetStat !== null;
+
+  // Create .codexcli/ directory with empty sidecars if it doesn't exist
   if (!existed) {
     if (!options.dryRun) {
-      saveJsonSorted(target, { entries: {}, aliases: {}, confirm: {} });
+      fs.mkdirSync(target, { recursive: true, mode: 0o700 });
+      // Seed empty sidecars so the store has a consistent initial state
+      fs.writeFileSync(path.join(target, '_aliases.json'), '{}\n', { mode: 0o600 });
+      fs.writeFileSync(path.join(target, '_confirm.json'), '{}\n', { mode: 0o600 });
       clearProjectFileCache();
     }
     printSuccess(`Created: ${target}`);
