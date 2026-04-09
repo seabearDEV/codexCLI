@@ -16,6 +16,10 @@ Always use codexCLI MCP tools (`codex_get`, `codex_set`, `codex_search`, etc.) t
 
 When you discover something non-obvious (a gotcha, an architectural decision, a pattern), store it with `codex_set` before the session ends. Future sessions benefit from what you learn now.
 
+## Write seeds, not encyclopedias
+
+Codex entries are seeds — small inputs that select rich regions of the LLM's pretrained terrain, not stores that hold the terrain itself. Optimize for **activation per byte**, not completeness. Before writing an entry, ask: *does this seed land somewhere the LLM couldn't have reached on its own?* If no, skip it. If yes, the byte cost is justified. See `conventions.seedDensity` for the full principle and `project.seedRoadmap` for the development plan that follows from it.
+
 ## Do not store
 
 Things derivable from `package.json`, `README.md`, or the code itself. The codex is for insights that would otherwise be lost between sessions.
