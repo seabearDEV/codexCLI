@@ -159,3 +159,9 @@ audit.jsonl
 # dogfooding premise of the project).
 .codexcli.json.backup
 
+# Seqlock generation counter (added in #58 for torn-read detection).
+# Bumps by 2 on every store write — tracking it would create constant
+# diff noise on every codex update. The codex tools manage it; git
+# should never see it.
+.codexcli/_epoch.json
+
