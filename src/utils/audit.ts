@@ -109,41 +109,103 @@ function pushAuditLine(entries: AuditEntry[], line: string): void {
   }
 }
 
+// ── Incremental tail cache ─────────────────────────────────────────────
+//
+// audit.jsonl is append-only and grows monotonically. Re-reading the
+// whole file on every loadAuditLog() call costs O(file-size) per
+// invocation, which dominated the codex_audit tool's cost in v1.11.1
+// manual testing — bulk-batch parallel calls froze the MCP server while
+// queued audit reads serialized through the event loop.
+//
+// This cache holds the parsed entries plus the byte offset of the last
+// successful read. Subsequent reads stat the file: if the size grew, we
+// pread() just the new tail and parse only the new lines. If the size
+// shrank (rotation, truncation, or test cleanup), we drop the cache and
+// fall back to a full re-read on the next call.
+
+let cachedAuditEntries: AuditEntry[] = [];
+let cachedAuditSize = 0;
+let cachedAuditPath = '';
+
+/** Reset the in-memory audit cache. Used by tests that swap CODEX_DATA_DIR. */
+export function clearAuditLogCache(): void {
+  cachedAuditEntries = [];
+  cachedAuditSize = 0;
+  cachedAuditPath = '';
+}
+
 export function loadAuditLog(): AuditEntry[] {
-  const chunkSize = 64 * 1024;
-  const entries: AuditEntry[] = [];
+  const auditPath = getAuditPath();
 
+  // If the audit path changed (CODEX_DATA_DIR redirect, scope swap, etc.),
+  // the previous cache is for a different file — reset.
+  if (auditPath !== cachedAuditPath) {
+    cachedAuditEntries = [];
+    cachedAuditSize = 0;
+    cachedAuditPath = auditPath;
+  }
+
+  let size: number;
   try {
-    const fd = fs.openSync(getAuditPath(), 'r');
-    const buffer = Buffer.alloc(chunkSize);
-    let remainder = '';
-
-    try {
-      let bytesRead: number;
-      do {
-        bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
-        if (bytesRead <= 0) break;
-
-        const chunk = remainder + buffer.toString('utf8', 0, bytesRead);
-        const lines = chunk.split('\n');
-        remainder = lines.pop() ?? '';
-
-        for (const line of lines) {
-          pushAuditLine(entries, line);
-        }
-      } while (bytesRead === buffer.length);
-
-      if (remainder) {
-        pushAuditLine(entries, remainder);
-      }
-
-      return entries;
-    } finally {
-      fs.closeSync(fd);
-    }
+    size = fs.statSync(auditPath).size;
   } catch {
+    // File missing — drop any stale cache and return empty.
+    cachedAuditEntries = [];
+    cachedAuditSize = 0;
     return [];
   }
+
+  // File shrunk (rotation / truncation / external rewrite). The cache
+  // would no longer match the on-disk prefix, so drop it and re-read
+  // from byte 0.
+  if (size < cachedAuditSize) {
+    cachedAuditEntries = [];
+    cachedAuditSize = 0;
+  }
+
+  // No new bytes — return the cached entries (a defensive copy so
+  // callers that mutate the array can't pollute the cache).
+  if (size === cachedAuditSize) {
+    return cachedAuditEntries.slice();
+  }
+
+  // Read just the new tail and parse only its complete lines.
+  const toRead = size - cachedAuditSize;
+  let fd: number;
+  try {
+    fd = fs.openSync(auditPath, 'r');
+  } catch {
+    return cachedAuditEntries.slice();
+  }
+  try {
+    const buffer = Buffer.alloc(toRead);
+    let total = 0;
+    while (total < toRead) {
+      const n = fs.readSync(fd, buffer, total, toRead - total, cachedAuditSize + total);
+      if (n <= 0) break;
+      total += n;
+    }
+    const text = buffer.toString('utf8', 0, total);
+    // Only commit complete lines: if a writer is mid-append, the trailing
+    // partial line stays unparsed and will be picked up on the next read
+    // once it's been flushed with its newline terminator.
+    const lastNewline = text.lastIndexOf('\n');
+    if (lastNewline === -1) {
+      // No complete lines yet — leave cachedAuditSize unchanged.
+      return cachedAuditEntries.slice();
+    }
+    const completeText = text.slice(0, lastNewline + 1);
+    const completeBytes = Buffer.byteLength(completeText, 'utf8');
+    const lines = completeText.split('\n');
+    for (const line of lines) {
+      pushAuditLine(cachedAuditEntries, line);
+    }
+    cachedAuditSize += completeBytes;
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  return cachedAuditEntries.slice();
 }
 
 export function queryAuditLog(options: AuditQueryOptions = {}): AuditEntry[] {
