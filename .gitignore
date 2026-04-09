@@ -165,3 +165,9 @@ audit.jsonl
 # should never see it.
 .codexcli/_epoch.json
 
+# Personal session continuity entry (per-user, per-machine, per-pair).
+# Holds collaboration texture, mood, "where we left off" notes for the
+# specific user-agent pair. Project-level open threads belong in
+# project.inFlight (committed); session.last is the personal overlay.
+.codexcli/session.last.json
+
