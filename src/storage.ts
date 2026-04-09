@@ -2,7 +2,7 @@ import { color } from './formatting';
 import { getNestedValue, setNestedValue, removeNestedValue, flattenObject } from './utils/objectPath';
 import { CodexData, CodexValue } from './types';
 import { debug } from './utils/debug';
-import { Scope, loadEntries, saveEntries, loadEntriesMerged, findProjectFile, saveEntriesAndTouchMeta, saveEntriesAndRemoveMeta } from './store';
+import { Scope, loadEntries, saveEntries, loadEntriesMerged, findProjectFile, saveEntriesAndTouchMeta, saveEntriesAndRemoveMeta, getEntryFast, setEntryFast } from './store';
 import { isValidEntryKey } from './utils/directoryStore';
 
 export { Scope } from './store';
@@ -67,6 +67,35 @@ export function saveData(data: CodexData, scope?: Scope  ): void {
  * With 'auto' scope: checks project first, falls through to global.
  */
 export function getValue(key: string, scope?: Scope  ): CodexValue | undefined {
+  // Fast path: leaf-key lookups read exactly one entry file instead of
+  // scanning the whole store directory. On miss we fall through to the slow
+  // path, which can also resolve subtree lookups (where `key` is a parent of
+  // multiple stored leaves) — those still require the full load.
+  if (isValidEntryKey(key)) {
+    // Wrapped in try/catch so any unexpected fast-path failure (including
+    // test environments where the fast-path export is mocked away) silently
+    // degrades to the slow path instead of breaking the operation.
+    try {
+      if (!scope || scope === 'auto') {
+        if (findProjectFile()) {
+          const projectVal = getEntryFast(key, 'project');
+          if (projectVal !== undefined) return projectVal;
+          const globalVal = getEntryFast(key, 'global');
+          if (globalVal !== undefined) return globalVal;
+        } else {
+          const globalVal = getEntryFast(key, 'global');
+          if (globalVal !== undefined) return globalVal;
+        }
+      } else {
+        const v = getEntryFast(key, scope);
+        if (v !== undefined) return v;
+      }
+    } catch (err) {
+      debug(`getValue fast-path failed, falling through: ${String(err)}`);
+    }
+  }
+  // Slow path: full load + nested walk. Handles subtree returns and any case
+  // the fast path missed.
   if (!scope || scope === 'auto') {
     // Fallthrough: project first, then global
     if (findProjectFile()) {
@@ -95,6 +124,17 @@ export function setValue(key: string, value: string, scope?: Scope  ): void {
     throw new Error(`Invalid store key: ${JSON.stringify(key)}`);
   }
   const effectiveScope = scope ?? 'auto';
+  // Fast path: write a single entry file directly. Returns false if a parent
+  // or child collision means we'd have to restructure multiple files — in
+  // that case fall through to the full load + diff path which already
+  // handles those conversions. Wrapped in try/catch so any unexpected
+  // fast-path failure (including test mocks that omit the export) degrades
+  // gracefully to the slow path.
+  try {
+    if (setEntryFast(key, value, effectiveScope)) return;
+  } catch (err) {
+    debug(`setValue fast-path failed, falling through: ${String(err)}`);
+  }
   const data = loadEntries(effectiveScope);
   setNestedValue(data, key, value);
   saveEntriesAndTouchMeta(data, key, effectiveScope);

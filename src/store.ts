@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { CodexData } from './types';
+import { CodexData, CodexValue } from './types';
 import {
   getUnifiedDataFilePath,
   getDataDirectory,
@@ -36,6 +36,21 @@ export interface ScopedStore {
   load(): UnifiedData;
   save(data: UnifiedData): void;
   clear(): void;
+  /**
+   * Fast-path single-entry read. Reads exactly one entry file (no directory
+   * scan). Returns `undefined` on miss — including the case where `key` is a
+   * parent of multiple stored entries (the slow path via `load()` is required
+   * to materialize a subtree).
+   */
+  getOne(key: string): CodexValue | undefined;
+  /**
+   * Fast-path single-entry write. Writes exactly one entry file (no full
+   * pre-load + diff). Returns `false` if a collision is detected that would
+   * require restructuring multiple files (parent-leaf conflict, or existing
+   * children that would need to be removed) — the caller must fall back to
+   * the full `save()` path in that case.
+   */
+  setOne(key: string, value: CodexValue, updated: number): boolean;
 }
 
 // ── Global store singleton ─────────────────────────────────────────────
@@ -187,6 +202,20 @@ export function saveEntries(data: CodexData, scope?: Scope  ): void {
   const store = resolveStore(scope);
   const current = store.load();
   store.save({ ...current, entries: data });
+}
+
+/** Fast-path leaf read. Returns undefined on miss; caller falls back to loadEntries. */
+export function getEntryFast(key: string, scope?: Scope): CodexValue | undefined {
+  return resolveStore(scope).getOne(key);
+}
+
+/**
+ * Fast-path leaf write. Returns true on success. Returns false if a parent /
+ * child collision means the slow path (full load + diff in `save()`) is needed
+ * to keep the on-disk store consistent.
+ */
+export function setEntryFast(key: string, value: CodexValue, scope?: Scope): boolean {
+  return resolveStore(scope).setOne(key, value, Date.now());
 }
 
 export function loadAliasMap(scope?: Scope  ): Record<string, string> {

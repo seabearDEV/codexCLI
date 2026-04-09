@@ -610,7 +610,140 @@ export function createDirectoryStore(
     });
   }
 
-  return { load, save, clear };
+  /**
+   * Fast-path single-entry read. Bypasses scanAndSync entirely — one stat +
+   * one read + one parse, regardless of how many other entries exist. Used by
+   * `getEntryFast` in `store.ts` for the common leaf-key lookup case.
+   *
+   * Returns `undefined` on ENOENT (no entry, or `key` is a parent of multiple
+   * stored leaves — the slow path via `load()` is required to materialize a
+   * subtree).
+   */
+  function getOne(key: string): CodexValue | undefined {
+    if (!isValidEntryKey(key)) return undefined;
+    const dir = getDirPath();
+    let filePath: string;
+    try {
+      filePath = entryFilePath(dir, key);
+    } catch {
+      return undefined;
+    }
+    try {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      const wrapper = parseEntryWrapper(raw);
+      return wrapper?.value;
+    } catch (err) {
+      if (!isENOENT(err)) {
+        debug(`getOne(${key}) failed: ${String(err)}`);
+      }
+      return undefined;
+    }
+  }
+
+  /**
+   * Fast-path single-entry write. Performs one cheap `readdirSync` for
+   * collision detection, writes the wrapper file under the store lock, and
+   * bumps the seqlock epoch — but skips the full `scanAndSync` that the
+   * normal `save()` path performs.
+   *
+   * Returns `false` (without writing) if a collision is detected:
+   *   - **Parent-leaf collision:** any ancestor of `key` exists as a stored
+   *     leaf (e.g. `key="a.b.c"` and `a.json` or `a.b.json` exists). The
+   *     write would require restructuring the parent into a subtree.
+   *   - **Child collision:** any stored entry has `key + '.'` as a prefix
+   *     (e.g. `key="a"` and `a.b.json` exists). The write would require
+   *     unlinking the children to keep the in-memory tree consistent.
+   *
+   * In either case the caller (`storage.ts:setValue`) falls back to the full
+   * `save()` path, which already handles these conversions correctly via its
+   * delete/write delta computation.
+   */
+  function setOne(key: string, value: CodexValue, updated: number): boolean {
+    if (!isValidEntryKey(key)) {
+      throw new Error(`Invalid store key: ${JSON.stringify(key)}`);
+    }
+    const dir = getDirPath();
+    ensureDir();
+    ensureReadme(dir);
+
+    return withFileLock(getStoreLockKey(dir), () => {
+      // Single readdir for collision detection. Cheap (one syscall) compared
+      // to scanAndSync's per-entry stat + read.
+      let dirEntries: string[];
+      try {
+        dirEntries = fs.readdirSync(dir);
+      } catch (err) {
+        if (isENOENT(err)) {
+          dirEntries = [];
+        } else {
+          throw err;
+        }
+      }
+
+      // Parent-leaf collision: walk up the dotted prefixes.
+      const parts = key.split('.');
+      for (let i = 1; i < parts.length; i++) {
+        const parent = parts.slice(0, i).join('.');
+        if (dirEntries.includes(parent + ENTRY_FILE_SUFFIX)) {
+          return false;  // caller falls back to slow path
+        }
+      }
+
+      // Child collision: any existing entry whose key starts with `${key}.`.
+      const childPrefix = key + '.';
+      for (const f of dirEntries) {
+        if (!isEntryFilename(f)) continue;
+        const otherKey = keyFromFilename(f);
+        if (otherKey.startsWith(childPrefix)) {
+          return false;  // caller falls back to slow path
+        }
+      }
+
+      // 0. Begin commit: bump epoch odd. Mirrors save()'s seqlock contract so
+      //    concurrent readers see the in-progress state and retry their scan.
+      const startEpoch = readEpoch(dir);
+      const inProgressEpoch = startEpoch + (startEpoch % 2 === 0 ? 1 : 2);
+      writeEpoch(dir, inProgressEpoch);
+
+      try {
+        const filePath = entryFilePath(dir, key);
+
+        // Preserve `meta.created` if the entry already exists.
+        let existingCreated: number | undefined;
+        try {
+          const existingRaw = fs.readFileSync(filePath, 'utf8');
+          existingCreated = parseEntryWrapper(existingRaw)?.meta?.created;
+        } catch (err) {
+          if (!isENOENT(err)) {
+            debug(`setOne(${key}) read-existing failed: ${String(err)}`);
+          }
+        }
+
+        const wrapper: EntryWrapper = {
+          value,
+          meta: { created: existingCreated ?? updated, updated },
+        };
+        atomicWriteFileSync(filePath, serializeEntryWrapper(wrapper));
+
+        // Refresh the per-entry cache so a subsequent load() doesn't re-read
+        // a file we just wrote ourselves.
+        try {
+          const mtimeMs = fs.statSync(filePath).mtimeMs;
+          entryCache.set(key, { wrapper, mtimeMs });
+        } catch (err) {
+          debug(`setOne(${key}) post-write stat failed: ${String(err)}`);
+        }
+      } finally {
+        // 6. End commit: bump epoch even. In a `finally` so a partially-failed
+        //    write still leaves the seqlock in a stable state for readers.
+        writeEpoch(dir, inProgressEpoch + 1);
+      }
+
+      return true;
+    });
+  }
+
+  return { load, save, clear, getOne, setOne };
 }
 
 // ── Migration ──────────────────────────────────────────────────────────
