@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.11.1-beta.2] - 2026-04-09
+
+Second packaging-only respin. No source-code changes; the only difference is in `.github/workflows/release.yml` where the beta channel now writes `Formula/ccli-beta.rb` (with class `CcliBeta`) instead of `Formula/ccli@beta.rb` (with class `CcliAtBeta`).
+
+**Why**: Homebrew's `Formulary.class_s` only handles `@<digit>`-versioned formulas (like `python@3.11`, `node@20`). It does NOT handle `@<letter>` like `@beta` — trying to load `ccli@beta.rb` errors with `Expected to find class Ccli@beta`, which isn't even a valid Ruby identifier. Both beta.0 and beta.1 wrote the un-loadable file. The dash form sidesteps brew's `class_s` entirely: `ccli-beta.rb` → `CcliBeta` via the standard separator + capitalize transform.
+
+The release workflow also now removes the obsolete `Formula/ccli@beta.rb` from the tap repo on the first beta tag after this fix lands, so existing tap users running `brew update` stop seeing the load error.
+
+**Install command changes**: `brew install seabearDEV/ccli/ccli-beta` (with a dash, not `@beta`). Binary is still invoked as `ccli-beta`.
+
 ## [1.11.1-beta.1] - 2026-04-09
 
 Packaging-only respin of v1.11.1-beta.0. No source-code changes; the only difference is in `.github/workflows/release.yml` where the Homebrew formula generator now installs the beta binary as `ccli-beta` instead of `ccli`. This lets `ccli@beta` coexist on a machine with stable `ccli` (no `brew unlink` cycling required to test the beta side-by-side). Stable formula generation is unchanged — still installs as `ccli`.

@@ -166,9 +166,16 @@ jobs:
           # binary name (`ccli-beta`) so both formulas can coexist on a
           # machine without symlink conflicts.
           if [[ "${version}" == *-* ]]; then
+            # Beta channel uses `ccli-beta.rb` (NOT `ccli@beta.rb`).
+            # Homebrew's `Formulary.class_s` only handles `@<digit>`-versioned
+            # formulas (like `python@3.11`, `node@20`); it does NOT handle
+            # `@<letter>` like `@beta`. Trying to load `ccli@beta.rb` errors
+            # with "Expected to find class Ccli@beta" — which isn't even a
+            # valid Ruby identifier. The dash form sidesteps brew's class_s
+            # entirely: `ccli-beta.rb` -> `CcliBeta` (separator + capitalize).
             echo "channel=beta" >> "$GITHUB_OUTPUT"
-            echo "formula_class=CcliAtBeta" >> "$GITHUB_OUTPUT"
-            echo "formula_file=ccli@beta.rb" >> "$GITHUB_OUTPUT"
+            echo "formula_class=CcliBeta" >> "$GITHUB_OUTPUT"
+            echo "formula_file=ccli-beta.rb" >> "$GITHUB_OUTPUT"
             echo "binary_name=ccli-beta" >> "$GITHUB_OUTPUT"
           else
             echo "channel=stable" >> "$GITHUB_OUTPUT"
@@ -247,6 +254,19 @@ jobs:
             end
           end
           EOF
+
+      - name: Clean up obsolete beta formula
+        if: steps.version.outputs.channel == 'beta'
+        working-directory: homebrew-ccli
+        run: |
+          # v1.11.1-beta.0 and beta.1 wrote `Formula/ccli@beta.rb`, which
+          # brew can't load (its class_s regex only handles @<digit>-versioned
+          # formulas). beta.2 renames to `ccli-beta.rb`. Remove the broken
+          # file from the tap so users running `brew update` stop seeing
+          # the load error.
+          if [[ -f Formula/ccli@beta.rb ]]; then
+            git rm Formula/ccli@beta.rb
+          fi
 
       - name: Push updated formula
         working-directory: homebrew-ccli
