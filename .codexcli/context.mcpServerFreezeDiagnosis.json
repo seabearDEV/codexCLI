@@ -1,0 +1,7 @@
+{
+  "value": "v1.11.1-beta.6→.7→.8 had three distinct MCP server freeze causes that all looked identical from the outside (server appears to hang mid-session, /mcp reconnect \"fixes\" it because it spawns a clean process). Before chasing a fourth perf bug, rule out all three: (1) scanAndSync re-scanning store dir on every loadEntries — fixed in b803683 via dir-mtime fast-skip. (2) loadAuditLog re-reading entire audit.jsonl on every call — fixed in 1810fc2 via incremental tail cache (clearAuditLogCache exported for tests). (3) Object.prototype poisoning via nsCoverage[e.ns]++ when telemetry namespace is __proto__/constructor/prototype — fixed in d773c4d by switching computeStats accumulators to Object.create(null). Cause #3 is the trickiest because the symptom (silent MCP SDK request dispatch failure on next tool call) is identical to a perf hang. If a future freeze appears: (a) check recent telemetry/audit entries for reserved-key namespaces, (b) grep for any obj[userKey]++ pattern on plain objects, (c) profile bulk-scan tool wall time vs cache hit/miss before assuming it's a fourth perf issue.",
+  "meta": {
+    "created": 1775757481098,
+    "updated": 1775757481098
+  }
+}

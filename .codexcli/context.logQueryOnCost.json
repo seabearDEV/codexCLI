@@ -1,0 +1,7 @@
+{
+  "value": "queryAuditLog and computeStats both iterate the full in-memory log array. The 1810fc2 audit tail cache fixed disk re-reads but the parsed cache itself grows O(N) over a process's lifetime, and queries against it scan the whole array. Stress test (10k iters, scripts/stress-test.mjs) showed ~1.4x slowdown attributable to this when audit/stats are in the op mix and store size is held constant. Not a freeze — soft, proportional, sub-100ms even at 14k calls. Most sessions never accumulate enough log entries for it to matter, but a long-lived MCP server doing heavy stats work could feel it. Sibling perf issue to v1.12 #57; consider filing as a v1.12+ follow-up. Defenses: index by time bucket, page through log in chunks, or cap cache size with LRU/ring buffer.",
+  "meta": {
+    "created": 1775759526947,
+    "updated": 1775759526947
+  }
+}
