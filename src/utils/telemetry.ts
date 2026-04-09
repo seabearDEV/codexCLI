@@ -311,7 +311,7 @@ export function classifyOp(tool: string): TelemetryEntry['op'] {
       return 'exec';
     case 'codex_context':
     case 'codex_get':
-    case 'codex_search':
+    case 'codex_find':
     case 'codex_export':
     case 'codex_alias_list':
     case 'codex_config_get':
@@ -527,7 +527,7 @@ export function computeStats(periodDays = 0): TelemetryStats {
   // Filter noise from the namespace dashboard:
   //   - failed operations (e.g. rejected validator writes like `_aliases`,
   //     `flog/`, `__proto__`) should not show up as "namespace activity"
-  //   - codex_search keys are search terms (regex, substring) — they're not
+  //   - codex_find keys are search terms (regex, substring) — they're not
   //     namespaces, but extractNamespace would happily slice them on `.`
   //     and produce phantom namespaces like `^arch\` or `flog/`
   //   - codex_alias_set / codex_alias_remove keys are alias names, not entry
@@ -538,7 +538,7 @@ export function computeStats(periodDays = 0): TelemetryStats {
   for (const e of entries) {
     if (e.ns === '*') continue;
     if (e.success === false) continue;
-    if (e.tool === 'codex_search') continue;
+    if (e.tool === 'codex_find') continue;
     if (e.tool === 'codex_alias_set' || e.tool === 'codex_alias_remove') continue;
     if (!nsCoverage[e.ns]) nsCoverage[e.ns] = { reads: 0, writes: 0, lastWrite: undefined };
     if (e.op === 'read') nsCoverage[e.ns].reads++;

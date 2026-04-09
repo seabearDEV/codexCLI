@@ -347,19 +347,19 @@ describe('MCP Server - Advanced Tests', () => {
     });
   });
 
-  // ── codex_search edge cases ─────────────────────────────────────────
+  // ── codex_find edge cases ─────────────────────────────────────────
 
-  describe('codex_search edge cases', () => {
+  describe('codex_find edge cases', () => {
     it('returns empty results for unmatched search', async () => {
       mockData.foo = 'bar';
-      const result = await toolHandlers['codex_search']({ searchTerm: 'zzzzzzz' });
+      const result = await toolHandlers['codex_find']({ query: 'zzzzzzz' });
       const text = result.content[0].text;
       expect(text).toContain('No results');
     });
 
     it('searches across keys and values', async () => {
       mockData.server = { ip: '192.168.1.100' };
-      const result = await toolHandlers['codex_search']({ searchTerm: '192.168' });
+      const result = await toolHandlers['codex_find']({ query: '192.168' });
       const text = result.content[0].text;
       expect(text).toContain('192.168');
     });
@@ -367,7 +367,7 @@ describe('MCP Server - Advanced Tests', () => {
     it('handles regex search', async () => {
       mockData.server = { port: '8080' };
       mockData.app = { port: '3000' };
-      const result = await toolHandlers['codex_search']({ searchTerm: '^\\d{4}$', regex: true });
+      const result = await toolHandlers['codex_find']({ query: '^\\d{4}$', regex: true });
       const text = result.content[0].text;
       expect(text).toContain('port');
     });
@@ -423,7 +423,7 @@ describe('MCP Server - Advanced Tests', () => {
 
   describe('codex_alias edge cases', () => {
     it('codex_alias_set creates alias and returns success', async () => {
-      const result = await toolHandlers['codex_alias_set']({ alias: 'srv', target: 'server.ip' });
+      const result = await toolHandlers['codex_alias_set']({ alias: 'srv', key: 'server.ip' });
       expect(result.content[0].text).toContain('srv');
     });
 

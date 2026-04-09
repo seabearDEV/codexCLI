@@ -169,12 +169,12 @@ describe('MCP Integration (real I/O)', () => {
     });
   });
 
-  describe('codex_search', () => {
+  describe('codex_find', () => {
     it('finds entries by value content', () => {
       callMcpTool('codex_set', { key: 'server.ip', value: '192.168.1.100' });
       callMcpTool('codex_set', { key: 'app.name', value: 'TestApp' });
 
-      const result = callMcpTool('codex_search', { searchTerm: '192.168' });
+      const result = callMcpTool('codex_find', { query: '192.168' });
       expect(result.content[0].text).toContain('192.168');
       expect(result.content[0].text).not.toContain('TestApp');
     });
@@ -183,7 +183,7 @@ describe('MCP Integration (real I/O)', () => {
   describe('codex_alias lifecycle', () => {
     it('creates alias and persists it on disk', () => {
       callMcpTool('codex_set', { key: 'commands.build', value: 'npm run build' });
-      callMcpTool('codex_alias_set', { alias: 'bld', path: 'commands.build' });
+      callMcpTool('codex_alias_set', { alias: 'bld', key: 'commands.build' });
 
       // Alias persisted on disk
       const data = readDataFile();

@@ -131,7 +131,7 @@ describe('MissWindowTracker', () => {
       op: 'read', hit: false, responseSize: 0,
     });
     tracker.onToolCall({
-      session: 's1', tool: 'codex_search', namespace: 'arch', key: 'arch.store',
+      session: 's1', tool: 'codex_find', namespace: 'arch', key: 'arch.store',
       op: 'read', hit: false, responseSize: 0,
     });
     // Should still be 1 window, not 2
@@ -152,7 +152,7 @@ describe('MissWindowTracker', () => {
       op: 'read', hit: false, responseSize: 100,
     });
     tracker.onToolCall({
-      session: 's1', tool: 'codex_search', namespace: '*', key: '',
+      session: 's1', tool: 'codex_find', namespace: '*', key: '',
       op: 'read', hit: false, responseSize: 200,
     });
     tracker.onToolCall({

@@ -75,7 +75,7 @@ describe('logToolCall', () => {
   it('classifies reads correctly', async () => {
     await logToolCall('codex_get', 'x');
     await logToolCall('codex_context');
-    await logToolCall('codex_search', 'term');
+    await logToolCall('codex_find', 'term');
     await logToolCall('codex_export');
     await logToolCall('codex_alias_list');
     await logToolCall('codex_config_get');
@@ -222,11 +222,11 @@ describe('computeStats', () => {
       expect(stats.namespaceCoverage.rejected).toBeUndefined();
     });
 
-    it('excludes codex_search keys', () => {
+    it('excludes codex_find keys', () => {
       const now = Date.now();
       writeEntries([
         { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch' },
-        { ts: now - 90, tool: 'codex_search', session: 's1', op: 'read', ns: '^arch\\' },
+        { ts: now - 90, tool: 'codex_find', session: 's1', op: 'read', ns: '^arch\\' },
       ]);
       const stats = computeStats();
       expect(stats.namespaceCoverage.arch).toBeDefined();

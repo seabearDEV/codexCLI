@@ -29,7 +29,7 @@ Core read/write:
 - codex_context — compact summary of entries (best for session start). Accepts tier: "essential" (minimal), "standard" (default, excludes arch), "full" (everything)
 - codex_get — retrieve specific keys or browse namespaces (use depth: 1 to scan top-level). Shows staleness tags on stale/untracked entries.
 - codex_set — store a key-value pair (use dot notation, keep values concise). Supports encryption via encrypt/password params.
-- codex_search — find entries by keyword. Supports regex, keys-only, values-only filtering.
+- codex_find — find entries by keyword. Supports regex, keys-only, values-only filtering.
 - codex_remove — delete an entry by key. Also removes associated aliases.
 
 Aliases:
@@ -62,7 +62,7 @@ FRESHNESS:
 - Run codex_stale after codex_context to audit knowledge freshness when starting a new task.
 
 PREFER MCP TOOLS:
-- Always interact with the data store via MCP tools (codex_get, codex_set, codex_search, etc.) rather than reading .codexcli/*.json directly.
+- Always interact with the data store via MCP tools (codex_get, codex_set, codex_find, etc.) rather than reading .codexcli/*.json directly.
 - Direct file reads bypass audit logging, alias resolution, interpolation, and scope fallthrough.
 - Hand-editing .codexcli/*.json files is unsupported — it desyncs per-entry meta (staleness timestamps) and breaks the wrapper format. Use the CLI or MCP tools.
 

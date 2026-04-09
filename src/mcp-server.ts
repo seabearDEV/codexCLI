@@ -96,7 +96,7 @@ import { SKIP_AUDIT, BULK_OPS, captureValue } from "./utils/instrumentation";
 function extractKey(name: string, params: Record<string, unknown>): string | undefined {
   if (name === 'codex_copy') return (params.dest ?? params.source) as string | undefined;
   if (name === 'codex_alias_set') return params.alias as string | undefined;
-  return (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.searchTerm) as string | undefined;
+  return (params.key ?? params.source ?? params.oldKey ?? params.alias ?? params.query) as string | undefined;
 }
 
 // --- Token-efficiency metric helpers ---
@@ -682,20 +682,20 @@ server.tool(
   }
 );
 
-// --- codex_search ---
+// --- codex_find ---
 server.tool(
-  "codex_search",
-  "Search stored project knowledge by keyword. Use to find relevant context before reading code.",
+  "codex_find",
+  "Find stored project knowledge by keyword. Use to locate relevant context before reading code.",
   {
-    searchTerm: z.string().describe("Term to search for (case-insensitive substring, or regex if regex=true)"),
-    regex: z.boolean().optional().describe("Treat searchTerm as a regular expression"),
+    query: z.string().describe("Query string to find (case-insensitive substring, or regex if regex=true)"),
+    regex: z.boolean().optional().describe("Treat query as a regular expression"),
     keysOnly: z.boolean().optional().describe("Match against keys only (skip values)"),
     valuesOnly: z.boolean().optional().describe("Match against values only (skip keys)"),
     aliasesOnly: z.boolean().optional().describe("Search only in aliases"),
     entriesOnly: z.boolean().optional().describe("Search only in data entries"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ searchTerm, regex, keysOnly, valuesOnly, aliasesOnly, entriesOnly, scope: scopeParam }) => {
+  async ({ query, regex, keysOnly, valuesOnly, aliasesOnly, entriesOnly, scope: scopeParam }) => {
     try {
       if (keysOnly && valuesOnly) {
         return errorResponse("'keysOnly' and 'valuesOnly' are mutually exclusive.");
@@ -704,13 +704,13 @@ server.tool(
       let match: (text: string) => boolean;
       try {
         if (regex) {
-          if (searchTerm.length > 500) {
+          if (query.length > 500) {
             return errorResponse("Regex pattern too long (max 500 characters).");
           }
-          const re = new RegExp(searchTerm, 'i');
+          const re = new RegExp(query, 'i');
           match = (text: string) => re.test(text);
         } else {
-          const lc = searchTerm.toLowerCase();
+          const lc = query.toLowerCase();
           match = (text: string) => text.toLowerCase().includes(lc);
         }
       } catch (err) {
@@ -741,7 +741,7 @@ server.tool(
       }
 
       if (results.length === 0) {
-        return textResponse(`No results found for '${searchTerm}'.`);
+        return textResponse(`No results found for '${query}'.`);
       }
       return textResponse(results.join("\n"));
     } catch (err) {
@@ -753,17 +753,17 @@ server.tool(
 // --- codex_alias_set ---
 server.tool(
   "codex_alias_set",
-  "Create or update an alias for a dot-notation path",
+  "Create or update an alias for a dot-notation key",
   {
     alias: z.string().describe("Alias name"),
-    path: z.string().describe("Dot-notation path the alias points to"),
+    key: z.string().describe("Dot-notation key the alias points to"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ alias, path, scope: scopeParam }) => {
+  async ({ alias, key, scope: scopeParam }) => {
     try {
       const scope = toScope(scopeParam);
-      setAlias(alias, path, scope);
-      return textResponse(`Alias set: ${alias} -> ${path}`);
+      setAlias(alias, key, scope);
+      return textResponse(`Alias set: ${alias} -> ${key}`);
     } catch (err) {
       return errorResponse(`Error setting alias: ${String(err)}`);
     }

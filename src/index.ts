@@ -216,7 +216,7 @@ codexCLI
     const scope = options.global ? 'global' as const : undefined;
     await withPager(async () => {
       await withCliInstrumentation(
-        { tool: 'codex_search', key: term, scope, params: { searchTerm: term } },
+        { tool: 'codex_find', key: term, scope, params: { query: term } },
         () => commands.searchEntries(term, options)
       );
     });
@@ -461,7 +461,7 @@ codexCLI
 async function handleSearch(term: string, options: { entries?: boolean, aliases?: boolean, tree?: boolean, json?: boolean, regex?: boolean, keys?: boolean, values?: boolean, global?: boolean }): Promise<void> {
   const scope = options.global ? 'global' as const : undefined;
   await withCliInstrumentation(
-    { tool: 'codex_search', key: term, scope, params: { searchTerm: term } },
+    { tool: 'codex_find', key: term, scope, params: { query: term } },
     () => commands.searchEntries(term, options)
   );
 }
