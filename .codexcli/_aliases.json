@@ -1,4 +1,5 @@
 {
+  "bzs": "project.name",
   "chk": "commands.check",
   "cln": "commands.clean",
   "dev": "context.devWorkflow",
