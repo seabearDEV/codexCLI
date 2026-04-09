@@ -162,15 +162,19 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           # Prerelease tags (anything with a `-`) ship to the @beta formula
           # so they don't bump stable users on `brew upgrade`. Stable tags
-          # ship to the canonical ccli formula.
+          # ship to the canonical ccli formula. Beta installs use a distinct
+          # binary name (`ccli-beta`) so both formulas can coexist on a
+          # machine without symlink conflicts.
           if [[ "${version}" == *-* ]]; then
             echo "channel=beta" >> "$GITHUB_OUTPUT"
             echo "formula_class=CcliAtBeta" >> "$GITHUB_OUTPUT"
             echo "formula_file=ccli@beta.rb" >> "$GITHUB_OUTPUT"
+            echo "binary_name=ccli-beta" >> "$GITHUB_OUTPUT"
           else
             echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "formula_class=Ccli" >> "$GITHUB_OUTPUT"
             echo "formula_file=ccli.rb" >> "$GITHUB_OUTPUT"
+            echo "binary_name=ccli" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Download release binaries
@@ -200,6 +204,7 @@ jobs:
           CHANNEL: ${{ steps.version.outputs.channel }}
           FORMULA_CLASS: ${{ steps.version.outputs.formula_class }}
           FORMULA_FILE: ${{ steps.version.outputs.formula_file }}
+          BINARY_NAME: ${{ steps.version.outputs.binary_name }}
           SHA_MACOS_UNIVERSAL: ${{ steps.sha.outputs.macos_universal }}
           SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
           SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
@@ -234,11 +239,11 @@ jobs:
 
             def install
               binary = Dir.glob("ccli-*").first
-              bin.install binary => "ccli"
+              bin.install binary => "$BINARY_NAME"
             end
 
             test do
-              assert_match version.to_s, shell_output("#{bin}/ccli --version")
+              assert_match version.to_s, shell_output("#{bin}/$BINARY_NAME --version")
             end
           end
           EOF

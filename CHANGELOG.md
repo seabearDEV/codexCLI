@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.11.1-beta.1] - 2026-04-09
+
+Packaging-only respin of v1.11.1-beta.0. No source-code changes; the only difference is in `.github/workflows/release.yml` where the Homebrew formula generator now installs the beta binary as `ccli-beta` instead of `ccli`. This lets `ccli@beta` coexist on a machine with stable `ccli` (no `brew unlink` cycling required to test the beta side-by-side). Stable formula generation is unchanged — still installs as `ccli`.
+
+After upgrading from beta.0 to beta.1, the binary is invoked as **`ccli-beta`** (not `ccli`). If you already had beta.0 installed via brew, `brew upgrade seabearDEV/ccli/ccli@beta` will replace the keg and the new symlink will be `ccli-beta`.
+
 ## [1.11.1-beta.0] - 2026-04-09
 
 First prerelease of v1.11.1, surfaced for beta-channel testing via `brew install seabearDEV/ccli/ccli@beta` before promotion to stable. The work is exclusively bug fixes and validator hardening — no new features. Found by an end-to-end MCP flogging session against the freshly-installed v1.11.0 binary; every fix has live verification + inline regression coverage.
