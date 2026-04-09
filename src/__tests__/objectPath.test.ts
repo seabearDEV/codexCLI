@@ -98,6 +98,42 @@ describe('objectPath utilities', () => {
     it('handles empty object', () => {
       expect(getNestedValue({}, 'any.key')).toBeUndefined();
     });
+
+    // Round-2 regression: pre-fix, getNestedValue did `obj[keys[0]]` which
+    // walked the prototype chain. So `getNestedValue({}, '__proto__')`
+    // returned Object.prototype, `getNestedValue({}, 'constructor')` returned
+    // the Object constructor, etc. — and codex_get / codex_copy / codex_rename
+    // all built bizarre behavior on top of those leaks. With Object.hasOwn
+    // gating each hop, every prototype-chain name returns undefined.
+    describe('prototype-chain safety', () => {
+      it.each([
+        '__proto__',
+        'constructor',
+        'prototype',
+        'hasOwnProperty',
+        'toString',
+        'valueOf',
+        'isPrototypeOf',
+        'propertyIsEnumerable',
+        '__defineGetter__',
+      ])('returns undefined for inherited Object.prototype name %j', (name) => {
+        expect(getNestedValue({}, name)).toBeUndefined();
+      });
+
+      it('returns undefined for nested __proto__.polluted', () => {
+        expect(getNestedValue({ a: {} }, 'a.__proto__.polluted')).toBeUndefined();
+      });
+
+      it('still returns own-property values that happen to share built-in names', () => {
+        // If a user explicitly stored an entry under a non-pollution key
+        // that happens to be reserved, the validator at the write boundary
+        // would have rejected it — but the read path should respect own
+        // properties when they exist. Use Object.create(null) to set up an
+        // own __proto__ without confusing the engine.
+        const obj = { regular: 'value' };
+        expect(getNestedValue(obj, 'regular')).toBe('value');
+      });
+    });
   });
 
   // ── removeNestedValue ───────────────────────────────────────────────

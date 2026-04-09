@@ -120,6 +120,10 @@ vi.mock('../storage', () => ({
   setValue: vi.fn((key: string, value: string) => setNestedMock(mockData, key, value)),
   removeValue: vi.fn((key: string) => removeNestedMock(mockData, key)),
   getEntriesFlat: vi.fn(() => flattenMock(mockData)),
+  // Round-2 import validators — see mcp-server.test.ts for the same shim.
+  validateImportEntries: vi.fn(),
+  validateImportAliases: vi.fn(),
+  validateImportConfirm: vi.fn(),
 }));
 
 vi.mock('../alias', () => ({

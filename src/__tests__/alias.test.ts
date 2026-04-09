@@ -77,6 +77,38 @@ describe('Alias Management', () => {
       const savedData = (saveAliasMap as Mock).mock.calls[0][0];
       expect(savedData['prod-ip']).toBe('new.path.to.ip');
     });
+
+    // Round-2 regression: pre-fix, setAlias accepted any string for both
+    // alias and target. The persistence path silently dropped some (e.g.
+    // __proto__) and persisted others (e.g. empty string), and the response
+    // always reported "Alias set" regardless of what actually landed.
+    describe('validation gate', () => {
+      it.each([
+        '__proto__',
+        'constructor',
+        'prototype',
+        '.dotleading',
+        'trailing.',
+        'a/b',
+        '_aliases',
+        '',
+      ])('rejects invalid alias name %j', (badName) => {
+        expect(() => setAlias(badName, 'safe.target')).toThrow(/Invalid alias name/);
+        expect(saveAliasMap).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        '__proto__',
+        'constructor',
+        '.dotleading',
+        '/etc/passwd',
+        '_aliases',
+        '',
+      ])('rejects invalid alias target %j', (badTarget) => {
+        expect(() => setAlias('safe_name', badTarget)).toThrow(/Invalid alias target/);
+        expect(saveAliasMap).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('removeAlias', () => {

@@ -1,6 +1,10 @@
 import { CodexData, CodexValue } from '../types';
 
 function isSafeKey(key: string): boolean {
+  // Empty parts come from leading/trailing/double dots in user keys; treat
+  // them as unsafe so the in-memory layer matches the file-system layer's
+  // isValidEntryKey rejection.
+  if (!key) return false;
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
 }
 
@@ -34,14 +38,25 @@ export function setNestedValue(obj: CodexData, path: string, value: string): voi
 }
 
 /**
- * Gets a value from a nested path using dot notation
+ * Gets a value from a nested path using dot notation.
+ *
+ * Uses Object.hasOwn for every property hop so prototype-chain names like
+ * `__proto__`, `constructor`, `hasOwnProperty`, `toString`, etc. don't leak
+ * inherited properties from Object.prototype.
+ *
+ * Pre-fix, codex_get __proto__ rendered Object.prototype as an empty subtree,
+ * codex_get constructor returned the source of the Object constructor, and
+ * codex_copy / codex_rename's existence checks always reported "already exists"
+ * for any prototype-chain name.
  */
 export function getNestedValue(obj: CodexData, path: string): CodexValue | undefined {
   if (!path) return undefined;
   const keys = path.split('.');
+  if (!Object.hasOwn(obj, keys[0])) return undefined;
   let current: CodexValue | undefined = obj[keys[0]];
   for (let i = 1; i < keys.length; i++) {
     if (current === undefined || typeof current === 'string') return undefined;
+    if (!Object.hasOwn(current, keys[i])) return undefined;
     current = current[keys[i]];
   }
   return current;

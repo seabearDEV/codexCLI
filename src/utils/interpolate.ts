@@ -8,6 +8,29 @@ import { CodexValue } from '../types';
 const MAX_DEPTH = 10;
 
 /**
+ * Errors thrown for *load-bearing* interpolation failures — the user
+ * explicitly opted into "fail loudly" semantics, so callers that fall back
+ * to the raw template on a normal error must NOT swallow these.
+ *
+ * Two cases qualify:
+ *   1. `${key:?msg}` required-check on a missing key. The user marked the
+ *      key as required precisely because the literal template would be
+ *      meaningless if rendered.
+ *   2. Circular reference detection. Returning the literal `${a}` after
+ *      we caught `a → b → a` would mask a real configuration bug.
+ *
+ * Plain "key not found" errors (no `:?`, no cycle) are not StrictInterpolationError
+ * — those are still swallowed by interpolateObject's fallback so a get on a
+ * subtree with one broken template doesn't fail the whole subtree.
+ */
+export class StrictInterpolationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StrictInterpolationError';
+  }
+}
+
+/**
  * Parse a ref string for conditional modifiers (`:-` default, `:?` error).
  * Returns the key and optional modifier with its value.
  *
@@ -53,7 +76,9 @@ function resolveRef(ref: string, maxDepth: number, seen: Set<string>, execCache:
 
   if (seen.has(resolvedKey)) {
     const chain = [...seen, resolvedKey].join(' → ');
-    throw new Error(`Circular interpolation detected: ${chain}`);
+    // Strict: a cycle is a structural bug, not a "missing data" condition.
+    // Subtree fallbacks would mask real misconfigurations.
+    throw new StrictInterpolationError(`Circular interpolation detected: ${chain}`);
   }
 
   const resolved = getValue(resolvedKey);
@@ -64,8 +89,10 @@ function resolveRef(ref: string, maxDepth: number, seen: Set<string>, execCache:
       return interpolate(modValue ?? '', maxDepth, seen, execCache);
     }
     if (modifier === ':?') {
+      // Strict: the user opted in to fail-loud by writing `:?`. If we
+      // returned the raw template here, the loudness would be silent.
       // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string should also use generic message
-      throw new Error(modValue || `"${rawKey.trim()}" is required but not set`);
+      throw new StrictInterpolationError(modValue || `"${rawKey.trim()}" is required but not set`);
     }
     throw new Error(`Interpolation failed: "${rawKey.trim()}" not found`);
   }
@@ -96,7 +123,7 @@ function resolveExecRef(ref: string, maxDepth: number, seen: Set<string>, execCa
 
   if (seen.has(resolvedKey)) {
     const chain = [...seen, resolvedKey].join(' → ');
-    throw new Error(`Circular interpolation detected: ${chain}`);
+    throw new StrictInterpolationError(`Circular interpolation detected: ${chain}`);
   }
 
   // Return cached result if already executed in this pass
@@ -262,8 +289,14 @@ export function interpolateObject(obj: Record<string, CodexValue>): Record<strin
     if (typeof value === 'string' && !isEncrypted(value)) {
       try {
         result[key] = interpolate(value, MAX_DEPTH, new Set<string>(), execCache);
-      } catch {
-        // If interpolation fails on a subtree leaf, keep the raw value
+      } catch (err) {
+        // StrictInterpolationError signals load-bearing failures (`:?`
+        // required check, circular reference) — the user explicitly opted
+        // in to fail loudly, so don't swallow them under the subtree fallback.
+        if (err instanceof StrictInterpolationError) throw err;
+        // For everything else (key not found, not-a-string, encrypted),
+        // keep the raw template so a single broken leaf doesn't fail the
+        // whole subtree get.
         result[key] = value;
       }
     } else {

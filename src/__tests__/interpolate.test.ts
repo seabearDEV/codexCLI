@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import { interpolate, interpolateObject } from '../utils/interpolate';
+import { interpolate, interpolateObject, StrictInterpolationError } from '../utils/interpolate';
 import { getValue } from '../storage';
 import { resolveKey } from '../alias';
 
@@ -226,6 +226,46 @@ describe('interpolateObject', () => {
     mockGetValue.mockReturnValue(undefined);
     const result = interpolateObject({ path: '${missing}/file' });
     expect(result['path']).toBe('${missing}/file');
+  });
+
+  // Regression for the v1.11 flogging finding: interpolateObject was
+  // catching ALL errors and silently returning the raw template, including
+  // `:?` required-check failures and circular-reference detections. The
+  // user explicitly opted into fail-loud behavior with `:?`, and a cycle
+  // is a structural bug that must surface — both should propagate.
+  describe('strict error propagation', () => {
+    it('re-throws StrictInterpolationError from `:?` required-check', () => {
+      mockGetValue.mockReturnValue(undefined);
+      expect(() =>
+        interpolateObject({ path: '${missing:?must be set}' })
+      ).toThrow(StrictInterpolationError);
+      expect(() =>
+        interpolateObject({ path: '${missing:?must be set}' })
+      ).toThrow(/must be set/);
+    });
+
+    it('re-throws StrictInterpolationError from circular references', () => {
+      mockGetValue.mockImplementation((key: string) => {
+        if (key === 'a') return '${b}';
+        if (key === 'b') return '${a}';
+        return undefined;
+      });
+      expect(() =>
+        interpolateObject({ path: '${a}' })
+      ).toThrow(StrictInterpolationError);
+    });
+
+    it('still swallows plain "not found" errors as raw fallback', () => {
+      // Plain misses (no `:?`) keep the friendly subtree-fallback behavior:
+      // one broken leaf shouldn't fail the whole subtree get.
+      mockGetValue.mockReturnValue(undefined);
+      const result = interpolateObject({
+        good: 'plain',
+        bad: '${missing}/x',
+      });
+      expect(result['good']).toBe('plain');
+      expect(result['bad']).toBe('${missing}/x');
+    });
   });
 });
 

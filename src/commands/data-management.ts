@@ -1,4 +1,4 @@
-import { loadData, saveData, getValue, setValue, handleError, Scope } from '../storage';
+import { loadData, saveData, getValue, setValue, handleError, Scope, validateImportEntries, validateImportAliases, validateImportConfirm } from '../storage';
 import { color } from '../formatting';
 import fs from 'fs';
 import { loadAliases, saveAliases } from '../alias';
@@ -118,6 +118,15 @@ export async function importData(type: string, file: string, options: ImportOpti
     }
 
     if (type === 'entries' || type === 'all') {
+      // Validate the raw input BEFORE expandFlatKeys runs. expandFlatKeys
+      // silently normalizes some bad keys (e.g. ".dotleading" → "dotleading")
+      // and erases the evidence that the input was invalid.
+      try {
+        validateImportEntries(validData);
+      } catch (err) {
+        printError(err instanceof Error ? err.message : String(err));
+        return;
+      }
       const expanded = expandFlatKeys(validData);
       const currentData = options.merge ? loadData(scope) : {};
 
@@ -135,6 +144,12 @@ export async function importData(type: string, file: string, options: ImportOpti
         printError('Alias values must all be strings (dot-notation paths).');
         return;
       }
+      try {
+        validateImportAliases(validData);
+      } catch (err) {
+        printError(err instanceof Error ? err.message : String(err));
+        return;
+      }
 
       const currentAliases = options.merge ? loadAliases(scope) : {};
 
@@ -147,6 +162,12 @@ export async function importData(type: string, file: string, options: ImportOpti
     }
 
     if (type === 'confirm' || type === 'all') {
+      try {
+        validateImportConfirm(validData);
+      } catch (err) {
+        printError(err instanceof Error ? err.message : String(err));
+        return;
+      }
       const currentConfirm = options.merge ? loadConfirmKeys(scope) : {};
       const newConfirm = options.merge
         ? { ...currentConfirm, ...(validData as Record<string, true>) }

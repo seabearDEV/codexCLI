@@ -9,7 +9,8 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 
-import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Scope } from "./storage";
+import { loadData, saveData, getValue, setValue, removeValue, getEntriesFlat, Scope, validateImportEntries, validateImportAliases, validateImportConfirm } from "./storage";
+import { isValidEntryKey } from "./utils/directoryStore";
 import { CodexData } from "./types";
 import {
   flattenObject,
@@ -38,7 +39,7 @@ import { deepMerge } from "./utils/deepMerge";
 import { version } from "../package.json";
 import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
-import { interpolate, interpolateObject } from "./utils/interpolate";
+import { interpolate, interpolateObject, StrictInterpolationError } from "./utils/interpolate";
 import { logToolCall, computeStats, classifyOp, getTelemetryPath, getMissPathsPath, TelemetryExtras, MissWindowTracker, appendMissPath, getSessionId, extractNamespace } from "./utils/telemetry";
 import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams, getAuditPath } from "./utils/audit";
 import { getEffectiveInstructions } from "./llm-instructions";
@@ -239,12 +240,16 @@ server.tool = ((...args: any[]) => {
       const hit = op === 'read' ? determineHit(result, success) : undefined;
       const tier = name === 'codex_context' ? (params.tier as string ?? 'standard') : undefined;
       const entryCount = op === 'read' && success ? extractEntryCount(responseText) : undefined;
-      // Redundant = value didn't change on a true mutation. Exclude rename (key move, not value change),
-      // run --dry (read-only), and import --preview (read-only) from redundant detection.
+      // Redundant = value didn't change on a true mutation. Exclude:
+      //   - rename (key move, not value change)
+      //   - run --dry (read-only) and import --preview (read-only)
+      //   - exec ops (codex_run): the stored command never changes during a
+      //     run, so before === after is trivially true and would always
+      //     mis-tag runs as "redundant writes" — but they aren't writes at all
       const isReadOnlyWrite = (name === 'codex_rename') ||
         (name === 'codex_run' && params.dry === true) ||
         (name === 'codex_import' && params.preview === true);
-      const redundant = isWrite && !isReadOnlyWrite && before !== undefined && after !== undefined && before === after ? true : undefined;
+      const redundant = op === 'write' && !isReadOnlyWrite && before !== undefined && after !== undefined && before === after ? true : undefined;
 
       // Telemetry (enriched, moved here so we have duration + metrics)
       const projectFile = findProjectFile();
@@ -253,6 +258,7 @@ server.tool = ((...args: any[]) => {
         hit,
         redundant,
         responseSize,
+        success,
         project: projectFile ? path.dirname(projectFile) : undefined,
       };
       void logToolCall(name, key, 'mcp', resolvedScope, telemetryExtras);
@@ -310,6 +316,14 @@ server.tool(
       const scope = toScope(scopeParam);
       ensureDataDirectoryExists();
       const resolved = resolveKey(key, scope);
+      // Pre-validate the alias name BEFORE any writes. Without this,
+      // setValue would persist the entry, then setAlias would throw on a
+      // bad alias name, leaving the store in a partial state (entry stored,
+      // alias rejected, user gets an error and doesn't realize the entry
+      // was already saved).
+      if (alias !== undefined && !isValidEntryKey(alias)) {
+        return errorResponse(`Invalid alias name: ${JSON.stringify(alias)}`);
+      }
       let storedValue = value;
       if (encrypt) {
         if (!password) {
@@ -451,7 +465,15 @@ server.tool(
             display = '[encrypted]';
           }
         } else if (typeof value === 'string') {
-          try { display = interpolate(strVal); } catch { display = value; }
+          try {
+            display = interpolate(strVal);
+          } catch (err) {
+            // StrictInterpolationError = user opted in to fail-loud (`:?`,
+            // circular). Surface those instead of silently rendering the
+            // raw template.
+            if (err instanceof StrictInterpolationError) throw err;
+            display = value;
+          }
         } else {
           display = value;
         }
@@ -1103,11 +1125,23 @@ server.tool(
           );
         }
 
-        const dataObj = expandFlatKeys(dataVal as Record<string, unknown>);
         const aliasesObj = aliasesVal as Record<string, unknown>;
 
         if (Object.values(aliasesObj).some(v => typeof v !== "string")) {
           return errorResponse("Alias values must all be strings (dot-notation paths).");
+        }
+
+        // Validate every key BEFORE expandFlatKeys runs. expandFlatKeys
+        // silently normalizes some bad keys (e.g. ".dotleading" → "dotleading"
+        // because isSafeKey rejects the leading-empty segment, so the parent
+        // walk breaks out and the leaf is set on the root). Validating the
+        // raw input catches those before normalization erases the evidence.
+        validateImportEntries(dataVal as Record<string, unknown>);
+        validateImportAliases(aliasesObj);
+        const dataObj = expandFlatKeys(dataVal as Record<string, unknown>);
+        const confirmValPre = obj.confirm;
+        if (confirmValPre && typeof confirmValPre === "object" && !Array.isArray(confirmValPre)) {
+          validateImportConfirm(confirmValPre as Record<string, unknown>);
         }
 
         const currentData = merge ? loadData(scope) : {};
@@ -1125,11 +1159,16 @@ server.tool(
           saveConfirmKeys({}, scope);
         }
       } else if (type === "entries") {
+        // Validate raw input BEFORE expandFlatKeys (which would silently
+        // normalize keys like ".dotleading" → "dotleading" and erase the
+        // evidence that the input was invalid in the first place).
+        validateImportEntries(obj);
         const expanded = expandFlatKeys(obj);
         const current = merge ? loadData(scope) : {};
         const newData = merge ? deepMerge(current, expanded) : expanded;
         saveData(newData as CodexData, scope);
       } else if (type === "confirm") {
+        validateImportConfirm(obj);
         const currentConfirm = merge ? loadConfirmKeys(scope) : {};
         const newConfirm = merge ? { ...currentConfirm, ...(obj as Record<string, true>) } : obj;
         saveConfirmKeys(newConfirm as Record<string, true>, scope);
@@ -1137,6 +1176,7 @@ server.tool(
         if (Object.values(obj).some(v => typeof v !== "string")) {
           return errorResponse("Alias values must all be strings (dot-notation paths).");
         }
+        validateImportAliases(obj);
 
         const current = merge ? loadAliases(scope) : {};
         const newAliases = merge

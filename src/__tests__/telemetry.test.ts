@@ -205,6 +205,48 @@ describe('computeStats', () => {
     expect(stats.namespaceCoverage.commands).toEqual({ reads: 1, writes: 0, lastWrite: undefined });
   });
 
+  // Round-2 regression: namespace tracking used to be polluted by failed
+  // operations (rejected validator writes), search-tool keys (regex patterns
+  // sliced on `.` to make phantom namespaces like `^arch\`), and alias-tool
+  // keys (alias names treated as entry namespaces). The filter excludes all
+  // three classes so the dashboard shows only real namespace activity.
+  describe('namespace coverage filters (round-2 regression)', () => {
+    it('excludes failed operations', () => {
+      const now = Date.now();
+      writeEntries([
+        { ts: now - 100, tool: 'codex_set', session: 's1', op: 'write', ns: 'arch' }, // success default
+        { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: 'rejected', success: false },
+      ]);
+      const stats = computeStats();
+      expect(stats.namespaceCoverage.arch).toBeDefined();
+      expect(stats.namespaceCoverage.rejected).toBeUndefined();
+    });
+
+    it('excludes codex_search keys', () => {
+      const now = Date.now();
+      writeEntries([
+        { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch' },
+        { ts: now - 90, tool: 'codex_search', session: 's1', op: 'read', ns: '^arch\\' },
+      ]);
+      const stats = computeStats();
+      expect(stats.namespaceCoverage.arch).toBeDefined();
+      expect(stats.namespaceCoverage['^arch\\']).toBeUndefined();
+    });
+
+    it('excludes codex_alias_set / codex_alias_remove keys', () => {
+      const now = Date.now();
+      writeEntries([
+        { ts: now - 100, tool: 'codex_set', session: 's1', op: 'write', ns: 'arch' },
+        { ts: now - 90, tool: 'codex_alias_set', session: 's1', op: 'write', ns: 'flog_alias' },
+        { ts: now - 80, tool: 'codex_alias_remove', session: 's1', op: 'write', ns: 'old_alias' },
+      ]);
+      const stats = computeStats();
+      expect(stats.namespaceCoverage.arch).toBeDefined();
+      expect(stats.namespaceCoverage.flog_alias).toBeUndefined();
+      expect(stats.namespaceCoverage.old_alias).toBeUndefined();
+    });
+  });
+
   it('filters by period', () => {
     const now = Date.now();
     const day = 86400000;

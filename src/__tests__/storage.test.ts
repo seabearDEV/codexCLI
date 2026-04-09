@@ -1,4 +1,4 @@
-import { handleError, loadData, saveData, getErrorMessage, getValue, setValue, removeValue, getEntriesFlat } from '../storage';
+import { handleError, loadData, saveData, getErrorMessage, getValue, setValue, removeValue, getEntriesFlat, validateImportEntries, validateImportAliases, validateImportConfirm } from '../storage';
 
 vi.mock('../store', () => ({
   loadEntries: vi.fn(() => ({})),
@@ -144,6 +144,156 @@ describe('Storage', () => {
 
       const result = getValue('server.ip');
       expect(result).toBe('1.2.3.4');
+    });
+  });
+
+  describe('setValue key validation gate (regression)', () => {
+    // Pre-fix, setValue called setNestedValue with no validation, and the
+    // file-system layer's isValidEntryKey only ran much later inside save().
+    // That allowed several broken behaviors:
+    //   1. ".dotleading" was silently normalized to "dotleading" on write,
+    //      while reads of ".dotleading" returned not-found (phantom mismatch)
+    //   2. "constructor.prototype.polluted", "prototype" reported success but
+    //      never persisted (phantom write)
+    //   3. "__proto__" crashed deeper in the pipeline with
+    //      "TypeError: path.split is not a function"
+    //
+    // After the fix, all of these reject cleanly at the storage boundary
+    // before any in-memory mutation happens.
+    it.each([
+      ['.dotleading'],
+      ['trailing.'],
+      ['__proto__'],
+      ['constructor.prototype.polluted'],
+      ['prototype'],
+      ['flog..doubledot'],
+      ['flog/with/slashes'],
+      ['_aliases'],
+      [''],
+    ])('rejects invalid key %j with a clean error', (badKey) => {
+      expect(() => setValue(badKey, 'evil')).toThrow(/Invalid store key/);
+      // And critically: loadEntries should NEVER have been called, because
+      // the validator runs before any I/O.
+      expect(loadEntries).not.toHaveBeenCalled();
+    });
+
+    it('removeValue returns false (not throw) for invalid keys', () => {
+      // Probing with user input shouldn't crash — return "nothing removed".
+      expect(removeValue('__proto__')).toBe(false);
+      expect(removeValue('.dotleading')).toBe(false);
+      expect(removeValue('')).toBe(false);
+      expect(loadEntries).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('import validators (round-2 regression)', () => {
+    // Pre-fix, codex_import / ccli import would silently drop entries with
+    // prototype-pollution names, leading dots, or empty segments via
+    // expandFlatKeys → isSafeKey, then report "merged successfully" with
+    // nothing actually persisted. These validators run before the save
+    // and reject the whole import with a descriptive error listing every
+    // bad key.
+
+    // The real attack vector is JSON.parse — JS object literals can't create
+    // an own __proto__ property (the literal triggers the prototype setter,
+    // not property assignment), but JSON.parse('{"__proto__":"evil"}') DOES
+    // create an own __proto__ key. These tests use JSON.parse to mirror what
+    // actually arrives from codex_import / ccli import.
+
+    describe('validateImportEntries', () => {
+      it('passes for an all-safe entries object', () => {
+        expect(() => validateImportEntries({
+          arch: { storage: 'note' },
+          'flag.foo': 'bar',
+        })).not.toThrow();
+      });
+
+      it('rejects nested __proto__ from JSON', () => {
+        const obj = JSON.parse('{"a":{"__proto__":"evil"}}') as Record<string, unknown>;
+        expect(() => validateImportEntries(obj))
+          .toThrow(/invalid entry keys.*__proto__/);
+      });
+
+      it('rejects top-level prototype-chain names from JSON', () => {
+        expect(() => validateImportEntries(JSON.parse('{"__proto__":"evil"}') as Record<string, unknown>))
+          .toThrow(/invalid entry keys/);
+        expect(() => validateImportEntries(JSON.parse('{"constructor":"evil"}') as Record<string, unknown>))
+          .toThrow(/invalid entry keys/);
+        expect(() => validateImportEntries(JSON.parse('{"prototype":"evil"}') as Record<string, unknown>))
+          .toThrow(/invalid entry keys/);
+      });
+
+      it('rejects sidecar collisions', () => {
+        expect(() => validateImportEntries({ _aliases: 'x' }))
+          .toThrow(/invalid entry keys.*_aliases/);
+      });
+
+      it('rejects path-traversal characters', () => {
+        expect(() => validateImportEntries({ 'a/b': 'x' }))
+          .toThrow(/invalid entry keys/);
+      });
+
+      it('rejects leading-dot keys (the .dotleading regression)', () => {
+        // This used to slip through: expandFlatKeys would silently normalize
+        // ".dotleading" → "dotleading" because isSafeKey rejects the empty
+        // first segment, the parent walk breaks out, and the leaf gets set
+        // on the result root. The fix is to validate the RAW input before
+        // expandFlatKeys runs, and isValidEntryKey explicitly rejects
+        // leading and trailing dots.
+        expect(() => validateImportEntries({ '.dotleading': 'evil' }))
+          .toThrow(/invalid entry keys.*\.dotleading/);
+        expect(() => validateImportEntries({ 'trailing.': 'evil' }))
+          .toThrow(/invalid entry keys.*trailing\./);
+      });
+
+      it('reports multiple bad keys at once', () => {
+        const obj = JSON.parse('{"good":"ok","__proto__":"bad1","_aliases":"bad2"}') as Record<string, unknown>;
+        expect(() => validateImportEntries(obj))
+          .toThrow(/(__proto__.*_aliases|_aliases.*__proto__)/);
+      });
+    });
+
+    describe('validateImportAliases', () => {
+      it('passes for safe alias name and target', () => {
+        expect(() => validateImportAliases({ chk: 'commands.check' }))
+          .not.toThrow();
+      });
+
+      it('rejects invalid alias name from JSON', () => {
+        const obj = JSON.parse('{"__proto__":"safe.target"}') as Record<string, unknown>;
+        expect(() => validateImportAliases(obj))
+          .toThrow(/invalid alias names.*__proto__/);
+      });
+
+      it('rejects invalid alias target', () => {
+        // Target "__proto__" is just a string value, no JSON quirk needed.
+        expect(() => validateImportAliases({ safe_name: '__proto__' }))
+          .toThrow(/invalid alias targets.*__proto__/);
+      });
+
+      it('rejects empty-string alias name', () => {
+        expect(() => validateImportAliases({ '': 'safe.target' }))
+          .toThrow(/invalid alias names/);
+      });
+
+      it('reports both invalid name and invalid target in one error', () => {
+        const obj = JSON.parse('{"__proto__":"/etc/passwd"}') as Record<string, unknown>;
+        expect(() => validateImportAliases(obj))
+          .toThrow(/invalid alias names.*invalid alias targets/);
+      });
+    });
+
+    describe('validateImportConfirm', () => {
+      it('passes for safe keys', () => {
+        expect(() => validateImportConfirm({ 'commands.release': true }))
+          .not.toThrow();
+      });
+
+      it('rejects __proto__ as a confirm key from JSON', () => {
+        const obj = JSON.parse('{"__proto__":true}') as Record<string, unknown>;
+        expect(() => validateImportConfirm(obj))
+          .toThrow(/invalid confirm keys.*__proto__/);
+      });
     });
   });
 

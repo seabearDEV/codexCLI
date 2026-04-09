@@ -126,14 +126,22 @@ function keyFromFilename(name: string): string {
 /**
  * Returns true if the key is safe to use as a flat entry filename.
  * A valid key:
- *   - Is non-empty
+ *   - Is a non-empty string
  *   - Does not start with `_` (reserved for sidecars like `_aliases`, `_confirm`)
+ *   - Does not start or end with `.` (would create empty segments and a hidden file)
  *   - Contains no path separators (`/`, `\`) — keys are flat filenames, not paths
  *   - Has no empty segment, `..` segment, or prototype-polluting name (`__proto__`,
  *     `constructor`, `prototype`) when split on `.`
+ *
+ * The `typeof key !== 'string'` guard is defensive: a caller that bypasses
+ * Zod validation (or that lets a prototype-chain object slip in via an
+ * unsafe alias-map lookup) should fail closed here instead of crashing
+ * deeper in the pipeline with `path.split is not a function`.
  */
 export function isValidEntryKey(key: string): boolean {
+  if (typeof key !== 'string') return false;
   if (!key || key.startsWith('_')) return false;
+  if (key.startsWith('.') || key.endsWith('.')) return false;
   if (key.includes('/') || key.includes('\\')) return false;
   const parts = key.split('.');
   for (const part of parts) {

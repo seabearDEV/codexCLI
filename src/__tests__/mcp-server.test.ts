@@ -118,6 +118,11 @@ vi.mock('../storage', () => ({
   setValue: vi.fn((key: string, value: string) => setNestedMock(mockData, key, value)),
   removeValue: vi.fn((key: string) => removeNestedMock(mockData, key)),
   getEntriesFlat: vi.fn(() => flattenMock(mockData)),
+  // Round-2 import validators — mock as no-ops since the test fixtures only
+  // use safe keys. Real validation behavior is covered by storage.test.ts.
+  validateImportEntries: vi.fn(),
+  validateImportAliases: vi.fn(),
+  validateImportConfirm: vi.fn(),
 }));
 
 // Mock alias

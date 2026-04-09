@@ -38,7 +38,7 @@ describe('audit + telemetry session ID consistency (regression for v1.11.x bug)'
   // The fix is structural: both modules now import getSessionId() from a
   // shared src/utils/session.ts, so there's a single source of truth.
 
-  it('logAudit and logToolCall produce the same session field for the same operation', async () => {
+  it('logAudit and logToolCall produce the same session field for the same operation (cli)', async () => {
     await logAudit({
       src: 'cli',
       tool: 'codex_set',
@@ -47,6 +47,30 @@ describe('audit + telemetry session ID consistency (regression for v1.11.x bug)'
       success: true,
     });
     await logToolCall('codex_set', 'foo.bar', 'cli');
+
+    const auditEntries = loadAuditLog();
+    const telemetryEntries = loadTelemetry();
+
+    expect(auditEntries).toHaveLength(1);
+    expect(telemetryEntries).toHaveLength(1);
+    expect(auditEntries[0].session).toBe(telemetryEntries[0].session);
+  });
+
+  it('logAudit and logToolCall produce the same session field for the same operation (mcp)', async () => {
+    // Regression: pre-fix, only the cli path was tested. A live flogging of
+    // v1.11.0 found audit and telemetry session IDs diverging for MCP-sourced
+    // operations because the running MCP server process predated PR #67 and
+    // had not been restarted. The CODE is correct (both modules import from
+    // the shared session.ts), but coverage was incomplete — this test pins
+    // the MCP path so a future regression here gets caught at unit-test time.
+    await logAudit({
+      src: 'mcp',
+      tool: 'codex_set',
+      op: 'write',
+      key: 'foo.bar',
+      success: true,
+    });
+    await logToolCall('codex_set', 'foo.bar', 'mcp');
 
     const auditEntries = loadAuditLog();
     const telemetryEntries = loadTelemetry();

@@ -1,5 +1,6 @@
 import { debug } from './utils/debug';
 import { Scope, loadAliasMap, saveAliasMap, loadAliasMapMerged, findProjectFile } from './store';
+import { isValidEntryKey } from './utils/directoryStore';
 
 
 
@@ -15,7 +16,20 @@ export function saveAliases(data: Record<string, string>, scope?: Scope  ): void
 }
 
 // Create or update an alias (one alias per entry — replaces any existing alias for the same target)
+//
+// Validates BOTH the alias name and the target path so the same key validation
+// rules that protect entries also protect the alias map. Pre-fix, the alias
+// map happily accepted "__proto__", ".dotleading", slashes, and the empty
+// string as alias names, with downstream behavior ranging from "silently
+// dropped on JSON serialization" to "creates a phantom alias visible in the
+// list as `  -> target`."
 export function setAlias(alias: string, path: string, scope?: Scope  ): void {
+  if (!isValidEntryKey(alias)) {
+    throw new Error(`Invalid alias name: ${JSON.stringify(alias)}`);
+  }
+  if (!isValidEntryKey(path)) {
+    throw new Error(`Invalid alias target: ${JSON.stringify(path)}`);
+  }
   const aliases = loadAliasMap(scope);
   // Enforce one alias per entry: O(1) lookup via inverted map
   const keyToAlias = buildKeyToAliasMap(aliases);
@@ -95,16 +109,21 @@ export function renameAlias(oldName: string, newName: string, scope?: Scope  ): 
 export function resolveKey(key: string, scope?: Scope  ): string {
   // Strip trailing colon (CLI tab-completion artifact)
   const cleanKey = key.replace(/:$/, '');
+  // Use Object.hasOwn so prototype-chain names like "__proto__", "constructor",
+  // and "toString" don't accidentally resolve to inherited properties of the
+  // alias map. Without this guard, resolveKey("__proto__") returned
+  // Object.prototype (an object, not a string), which then crashed downstream
+  // string operations with "path.split is not a function".
   if (!scope || scope === 'auto') {
     const merged = loadAliasMapMerged();
-    const resolved = merged[cleanKey] ?? cleanKey;
+    const resolved = Object.hasOwn(merged, cleanKey) ? merged[cleanKey] : cleanKey;
     if (resolved !== cleanKey) {
       debug(`Alias resolved: "${cleanKey}" -> "${resolved}"`);
     }
     return resolved;
   }
   const aliases = loadAliasMap(scope);
-  const resolved = aliases[cleanKey] ?? cleanKey;
+  const resolved = Object.hasOwn(aliases, cleanKey) ? aliases[cleanKey] : cleanKey;
   if (resolved !== cleanKey) {
     debug(`Alias resolved: "${cleanKey}" -> "${resolved}"`);
   }

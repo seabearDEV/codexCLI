@@ -17,6 +17,9 @@ export interface TelemetryEntry {
   redundant?: boolean | undefined;
   responseSize?: number | undefined;
   agent?: string | undefined;
+  /** Whether the operation succeeded. Optional for backward compat with
+   *  pre-v1.11.x telemetry that didn't carry this field. */
+  success?: boolean | undefined;
 }
 
 // Re-export for backward compatibility — anything that previously imported
@@ -334,6 +337,7 @@ export interface TelemetryExtras {
   hit?: boolean | undefined;
   redundant?: boolean | undefined;
   responseSize?: number | undefined;
+  success?: boolean | undefined;
 }
 
 export function logToolCall(tool: string, key?: string, source: 'mcp' | 'cli' = 'mcp', scope?: 'project' | 'global', extras?: TelemetryExtras, sync = false): Promise<void> {
@@ -520,9 +524,22 @@ export function computeStats(periodDays = 0): TelemetryStats {
   const execs = entries.filter(e => e.op === 'exec').length;
 
   // Namespace coverage
+  // Filter noise from the namespace dashboard:
+  //   - failed operations (e.g. rejected validator writes like `_aliases`,
+  //     `flog/`, `__proto__`) should not show up as "namespace activity"
+  //   - codex_search keys are search terms (regex, substring) — they're not
+  //     namespaces, but extractNamespace would happily slice them on `.`
+  //     and produce phantom namespaces like `^arch\` or `flog/`
+  //   - codex_alias_set / codex_alias_remove keys are alias names, not entry
+  //     namespaces. Counting them produced 1-write "namespaces" like
+  //     `flog_test_alias` or `chk` in the dashboard.
+  // Older telemetry entries without `success` are kept for backward compat.
   const nsCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }> = {};
   for (const e of entries) {
     if (e.ns === '*') continue;
+    if (e.success === false) continue;
+    if (e.tool === 'codex_search') continue;
+    if (e.tool === 'codex_alias_set' || e.tool === 'codex_alias_remove') continue;
     if (!nsCoverage[e.ns]) nsCoverage[e.ns] = { reads: 0, writes: 0, lastWrite: undefined };
     if (e.op === 'read') nsCoverage[e.ns].reads++;
     if (e.op === 'write') {
