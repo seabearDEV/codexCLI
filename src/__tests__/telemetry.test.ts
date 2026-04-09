@@ -245,6 +245,36 @@ describe('computeStats', () => {
       expect(stats.namespaceCoverage.flog_alias).toBeUndefined();
       expect(stats.namespaceCoverage.old_alias).toBeUndefined();
     });
+
+    // Regression: a telemetry entry whose `ns` is `__proto__` (or `constructor`
+    // / `prototype`) used to poison Object.prototype via `nsCoverage[e.ns]++`,
+    // because a plain `{}` resolves those keys up the prototype chain. The
+    // pollution then silently broke the MCP SDK's request dispatch on the next
+    // tool call (server stopped responding mid-session). nsCoverage and the
+    // other dict accumulators in computeStats are now Object.create(null).
+    it('does not pollute Object.prototype when ns is __proto__/constructor/prototype', () => {
+      const now = Date.now();
+      writeEntries([
+        { ts: now - 100, tool: 'codex_get', session: 's1', op: 'read', ns: '__proto__' },
+        { ts: now - 90, tool: 'codex_set', session: 's1', op: 'write', ns: '__proto__' },
+        { ts: now - 80, tool: 'codex_get', session: 's1', op: 'read', ns: 'constructor' },
+        { ts: now - 70, tool: 'codex_get', session: 's1', op: 'read', ns: 'prototype' },
+        { ts: now - 60, tool: 'codex_get', session: 's1', op: 'read', ns: 'arch' },
+      ]);
+      // Run computeStats — must not throw and must not mutate Object.prototype.
+      const stats = computeStats();
+      // Sentinel: a fresh object must not have inherited any of the
+      // counter properties from a polluted Object.prototype.
+      const probe: Record<string, unknown> = {};
+      expect(probe.reads).toBeUndefined();
+      expect(probe.writes).toBeUndefined();
+      expect(probe.lastWrite).toBeUndefined();
+      expect(probe.calls).toBeUndefined();
+      expect(probe.tokensSaved).toBeUndefined();
+      expect(probe.hits).toBeUndefined();
+      // Sanity: legit ns still tracked.
+      expect(stats.namespaceCoverage.arch).toBeDefined();
+    });
   });
 
   it('filters by period', () => {

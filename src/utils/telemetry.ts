@@ -534,7 +534,15 @@ export function computeStats(periodDays = 0): TelemetryStats {
   //     namespaces. Counting them produced 1-write "namespaces" like
   //     `flog_test_alias` or `chk` in the dashboard.
   // Older telemetry entries without `success` are kept for backward compat.
-  const nsCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }> = {};
+  // Null-prototype: telemetry `ns` values are user-controlled (and historical
+  // logs may contain `__proto__` / `constructor` / `prototype` from rejected
+  // writes recorded before the success-filter was added). A plain `{}` would
+  // resolve `nsCoverage['__proto__']` to Object.prototype, skip the init
+  // branch, then mutate Object.prototype itself when we increment counters —
+  // poisoning every object in the process and silently breaking the MCP SDK's
+  // request dispatch on the next call. Same applies to the other dict-shaped
+  // accumulators below.
+  const nsCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }> = Object.create(null);
   for (const e of entries) {
     if (e.ns === '*') continue;
     if (e.success === false) continue;
@@ -567,8 +575,8 @@ export function computeStats(periodDays = 0): TelemetryStats {
     else scopeBreakdown.unscoped++;
   }
 
-  // Project breakdown
-  const projectBreakdown: Record<string, number> = {};
+  // Project breakdown — null-prototype, see nsCoverage rationale above.
+  const projectBreakdown: Record<string, number> = Object.create(null);
   for (const e of entries) {
     if (e.project) {
       projectBreakdown[e.project] = (projectBreakdown[e.project] ?? 0) + 1;
@@ -627,8 +635,9 @@ export function computeStats(periodDays = 0): TelemetryStats {
   );
 
   // Exploration-weighted token savings (namespace-aware, calibrated when possible)
-  const explorationBreakdown: Record<string, { hits: number; tokensSaved: number }> = {};
-  const calibration: Record<string, ExplorationCostResult> = {};
+  // Null-prototype, see nsCoverage rationale above.
+  const explorationBreakdown: Record<string, { hits: number; tokensSaved: number }> = Object.create(null);
+  const calibration: Record<string, ExplorationCostResult> = Object.create(null);
   let estimatedExplorationTokensSaved = 0;
 
   // Load miss-path data once for calibration
@@ -665,8 +674,8 @@ export function computeStats(periodDays = 0): TelemetryStats {
   const deliveryCostTokens = estimatedTokensSaved; // raw bytes served ÷ 4
   const netTokensSaved = estimatedTotalTokensSaved - deliveryCostTokens;
 
-  // Agent breakdown
-  const agentBreakdown: Record<string, { calls: number; reads: number; writes: number }> = {};
+  // Agent breakdown — null-prototype, see nsCoverage rationale above.
+  const agentBreakdown: Record<string, { calls: number; reads: number; writes: number }> = Object.create(null);
   for (const e of entries) {
     const agent = e.agent;
     if (!agent) continue;
