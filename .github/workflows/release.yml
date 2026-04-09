@@ -130,10 +130,22 @@ jobs:
       - name: List artifacts
         run: ls -lR artifacts
 
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          # SemVer prerelease tags contain a `-` after the patch number
+          # (e.g. v1.11.1-beta.0, v1.12.0-rc.1). Stable tags are pure
+          # MAJOR.MINOR.PATCH like v1.11.1.
+          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
-          prerelease: false
+          prerelease: ${{ steps.prerelease.outputs.prerelease == 'true' }}
           files: artifacts/*
 
   update-homebrew:
@@ -142,9 +154,24 @@ jobs:
     name: Update Homebrew Tap
 
     steps:
-      - name: Get version from tag
+      - name: Get version + channel from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          # Strip the leading "v" so $version is bare semver.
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          # Prerelease tags (anything with a `-`) ship to the @beta formula
+          # so they don't bump stable users on `brew upgrade`. Stable tags
+          # ship to the canonical ccli formula.
+          if [[ "${version}" == *-* ]]; then
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+            echo "formula_class=CcliAtBeta" >> "$GITHUB_OUTPUT"
+            echo "formula_file=ccli@beta.rb" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "formula_class=Ccli" >> "$GITHUB_OUTPUT"
+            echo "formula_file=ccli.rb" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Download release binaries
         run: |
@@ -170,13 +197,16 @@ jobs:
       - name: Generate formula
         env:
           CCLI_VERSION: ${{ steps.version.outputs.version }}
+          CHANNEL: ${{ steps.version.outputs.channel }}
+          FORMULA_CLASS: ${{ steps.version.outputs.formula_class }}
+          FORMULA_FILE: ${{ steps.version.outputs.formula_file }}
           SHA_MACOS_UNIVERSAL: ${{ steps.sha.outputs.macos_universal }}
           SHA_LINUX_X64: ${{ steps.sha.outputs.linux_x64 }}
           SHA_LINUX_ARM64: ${{ steps.sha.outputs.linux_arm64 }}
         run: |
           mkdir -p homebrew-ccli/Formula
-          cat > homebrew-ccli/Formula/ccli.rb << EOF
-          class Ccli < Formula
+          cat > "homebrew-ccli/Formula/$FORMULA_FILE" << EOF
+          class $FORMULA_CLASS < Formula
             desc "Command-line information store for quick reference of frequently used data"
             homepage "https://github.com/seabearDEV/codexCLI"
             version "$CCLI_VERSION"
@@ -218,8 +248,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/ccli.rb
-          git commit -m "Update ccli to $CCLI_VERSION"
+          git add "Formula/$FORMULA_FILE"
+          git commit -m "Update $CHANNEL channel to $CCLI_VERSION"
           git push
         env:
           CCLI_VERSION: ${{ steps.version.outputs.version }}
+          CHANNEL: ${{ steps.version.outputs.channel }}
+          FORMULA_FILE: ${{ steps.version.outputs.formula_file }}
