@@ -39,34 +39,46 @@ describe('Storage', () => {
   });
 
   describe('handleError', () => {
-    it('logs red-colored message in non-DEBUG mode', () => {
+    // Round-3 fix: handleError used to swallow the underlying error message
+    // in non-DEBUG mode (only printed `message`, never the error itself).
+    // CLI users hit this when invalid keys produced "Failed to set entry:"
+    // with no detail. The format is now consistent: `<prefix><message>: <error>`
+    // in both modes, with the stack trace gated on DEBUG. process.exitCode
+    // is also set to 1 so wrappers can detect failures.
+    afterEach(() => {
+      // handleError now sets exitCode; reset between tests so failures
+      // don't leak into the suite-level exit code.
+      process.exitCode = undefined;
+    });
+
+    it('logs red-colored message + error in non-DEBUG mode', () => {
       handleError('Something failed', new Error('oops'));
 
       expect(console.error).toHaveBeenCalledTimes(1);
-      expect(console.error).toHaveBeenCalledWith('[red]Something failed[/red]');
+      expect(console.error).toHaveBeenCalledWith('[red]Something failed[/red]: oops');
+      expect(process.exitCode).toBe(1);
     });
 
-    it('in DEBUG mode, logs error object and gray stack trace', () => {
+    it('in DEBUG mode, logs message + error + gray stack trace', () => {
       process.env.DEBUG = 'true';
       const err = new Error('oops');
 
       handleError('Something failed', err);
 
-      expect(console.error).toHaveBeenCalledWith(
-        '[red]Something failed[/red]: ',
-        err
-      );
+      expect(console.error).toHaveBeenCalledWith('[red]Something failed[/red]: oops');
       expect(console.error).toHaveBeenCalledWith(
         expect.stringContaining('[gray]')
       );
+      expect(process.exitCode).toBe(1);
     });
 
     it('includes context prefix when provided', () => {
       handleError('Something failed', new Error('oops'), 'myContext');
 
       expect(console.error).toHaveBeenCalledWith(
-        '[red][myContext] Something failed[/red]'
+        '[red][myContext] Something failed[/red]: oops'
       );
+      expect(process.exitCode).toBe(1);
     });
 
     it('includes context prefix in DEBUG mode', () => {
@@ -76,9 +88,17 @@ describe('Storage', () => {
       handleError('Something failed', err, 'ctx');
 
       expect(console.error).toHaveBeenCalledWith(
-        '[red][ctx] Something failed[/red]: ',
-        err
+        '[red][ctx] Something failed[/red]: oops'
       );
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('stringifies non-Error values in the message line', () => {
+      handleError('Something failed', 'a plain string');
+      expect(console.error).toHaveBeenCalledWith(
+        '[red]Something failed[/red]: a plain string'
+      );
+      expect(process.exitCode).toBe(1);
     });
   });
 

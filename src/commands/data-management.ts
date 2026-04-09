@@ -314,11 +314,33 @@ function computeDiff(current: Record<string, string>, incoming: Record<string, s
 }
 
 function showImportPreview(type: string, validData: Record<string, unknown>, merge: boolean): void {
+  // Mirror the same section dispatch the apply path uses. Pre-fix, this
+  // function ran three top-level branches all against `validData`, so an
+  // --all import file shaped {entries:..., aliases:..., confirm:...} got
+  // diffed as if the wrapper itself were the entries (showing
+  // "[add] entries.foo: bar", "[add] aliases.alias: target", etc.).
+  const isAll = type === 'all';
+  const entriesSection: Record<string, unknown> | undefined =
+    type === 'entries' ? validData :
+    isAll && validData.entries && typeof validData.entries === 'object' && !Array.isArray(validData.entries)
+      ? validData.entries as Record<string, unknown>
+      : undefined;
+  const aliasesSection: Record<string, unknown> | undefined =
+    type === 'aliases' ? validData :
+    isAll && validData.aliases && typeof validData.aliases === 'object' && !Array.isArray(validData.aliases)
+      ? validData.aliases as Record<string, unknown>
+      : undefined;
+  const confirmSection: Record<string, unknown> | undefined =
+    type === 'confirm' ? validData :
+    isAll && validData.confirm && typeof validData.confirm === 'object' && !Array.isArray(validData.confirm)
+      ? validData.confirm as Record<string, unknown>
+      : undefined;
+
   let hasChanges = false;
 
-  if (type === 'entries' || type === 'all') {
+  if (entriesSection) {
     const currentFlat = flattenObject(loadData());
-    const importFlat = flattenObject(expandFlatKeys(validData));
+    const importFlat = flattenObject(expandFlatKeys(entriesSection));
     const lines = computeDiff(currentFlat, importFlat, merge);
     console.log(color.bold(`Entries (${merge ? 'merge' : 'replace'}):`));
     if (lines.length > 0) {
@@ -329,13 +351,12 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
     }
   }
 
-  if (type === 'aliases' || type === 'all') {
+  if (aliasesSection) {
     const currentAliases = loadAliases();
-    const importAliases = validData as Record<string, string>;
     const currentFlat: Record<string, string> = {};
     const importFlat: Record<string, string> = {};
     for (const [k, v] of Object.entries(currentAliases)) currentFlat[k] = v;
-    for (const [k, v] of Object.entries(importAliases)) importFlat[k] = String(v);
+    for (const [k, v] of Object.entries(aliasesSection)) importFlat[k] = String(v);
     const lines = computeDiff(currentFlat, importFlat, merge);
     console.log(color.bold(`Aliases (${merge ? 'merge' : 'replace'}):`));
     if (lines.length > 0) {
@@ -346,13 +367,12 @@ function showImportPreview(type: string, validData: Record<string, unknown>, mer
     }
   }
 
-  if (type === 'confirm' || type === 'all') {
+  if (confirmSection) {
     const currentConfirm = loadConfirmKeys();
-    const importConfirm = validData;
     const currentFlat: Record<string, string> = {};
     const importFlat: Record<string, string> = {};
     for (const k of Object.keys(currentConfirm)) currentFlat[k] = 'true';
-    for (const k of Object.keys(importConfirm)) importFlat[k] = 'true';
+    for (const k of Object.keys(confirmSection)) importFlat[k] = 'true';
     const lines = computeDiff(currentFlat, importFlat, merge);
     console.log(color.bold(`Confirm keys (${merge ? 'merge' : 'replace'}):`));
     if (lines.length > 0) {

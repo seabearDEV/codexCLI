@@ -19,15 +19,27 @@ export function getErrorMessage(error: unknown): string {
  */
 export function handleError(message: string, error: unknown, context?: string): void {
   const contextPrefix = context ? `[${context}] ` : '';
+  // Always include the error's own message in user-facing output. Pre-fix
+  // the non-DEBUG branch printed only `message` (e.g. "Failed to set entry:")
+  // and threw away the underlying error text — so a CLI user setting an
+  // invalid key saw "Failed to set entry:" with no idea why. The actual
+  // reason ("Invalid store key: __proto__") was only visible with
+  // DEBUG=true. Now both branches show the message, with the stack
+  // trace gated on DEBUG.
+  const errorText = error instanceof Error ? error.message : String(error);
 
   if (process.env.DEBUG === 'true') {
-    console.error(`${color.red(contextPrefix + message)}: `, error);
+    console.error(`${color.red(contextPrefix + message)}: ${errorText}`);
     if (error instanceof Error && error.stack) {
       console.error(color.gray(error.stack));
     }
   } else {
-    console.error(color.red(contextPrefix + message));
+    console.error(`${color.red(contextPrefix + message)}: ${errorText}`);
   }
+
+  // Surface failure via the process exit code so scripts wrapping ccli can
+  // detect errors. Pre-fix the CLI returned 0 on most error paths.
+  process.exitCode = 1;
 }
 
 /**
