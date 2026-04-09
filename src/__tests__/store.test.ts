@@ -130,15 +130,26 @@ describe('mtime caching', () => {
 
     loadEntries('global');
 
-    // External modification (simulate another process) — write a new wrapper
-    // to the entry file with a different mtime. The per-file mtime cache
-    // should detect the change on the next load().
+    // External modification (simulate another process) — atomically rename
+    // a fresh wrapper file into place. Atomic rename is what realistic
+    // writers use (editors, codexCLI itself, etc.) and it bumps both the
+    // file mtime and the parent directory mtime, which is what the
+    // dir-mtime fast-skip in scanAndSync invalidates on. In-place
+    // overwrite would not bump dir mtime and is an unsupported edit
+    // surface (see conventions.editSurface).
     const entryPath = path.join(storeDir, 'x.json');
+    const tmpPath = entryPath + '.tmp';
+    fs.writeFileSync(tmpPath, JSON.stringify({ value: '2' }));
+    fs.renameSync(tmpPath, entryPath);
     const originalMtime = fs.statSync(entryPath).mtimeMs;
-    fs.writeFileSync(entryPath, JSON.stringify({ value: '2' }));
     const fd = fs.openSync(entryPath, 'r+');
     fs.futimesSync(fd, new Date(), new Date(originalMtime + 1000));
     fs.closeSync(fd);
+    // Bump the directory mtime explicitly so the fast-skip in scanAndSync
+    // sees the change even when the rename happens within the same fs
+    // mtime quantum as the prior write.
+    const dirStat = fs.statSync(storeDir);
+    fs.utimesSync(storeDir, new Date(), new Date(dirStat.mtimeMs + 1000));
 
     const reloaded = loadEntries('global');
     expect(reloaded).toEqual({ x: '2' });

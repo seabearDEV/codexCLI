@@ -351,11 +351,19 @@ export function createDirectoryStore(
   // sidecar that appears later without a stale-read hazard.
   let aliasesCache: CachedSidecar<Record<string, string>> | null = null;
   let confirmCache: CachedSidecar<Record<string, true>> | null = null;
+  // Directory mtime at the time of the last successful scanAndSync. The
+  // directory's own mtime is bumped by every atomic-write inside it (since
+  // atomicWriteFileSync uses create-tmp + rename, which adds and removes a
+  // dir entry). If the dir mtime hasn't changed, no entry, sidecar, or
+  // epoch file has been touched — so we can skip the per-file scan
+  // entirely. Sentinel `-1` means "no scan has run yet".
+  let dirMtimeMs = -1;
 
   function clear(): void {
     entryCache.clear();
     aliasesCache = null;
     confirmCache = null;
+    dirMtimeMs = -1;
   }
 
   /**
@@ -394,6 +402,30 @@ export function createDirectoryStore(
    */
   function scanAndSync(): void {
     const dir = getDirPath();
+
+    // Fast skip: stat the directory itself first. If its mtime hasn't
+    // changed since the last scan, no atomic-write has touched any file
+    // inside it (atomicWriteFileSync's create-tmp + rename bumps the dir
+    // mtime as a side effect of adding and removing the tmp dirent), so
+    // the entry cache, sidecar caches, and seqlock epoch file are all
+    // still authoritative. Skip the readdir + per-entry stat loop.
+    try {
+      const dirStat = fs.statSync(dir);
+      if (dirMtimeMs !== -1 && dirStat.mtimeMs === dirMtimeMs) {
+        return;
+      }
+      dirMtimeMs = dirStat.mtimeMs;
+    } catch (err) {
+      if (isENOENT(err)) {
+        entryCache.clear();
+        aliasesCache = { data: {}, mtimeMs: -1 };
+        confirmCache = { data: {}, mtimeMs: -1 };
+        dirMtimeMs = -1;
+        return;
+      }
+      throw err;
+    }
+
     let files: string[];
     try {
       files = fs.readdirSync(dir);
@@ -402,6 +434,7 @@ export function createDirectoryStore(
         entryCache.clear();
         aliasesCache = { data: {}, mtimeMs: -1 };
         confirmCache = { data: {}, mtimeMs: -1 };
+        dirMtimeMs = -1;
         return;
       }
       throw err;

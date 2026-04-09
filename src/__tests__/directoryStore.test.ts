@@ -696,16 +696,21 @@ describe('sidecar mtime cache', () => {
     });
     store.load();  // prime
 
-    // Simulate an external rewrite with a newer mtime using utimesSync for determinism.
+    // Simulate an external atomic rewrite. Atomic rename (the realistic
+    // pattern used by editors, codexCLI's own writes, etc.) bumps both
+    // file and parent-directory mtime, which is what scanAndSync's
+    // dir-mtime fast-skip invalidates on.
     const aliasesPath = path.join(dir, '_aliases.json');
     const previousStat = fs.statSync(aliasesPath);
-    fs.writeFileSync(
-      aliasesPath,
-      JSON.stringify({ y: 'a' }, null, 2)
-    );
-    // +1000 ms ensures the bump is visible even on filesystems with 1-second mtime granularity.
+    const tmpPath = aliasesPath + '.tmp';
+    fs.writeFileSync(tmpPath, JSON.stringify({ y: 'a' }, null, 2));
+    fs.renameSync(tmpPath, aliasesPath);
     const newerMtime = new Date(previousStat.mtimeMs + 1000);
     fs.utimesSync(aliasesPath, newerMtime, newerMtime);
+    // Bump dir mtime explicitly so the dir-mtime fast-skip detects the
+    // change even within a single fs mtime quantum.
+    const dirStat = fs.statSync(dir);
+    fs.utimesSync(dir, new Date(), new Date(dirStat.mtimeMs + 1000));
 
     const reloaded = store.load();
     expect(reloaded.aliases).toEqual({ y: 'a' });
