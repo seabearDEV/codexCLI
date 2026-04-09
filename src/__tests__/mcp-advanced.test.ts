@@ -541,15 +541,15 @@ describe('MCP Server - Advanced Tests', () => {
     it('imports entries from JSON data', async () => {
       const result = await toolHandlers['codex_import']({
         type: 'entries',
-        json: JSON.stringify({ project: { name: 'imported' } }),
+        data: JSON.stringify({ project: { name: 'imported' } }),
       });
-      expect(result.content[0].text.toLowerCase()).toContain('import');
+      expect(result.content[0].text.toLowerCase()).toMatch(/import|merge/);
     });
 
     it('returns error for invalid JSON', async () => {
       const result = await toolHandlers['codex_import']({
         type: 'entries',
-        json: 'not json!!!',
+        data: 'not json!!!',
       });
       expect(result.isError).toBe(true);
     });
@@ -557,7 +557,7 @@ describe('MCP Server - Advanced Tests', () => {
     it('returns error for array JSON', async () => {
       const result = await toolHandlers['codex_import']({
         type: 'entries',
-        json: '[1,2,3]',
+        data: '[1,2,3]',
       });
       expect(result.isError).toBe(true);
     });

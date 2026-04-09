@@ -249,7 +249,7 @@ describe('MCP Integration (real I/O)', () => {
       expect(Object.keys((afterReset.entries as any))).toHaveLength(0);
 
       // Import
-      callMcpTool('codex_import', { type: 'entries', json: exportedJson });
+      callMcpTool('codex_import', { type: 'entries', data: exportedJson });
       const afterImport = readDataFile();
       expect((afterImport.entries as any).a.b).toBe('original');
       expect((afterImport.entries as any).c.d).toBe('other');

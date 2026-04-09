@@ -363,7 +363,7 @@ server.tool(
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
     aliases_only: z.boolean().optional().describe("Show aliases only"),
     values: z.boolean().optional().describe("Include values in output (default: false; leaf values always include their value)"),
-    depth: z.number().optional().describe("Limit key depth (e.g. 1 for top-level only, 2 for two levels)"),
+    depth: z.coerce.number().optional().describe("Limit key depth (e.g. 1 for top-level only, 2 for two levels)"),
     decrypt: z.boolean().optional().describe("Decrypt an encrypted value"),
     password: z.string().optional().describe("Password for decryption (required when decrypt is true)"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
@@ -1021,21 +1021,27 @@ server.tool(
 // --- codex_import ---
 server.tool(
   "codex_import",
-  "Import entries and/or aliases from a JSON string",
+  "Import entries and/or aliases. Pass `data` as either an object or a JSON string. Example: codex_import({ data: { arch: { api: 'GraphQL' } } })",
   {
-    type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to import"),
-    json: z.string().describe("JSON string to import"),
-    merge: z.boolean().optional().describe("Merge with existing data instead of replacing (default false)"),
+    data: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Data to import — either a JSON string or an object literal"),
+    type: z.enum(["entries", "aliases", "confirm", "all"]).optional().describe("What to import (default: entries)"),
+    merge: z.boolean().optional().describe("Merge with existing data instead of replacing (default true — pass false to wipe and replace)"),
     preview: z.boolean().optional().describe("Preview changes without modifying data (returns diff text)"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ type, json, merge, preview, scope: scopeParam }) => {
+  async ({ data, type: typeParam, merge: mergeParam, preview, scope: scopeParam }) => {
     try {
+      const type = typeParam ?? "entries";
+      const merge = mergeParam ?? true;
       let parsed: unknown;
-      try {
-        parsed = JSON.parse(json);
-      } catch {
-        return errorResponse("Invalid JSON string.");
+      if (typeof data === "string") {
+        try {
+          parsed = JSON.parse(data);
+        } catch {
+          return errorResponse("Invalid JSON string.");
+        }
+      } else {
+        parsed = data;
       }
 
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -1339,7 +1345,7 @@ server.tool(
   "codex_stale",
   "Find entries that haven't been updated recently (helps identify stale knowledge)",
   {
-    days: z.number().int().min(0).optional().describe("Threshold in days (default: 30). Entries not updated in this many days are returned."),
+    days: z.coerce.number().int().min(0).optional().describe("Threshold in days (default: 30). Entries not updated in this many days are returned."),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
   async ({ days, scope: scopeParam }) => {
@@ -1558,7 +1564,7 @@ server.tool(
     misses_only: z.boolean().optional().describe("Show only read operations that found nothing (misses)"),
     redundant_only: z.boolean().optional().describe("Show only writes where value didn't change"),
     detailed: z.boolean().optional().describe("Show per-entry metrics (duration, sizes, hit/miss) (default: false)"),
-    limit: z.number().int().min(1).max(500).optional().describe("Max entries to return (default: 50)"),
+    limit: z.coerce.number().int().min(1).max(500).optional().describe("Max entries to return (default: 50)"),
   },
   async ({ key, period, writes_only, src, project, hits_only, misses_only, redundant_only, detailed, limit }) => {
     try {
