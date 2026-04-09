@@ -106,8 +106,56 @@ export async function importData(type: string, file: string, options: ImportOpti
 
     const validData = importedData as Record<string, unknown>;
 
+    // For type=all, the file is shaped { entries: {...}, aliases: {...},
+    // confirm: {...} } and each section needs its own validator + handler.
+    // For the single-type imports, validData is the section itself.
+    //
+    // Pre-fix, the CLI ran type=all through three separate top-level
+    // branches that all treated `validData` as the section payload — so
+    // an --all import file got saved as entries with keys "entries"/
+    // "aliases"/"confirm", and the alias branch rejected validData because
+    // its values were objects, not strings. The MCP codex_import handler
+    // already does the per-section split correctly; this brings the CLI
+    // into line.
+    const isAll = type === 'all';
+    const entriesSection: Record<string, unknown> | undefined =
+      type === 'entries' ? validData :
+      isAll && validData.entries && typeof validData.entries === 'object' && !Array.isArray(validData.entries)
+        ? validData.entries as Record<string, unknown>
+        : undefined;
+    const aliasesSection: Record<string, unknown> | undefined =
+      type === 'aliases' ? validData :
+      isAll && validData.aliases && typeof validData.aliases === 'object' && !Array.isArray(validData.aliases)
+        ? validData.aliases as Record<string, unknown>
+        : undefined;
+    const confirmSection: Record<string, unknown> | undefined =
+      type === 'confirm' ? validData :
+      isAll && validData.confirm && typeof validData.confirm === 'object' && !Array.isArray(validData.confirm)
+        ? validData.confirm as Record<string, unknown>
+        : undefined;
+
+    if (isAll && !entriesSection && !aliasesSection && !confirmSection) {
+      printError('Import with type "all" requires {"entries": {...}, "aliases": {...}, "confirm": {...}} (at least one section).');
+      return;
+    }
+
     // Preview mode: show diff without modifying data
     if (options.preview) {
+      // Validate raw input the same way the apply path does. Pre-fix the
+      // preview silently dropped bad keys via flattenObject's prototype-
+      // getter trap, so the user saw a clean preview for an import the
+      // apply would reject.
+      try {
+        if (entriesSection) validateImportEntries(entriesSection);
+        if (aliasesSection) {
+          const hasNonStringValues = Object.values(aliasesSection).some(v => typeof v !== 'string');
+          if (!hasNonStringValues) validateImportAliases(aliasesSection);
+        }
+        if (confirmSection) validateImportConfirm(confirmSection);
+      } catch (err) {
+        printError(err instanceof Error ? err.message : String(err));
+        return;
+      }
       showImportPreview(type, validData, !!options.merge);
       return;
     }
@@ -117,17 +165,17 @@ export async function importData(type: string, file: string, options: ImportOpti
       createAutoBackup('pre-import');
     }
 
-    if (type === 'entries' || type === 'all') {
-      // Validate the raw input BEFORE expandFlatKeys runs. expandFlatKeys
+    if (entriesSection) {
+      // Validate raw input BEFORE expandFlatKeys runs. expandFlatKeys
       // silently normalizes some bad keys (e.g. ".dotleading" → "dotleading")
       // and erases the evidence that the input was invalid.
       try {
-        validateImportEntries(validData);
+        validateImportEntries(entriesSection);
       } catch (err) {
         printError(err instanceof Error ? err.message : String(err));
         return;
       }
-      const expanded = expandFlatKeys(validData);
+      const expanded = expandFlatKeys(entriesSection);
       const currentData = options.merge ? loadData(scope) : {};
 
       const newData = options.merge
@@ -138,14 +186,14 @@ export async function importData(type: string, file: string, options: ImportOpti
       printSuccess(`Entries ${options.merge ? 'merged' : 'imported'} successfully`);
     }
 
-    if (type === 'aliases' || type === 'all') {
-      const hasNonStringValues = Object.values(validData).some(v => typeof v !== 'string');
+    if (aliasesSection) {
+      const hasNonStringValues = Object.values(aliasesSection).some(v => typeof v !== 'string');
       if (hasNonStringValues) {
         printError('Alias values must all be strings (dot-notation paths).');
         return;
       }
       try {
-        validateImportAliases(validData);
+        validateImportAliases(aliasesSection);
       } catch (err) {
         printError(err instanceof Error ? err.message : String(err));
         return;
@@ -154,24 +202,24 @@ export async function importData(type: string, file: string, options: ImportOpti
       const currentAliases = options.merge ? loadAliases(scope) : {};
 
       const newAliases = options.merge
-        ? { ...currentAliases, ...(validData as Record<string, string>) }
-        : validData;
+        ? { ...currentAliases, ...(aliasesSection as Record<string, string>) }
+        : aliasesSection;
 
       saveAliases(newAliases as Record<string, string>, scope);
       printSuccess(`Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
     }
 
-    if (type === 'confirm' || type === 'all') {
+    if (confirmSection) {
       try {
-        validateImportConfirm(validData);
+        validateImportConfirm(confirmSection);
       } catch (err) {
         printError(err instanceof Error ? err.message : String(err));
         return;
       }
       const currentConfirm = options.merge ? loadConfirmKeys(scope) : {};
       const newConfirm = options.merge
-        ? { ...currentConfirm, ...(validData as Record<string, true>) }
-        : validData;
+        ? { ...currentConfirm, ...(confirmSection as Record<string, true>) }
+        : confirmSection;
       saveConfirmKeys(newConfirm as Record<string, true>, scope);
       printSuccess(`Confirm keys ${options.merge ? 'merged' : 'imported'} successfully`);
     }

@@ -1047,6 +1047,36 @@ server.tool(
 
       // Preview mode: compute diff and return without modifying data
       if (preview) {
+        // Validate the raw input the same way the apply path does, so a
+        // preview never says "here's what would change" for an import
+        // that the apply path would reject. Pre-fix, the preview silently
+        // dropped bad keys (e.g. __proto__) from the diff because it ran
+        // through flattenObject which trips the __proto__ getter trap.
+        try {
+          if (type === "entries") {
+            validateImportEntries(obj);
+          } else if (type === "aliases") {
+            validateImportAliases(obj);
+          } else if (type === "confirm") {
+            validateImportConfirm(obj);
+          } else if (type === "all") {
+            const dv = obj.entries;
+            const av = obj.aliases;
+            const cv = obj.confirm;
+            if (dv && typeof dv === "object" && !Array.isArray(dv)) {
+              validateImportEntries(dv as Record<string, unknown>);
+            }
+            if (av && typeof av === "object" && !Array.isArray(av)) {
+              validateImportAliases(av as Record<string, unknown>);
+            }
+            if (cv && typeof cv === "object" && !Array.isArray(cv)) {
+              validateImportConfirm(cv as Record<string, unknown>);
+            }
+          }
+        } catch (err) {
+          return errorResponse(`Preview failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+
         const lines: string[] = [];
 
         const diffEntries = (current: Record<string, string>, incoming: Record<string, string>, doMerge: boolean): string[] => {

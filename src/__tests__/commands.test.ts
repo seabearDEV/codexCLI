@@ -918,8 +918,17 @@ describe('Commands', () => {
       expect(showedSuccess).toBe(true);
     });
 
-    it('imports all with force', async () => {
-      const allContent = { key: 'value' };
+    it('imports all with force using proper section shape', async () => {
+      // type=all requires the {entries, aliases, confirm} wrapper shape.
+      // Pre-fix, importData treated `validData` as both entries AND aliases
+      // for type=all, which mostly broke and "worked" by accident only when
+      // the input happened to have all-string values. The fix dispatches
+      // each section to its own save path; this test pins the new contract.
+      const allContent = {
+        entries: { server: { ip: '1.2.3.4' } },
+        aliases: { srv: 'server.ip' },
+        confirm: { 'commands.release': true },
+      };
       (fs.readFileSync as Mock).mockImplementation((p: string) => {
         if (p === importFile) return JSON.stringify(allContent);
         return JSON.stringify({});
@@ -930,6 +939,27 @@ describe('Commands', () => {
       // Should save entries, aliases, and confirm keys
       expect(saveEntries).toHaveBeenCalled();
       expect(saveAliasMap).toHaveBeenCalled();
+    });
+
+    it('rejects imports all without proper section shape', async () => {
+      // Pre-fix, importData type=all silently treated raw data as each
+      // section. After the fix, missing sections produce a clear error
+      // instead of accidentally saving wrong data.
+      const allContent = { key: 'value' };  // no entries/aliases/confirm wrapper
+      (fs.readFileSync as Mock).mockImplementation((p: string) => {
+        if (p === importFile) return JSON.stringify(allContent);
+        return JSON.stringify({});
+      });
+
+      await importData('all', importFile, { force: true });
+
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('requires'))
+      );
+      expect(showedError).toBe(true);
+      expect(saveEntries).not.toHaveBeenCalled();
+      expect(saveAliasMap).not.toHaveBeenCalled();
     });
   });
 
