@@ -1012,6 +1012,7 @@ A successful response will include `"serverInfo":{"name":"codexcli"}` in the JSO
 | [Schema Guide](docs/schema-guide.md) | How to structure your `.codexcli/` store — namespaces, file anatomy, good vs bad entries, reference examples |
 | [Token Savings](docs/token-savings.md) | How CodexCLI measures AI agent efficiency — every metric explained, estimation methodology, limitations |
 | [Roadmap](docs/ROADMAP.md) | Completed features, upcoming milestones, long-term vision |
+| [Dogfooding](docs/dogfooding.md) | How CodexCLI found and fixed its own bugs using its own MCP tools |
 
 ## Development
 
