@@ -6,6 +6,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-04-10
+
+Stable promotion of v1.11.1-beta.8 after successful soak. Consolidates all beta-cycle fixes below. See individual beta entries for commit-level detail.
+
+### ⚠️ Breaking Changes
+
+- **`codex_import` defaults to `merge:true`.** Callers that relied on replace-by-default must pass `merge:false` explicitly.
+- **`codex_import` parameter renamed**: `json` → `data`, accepts either a JSON string or an object literal. `type` defaults to `'entries'`.
+
+### Fixed
+
+- **MCP server freeze (3 independent causes):**
+  1. **Object.prototype poisoning** — telemetry entries with `__proto__`/`constructor`/`prototype` as namespace poisoned `Object.prototype` via `nsCoverage[e.ns]++`, silently breaking MCP SDK request dispatch. Dict accumulators in `computeStats` now use `Object.create(null)`. (d773c4d)
+  2. **Full audit.jsonl re-read on every `loadAuditLog()` call** — added incremental tail cache; subsequent calls read only new bytes. Cache resets on shrink/rotation. (1810fc2)
+  3. **Full directory scan on every `scanAndSync()` call** — added dir-mtime fast-skip; if the store directory's mtime is unchanged, the cached entry state is authoritative and per-file scanning is skipped. (b803683)
+- **Numeric MCP tool params now coerce strings.** `codex_audit limit`, `codex_stale days`, `codex_get depth` use `z.coerce.number()` so MCP clients passing values as strings no longer hit validation errors. (4ef3800)
+- **Validator-bypass + prototype-pollution: 7 latent bugs closed.** `setValue`, `setAlias`, `codex_copy`, `codex_rename`, and `codex_import` had inconsistent or absent key validation. See beta.0 entry for the full breakdown.
+- **Interpolation `:?` and circular detection now propagate errors** instead of returning raw literals.
+- **`codex_import` preview mode validates keys up-front.**
+- **`codex_import type=all` (CLI) properly dispatches sections.**
+- **`codex_run` no longer tagged as a redundant write.**
+- **`codex_stats` namespace coverage filters noise** from failed ops, searches, and alias operations.
+- **`handleError`/`printError` show underlying error message and set `exitCode = 1`.**
+- **`getNestedValue` no longer walks the prototype chain** — `codex_get __proto__` returns "not found" instead of `Object.prototype`.
+- **`codex_set` with invalid alias name now errors before creating the entry** (no more partial-state on bad alias).
+
+### Changed
+
+- **Packaging**: Beta binary installed as `ccli-beta` via `brew install seabearDEV/ccli/ccli-beta` (dash, not `@beta`).
+- **Test count**: 1167 → 1226 (+59 regression tests across validator, prototype-safety, perf, and session-consistency coverage).
+
 ## [1.11.1-beta.2] - 2026-04-09
 
 Second packaging-only respin. No source-code changes; the only difference is in `.github/workflows/release.yml` where the beta channel now writes `Formula/ccli-beta.rb` (with class `CcliBeta`) instead of `Formula/ccli@beta.rb` (with class `CcliAtBeta`).
