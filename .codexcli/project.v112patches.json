@@ -1,0 +1,7 @@
+{
+  "value": "v1.12.x patch chain for export/import integrity. Origin: 2026-04-09 review found 7 gaps, scoped across three releases by severity. HIGH→v1.12.1 (#74 auto-backup scope, #75 encrypted roundtrip), MEDIUM→v1.12.2 (#76 export-all shape, #77 import transactionality, #78 export envelope), LOW→v1.12.3 (#79 value-type validation, #80 import size cap).\n\nSEQUENCING: land #78 (export envelope) first in v1.12.2 — #75 needs its includesEncrypted flag, #76 needs its version field for the shape transition. Both are sibling issues the envelope unblocks. Don't reorder v1.12.2's internal sequence even if tempting to chase the higher-severity-looking bugs first.\n\nAUDIT COMPLETE: if asked to review export/import integrity again, check `gh issue list --milestone v1.12.1` (and .2, .3) before reading code. The audit is done and the work is sequenced. Reviewing again will just reproduce this list.\n\nCONVENTION (new): severity-to-patch-number mapping (HIGH→.1, MEDIUM→.2, LOW→.3) for this chain. Not a project-wide rule yet — this was the first time the convention was used. Keep or revisit after v1.12.x ships.",
+  "meta": {
+    "created": 1775765747564,
+    "updated": 1775765747564
+  }
+}
