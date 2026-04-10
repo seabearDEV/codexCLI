@@ -1,7 +1,7 @@
 {
-  "value": "v1.12.0 code complete 2026-04-10. All four milestone issues resolved: #57 (already shipped), #81 (tail cache + query optimization), #41 (audit --follow), #68 (LLM instructions nudge). Pending: version bump, CHANGELOG, tag. Then v1.12.x patches per project.v112patches (#74-#80).",
+  "value": "v1.12.0 milestone closed 2026-04-10. All four issues shipped (#57, #81, #41, #68). Beta v1.12.0-beta.0 soak testing in progress through weekend of 2026-04-11. Stable cut pending soak results. Next: v1.12.x patches per project.v112patches (#74-#80).",
   "meta": {
     "created": 1775761844860,
-    "updated": 1775845527645
+    "updated": 1775847643226
   }
 }
