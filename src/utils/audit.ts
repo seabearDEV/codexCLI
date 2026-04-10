@@ -134,11 +134,14 @@ export function clearAuditLogCache(): void {
   cachedAuditPath = '';
 }
 
-export function loadAuditLog(): AuditEntry[] {
+/**
+ * Refresh the in-memory audit cache from disk. Reads only new tail bytes
+ * since the last call. Does not copy — callers that need mutation safety
+ * should use loadAuditLog() instead.
+ */
+function refreshAuditCache(): void {
   const auditPath = getAuditPath();
 
-  // If the audit path changed (CODEX_DATA_DIR redirect, scope swap, etc.),
-  // the previous cache is for a different file — reset.
   if (auditPath !== cachedAuditPath) {
     cachedAuditEntries = [];
     cachedAuditSize = 0;
@@ -149,33 +152,26 @@ export function loadAuditLog(): AuditEntry[] {
   try {
     size = fs.statSync(auditPath).size;
   } catch {
-    // File missing — drop any stale cache and return empty.
     cachedAuditEntries = [];
     cachedAuditSize = 0;
-    return [];
+    return;
   }
 
-  // File shrunk (rotation / truncation / external rewrite). The cache
-  // would no longer match the on-disk prefix, so drop it and re-read
-  // from byte 0.
   if (size < cachedAuditSize) {
     cachedAuditEntries = [];
     cachedAuditSize = 0;
   }
 
-  // No new bytes — return the cached entries (a defensive copy so
-  // callers that mutate the array can't pollute the cache).
   if (size === cachedAuditSize) {
-    return cachedAuditEntries.slice();
+    return;
   }
 
-  // Read just the new tail and parse only its complete lines.
   const toRead = size - cachedAuditSize;
   let fd: number;
   try {
     fd = fs.openSync(auditPath, 'r');
   } catch {
-    return cachedAuditEntries.slice();
+    return;
   }
   try {
     const buffer = Buffer.alloc(toRead);
@@ -186,13 +182,9 @@ export function loadAuditLog(): AuditEntry[] {
       total += n;
     }
     const text = buffer.toString('utf8', 0, total);
-    // Only commit complete lines: if a writer is mid-append, the trailing
-    // partial line stays unparsed and will be picked up on the next read
-    // once it's been flushed with its newline terminator.
     const lastNewline = text.lastIndexOf('\n');
     if (lastNewline === -1) {
-      // No complete lines yet — leave cachedAuditSize unchanged.
-      return cachedAuditEntries.slice();
+      return;
     }
     const completeText = text.slice(0, lastNewline + 1);
     const completeBytes = Buffer.byteLength(completeText, 'utf8');
@@ -204,19 +196,23 @@ export function loadAuditLog(): AuditEntry[] {
   } finally {
     fs.closeSync(fd);
   }
+}
 
+export function loadAuditLog(): AuditEntry[] {
+  refreshAuditCache();
   return cachedAuditEntries.slice();
 }
 
 export function queryAuditLog(options: AuditQueryOptions = {}): AuditEntry[] {
-  const all = loadAuditLog();
+  refreshAuditCache();
+
   const cutoff = options.periodDays && options.periodDays > 0
     ? Date.now() - options.periodDays * 86400000
     : 0;
   const limit = options.limit ?? 50;
   const keyPrefix = options.key ? options.key + '.' : undefined;
 
-  const filtered = all.filter(e =>
+  const filtered = cachedAuditEntries.filter(e =>
     (cutoff <= 0 || e.ts >= cutoff) &&
     (!options.key || e.key === options.key || !!e.key?.startsWith(keyPrefix!)) &&
     (!options.writesOnly || e.op === 'write') &&

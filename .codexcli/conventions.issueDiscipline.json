@@ -1,0 +1,7 @@
+{
+  "value": "All new work requires a GitHub issue assigned to a milestone before implementation starts. No exceptions for \"quick fixes\" or \"while I'm here\" scope creep. File first, then build. See project.tracking for issue/milestone conventions.",
+  "meta": {
+    "created": 1775842661857,
+    "updated": 1775842661857
+  }
+}

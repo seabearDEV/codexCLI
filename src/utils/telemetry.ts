@@ -387,46 +387,87 @@ function pushTelemetryLine(entries: TelemetryEntry[], line: string): void {
   }
 }
 
+// ── Incremental tail cache ─────────────────────────────────────────────
+//
+// Mirrors the audit.jsonl tail cache (see src/utils/audit.ts). Telemetry
+// is also append-only, so the same strategy applies: cache parsed entries
+// plus the byte offset of the last read, and on subsequent calls only
+// parse the new tail.
+
+let cachedTelemetryEntries: TelemetryEntry[] = [];
+let cachedTelemetrySize = 0;
+let cachedTelemetryPath = '';
+
+/** Reset the in-memory telemetry cache. Used by tests that swap CODEX_DATA_DIR. */
+export function clearTelemetryCache(): void {
+  cachedTelemetryEntries = [];
+  cachedTelemetrySize = 0;
+  cachedTelemetryPath = '';
+}
+
 /**
  * Read and parse the telemetry log. Returns entries in file order
  * (oldest-first, since new entries are appended to the log).
  */
 export function loadTelemetry(): TelemetryEntry[] {
-  const chunkSize = 64 * 1024;
-  const entries: TelemetryEntry[] = [];
+  const telemetryPath = getTelemetryPath();
 
+  if (telemetryPath !== cachedTelemetryPath) {
+    cachedTelemetryEntries = [];
+    cachedTelemetrySize = 0;
+    cachedTelemetryPath = telemetryPath;
+  }
+
+  let size: number;
   try {
-    const fd = fs.openSync(getTelemetryPath(), 'r');
-    const buffer = Buffer.alloc(chunkSize);
-    let remainder = '';
-
-    try {
-      let bytesRead: number;
-      do {
-        // null position advances the fd's read offset automatically on each call
-        bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
-        if (bytesRead <= 0) break;
-
-        const chunk = remainder + buffer.toString('utf8', 0, bytesRead);
-        const lines = chunk.split('\n');
-        remainder = lines.pop() ?? '';
-
-        for (const line of lines) {
-          pushTelemetryLine(entries, line);
-        }
-      } while (bytesRead === buffer.length);
-
-      if (remainder) {
-        pushTelemetryLine(entries, remainder);
-      }
-
-      return entries;
-    } finally {
-      fs.closeSync(fd);
-    }
+    size = fs.statSync(telemetryPath).size;
   } catch {
+    cachedTelemetryEntries = [];
+    cachedTelemetrySize = 0;
     return [];
   }
+
+  if (size < cachedTelemetrySize) {
+    cachedTelemetryEntries = [];
+    cachedTelemetrySize = 0;
+  }
+
+  if (size === cachedTelemetrySize) {
+    return cachedTelemetryEntries.slice();
+  }
+
+  const toRead = size - cachedTelemetrySize;
+  let fd: number;
+  try {
+    fd = fs.openSync(telemetryPath, 'r');
+  } catch {
+    return cachedTelemetryEntries.slice();
+  }
+  try {
+    const buffer = Buffer.alloc(toRead);
+    let total = 0;
+    while (total < toRead) {
+      const n = fs.readSync(fd, buffer, total, toRead - total, cachedTelemetrySize + total);
+      if (n <= 0) break;
+      total += n;
+    }
+    const text = buffer.toString('utf8', 0, total);
+    const lastNewline = text.lastIndexOf('\n');
+    if (lastNewline === -1) {
+      return cachedTelemetryEntries.slice();
+    }
+    const completeText = text.slice(0, lastNewline + 1);
+    const completeBytes = Buffer.byteLength(completeText, 'utf8');
+    const lines = completeText.split('\n');
+    for (const line of lines) {
+      pushTelemetryLine(cachedTelemetryEntries, line);
+    }
+    cachedTelemetrySize += completeBytes;
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  return cachedTelemetryEntries.slice();
 }
 
 export interface TelemetryStats {
