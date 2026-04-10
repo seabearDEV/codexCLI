@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.12.0-beta.0] - 2026-04-10
+
+First prerelease of v1.12.0 — perf + observability mini-release. Install via `brew install seabearDEV/ccli/ccli-beta` for side-by-side testing with stable.
+
+### Added
+
+- **`ccli audit --follow` / `-f`**: Live audit log streaming. Tails `audit.jsonl` and formats new entries with the same colors and layout as snapshot mode. Supports all existing filters (`--writes`, `--key`, `--src`, `--mcp`, `--cli`, `--project`, `--hits`, `--misses`, `--redundant`, `--detailed`). `--json` emits one JSON line per entry (NDJSON). Closes #41.
+- **LLM instructions**: Agents are now nudged to run `gh issue list --state open` after `codex_context` at session start to cross-reference in-flight work. Closes #68.
+
+### Performance
+
+- **Telemetry tail cache**: `loadTelemetry()` now caches parsed entries and reads only new tail bytes on subsequent calls, mirroring the `loadAuditLog()` pattern from v1.11.1. Eliminates full file re-read on every `computeStats()` call. Closes #81.
+- **Audit query optimization**: `queryAuditLog()` now reads the cached audit entries directly instead of creating a defensive `.slice()` copy, avoiding an O(N) allocation on every query.
+
+### Notes for testers
+
+- `ccli audit --follow` is the main new feature to exercise. Try it with filters: `ccli-beta audit -f --writes`, `ccli-beta audit -f --mcp`, `ccli-beta audit -f --json`.
+- In one terminal run `ccli-beta audit -f`, in another run `ccli-beta set test.flog "hello"` — verify the entry appears formatted in real time.
+- Ctrl+C should exit cleanly with no dangling watchers.
+
 ## [1.11.1] - 2026-04-10
 
 Stable promotion of v1.11.1-beta.8 after successful soak. Consolidates all beta-cycle fixes below. See individual beta entries for commit-level detail.

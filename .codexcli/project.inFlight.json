@@ -1,7 +1,7 @@
 {
-  "value": "v1.11.1 RELEASED 2026-04-10. Tagged, pushed, CI triggered.\n\nREMAINING POST-RELEASE:\n1. File GitHub issue for context.logQueryOnCost (audit/stats O(N) iteration — sibling to v1.12.0 #57)\n2. Dogfooding post: codexCLI stress-tested itself, found and fixed three freezes, stored findings for future agents\n\nNEXT MILESTONE: v1.12.0 per project.v112 (#57 #41 #68), then v1.12.x patches per project.v112patches (#74-#80).",
+  "value": "v1.12.0 code complete 2026-04-10. All four milestone issues resolved: #57 (already shipped), #81 (tail cache + query optimization), #41 (audit --follow), #68 (LLM instructions nudge). Pending: version bump, CHANGELOG, tag. Then v1.12.x patches per project.v112patches (#74-#80).",
   "meta": {
     "created": 1775761844860,
-    "updated": 1775840394669
+    "updated": 1775845527645
   }
 }
