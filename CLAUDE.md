@@ -1,6 +1,6 @@
 ## Bootstrap
 
-Call `codex_context` as your first tool call to load all stored project knowledge.
+Call `codex_context` as your first tool call to load all stored project knowledge. Then run `gh issue list --state open` to see in-flight work — if the user's request relates to an open issue, read its body for context before coding.
 
 ## Prefer MCP tools over direct file reads
 

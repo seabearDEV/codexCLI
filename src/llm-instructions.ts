@@ -68,6 +68,7 @@ PREFER MCP TOOLS:
 
 EFFECTIVE USAGE:
 - Always call codex_context as your FIRST tool call to bootstrap session knowledge.
+- If the project is a GitHub repo, run \`gh issue list --state open\` after codex_context to see in-flight work. If the user's request relates to an open issue, read its body for context before coding.
 - Pick the right tier for the task:
   - tier:"essential" — answering questions, small fixes, single-file edits
   - omit (standard) — multi-file changes, bug fixes, new features
