@@ -1,5 +1,6 @@
+import fs from 'fs';
 import path from 'path';
-import { queryAuditLog, AuditEntry } from '../utils/audit';
+import { queryAuditLog, tailAuditLog, getAuditPath, AuditEntry } from '../utils/audit';
 import { parsePeriodDays } from '../utils';
 import { color } from '../formatting';
 
@@ -15,6 +16,7 @@ export interface AuditCommandOptions {
   misses?: boolean;
   redundant?: boolean;
   detailed?: boolean;
+  follow?: boolean;
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -65,6 +67,58 @@ function truncate(str: string, maxLen: number): string {
   return str.slice(0, maxLen - 1) + '\u2026';
 }
 
+// ── Shared formatting ──────────────────────────────────────────────
+
+interface FormatContext {
+  lastDate: string;
+  showProject: boolean;
+  detailed: boolean;
+  diffMax: number;
+}
+
+/**
+ * Format a single audit entry into printable lines.
+ * Mutates ctx.lastDate for date collapsing across consecutive entries.
+ */
+function formatAuditEntry(entry: AuditEntry, ctx: FormatContext): string[] {
+  const { date, time } = formatTs(entry.ts);
+  const hasDiff = entry.before !== undefined || entry.after !== undefined || entry.error;
+
+  const dateCol = date === ctx.lastDate ? '      ' : color.white(date);
+  ctx.lastDate = date;
+
+  const timeCol = color.gray(time);
+  const tool = shortTool(entry.tool);
+  const keyStr = entry.key ? color.cyan(entry.key) : color.gray('(bulk)');
+  const srcStr = color.gray(srcLabel(entry));
+  const status = entry.success ? color.green('OK') : color.red('FAIL');
+  const scope = entry.scope && entry.scope !== 'auto' ? `  ${color.gray('[' + entry.scope + ']')}` : '';
+  const proj = ctx.showProject ? `  ${color.gray(projectLabel(entry) || 'global')}` : '';
+
+  const lines: string[] = [];
+  lines.push(`${dateCol} ${timeCol}  ${tool}  ${keyStr}  ${srcStr}  ${status}${scope}${proj}`);
+
+  const pad = ' '.repeat(14); // "Mon DD " (7) + "HH:MM" (5) + "  " (2) = 14
+  if (entry.before !== undefined) {
+    lines.push(`${pad}${color.red('- ' + truncate(entry.before, ctx.diffMax))}`);
+  }
+  if (entry.after !== undefined) {
+    lines.push(`${pad}${color.green('+ ' + truncate(entry.after, ctx.diffMax))}`);
+  }
+  if (entry.error) {
+    lines.push(`${pad}${color.red('error: ' + truncate(entry.error, ctx.diffMax))}`);
+  }
+  const metrics = ctx.detailed ? metricsLine(entry) : '';
+  if (metrics) {
+    lines.push(`${pad}${color.gray(metrics)}`);
+  }
+  if (hasDiff || metrics) lines.push('');
+
+  return lines;
+}
+
+// ── Snapshot mode ──────────────────────────────────────────────────
+
 export function showAuditLog(key: string | undefined, options: AuditCommandOptions): void {
   const days = parsePeriodDays(options.period);
   const limit = options.limit ?? 50;
@@ -97,51 +151,17 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
   console.log(color.bold(`\nAudit Log \u2014 ${periodLabel}, ${entries.length} entries\n`));
 
   const termWidth = process.stdout.columns || 80;
-  // Diff lines are indented to align under the tool column:
-  // "Mon DD " (7) + "HH:MM" (5) + "  " (2) = 14 chars
-  const DIFF_INDENT = 14;
-  const diffMax = termWidth - DIFF_INDENT - 2; // "- " or "+ " prefix
+  const diffMax = termWidth - 14 - 2;
 
-  // Show project column when entries span multiple projects
   const projectNames = new Set(entries.map(e => e.project ?? ''));
   const showProject = projectNames.size > 1 || (projectNames.size === 1 && !projectNames.has(''));
 
-  let lastDate = '';
+  const ctx: FormatContext = { lastDate: '', showProject, detailed: Boolean(options.detailed), diffMax };
 
   for (const entry of entries) {
-    const { date, time } = formatTs(entry.ts);
-    const hasDiff = entry.before !== undefined || entry.after !== undefined || entry.error;
-
-    // Collapse repeated dates
-    const dateCol = date === lastDate ? '      ' : color.white(date);
-    lastDate = date;
-
-    const timeCol = color.gray(time);
-    const tool = shortTool(entry.tool);
-    const keyStr = entry.key ? color.cyan(entry.key) : color.gray('(bulk)');
-    const srcStr = color.gray(srcLabel(entry));
-    const status = entry.success ? color.green('OK') : color.red('FAIL');
-    const scope = entry.scope && entry.scope !== 'auto' ? `  ${color.gray('[' + entry.scope + ']')}` : '';
-    const proj = showProject ? `  ${color.gray(projectLabel(entry) || 'global')}` : '';
-
-    console.log(`${dateCol} ${timeCol}  ${tool}  ${keyStr}  ${srcStr}  ${status}${scope}${proj}`);
-
-    const pad = ' '.repeat(DIFF_INDENT);
-    if (entry.before !== undefined) {
-      console.log(`${pad}${color.red('- ' + truncate(entry.before, diffMax))}`);
+    for (const line of formatAuditEntry(entry, ctx)) {
+      console.log(line);
     }
-    if (entry.after !== undefined) {
-      console.log(`${pad}${color.green('+ ' + truncate(entry.after, diffMax))}`);
-    }
-    if (entry.error) {
-      console.log(`${pad}${color.red('error: ' + truncate(entry.error, diffMax))}`);
-    }
-    const metrics = options.detailed ? metricsLine(entry) : '';
-    if (metrics) {
-      console.log(`${pad}${color.gray(metrics)}`);
-    }
-
-    if (hasDiff || metrics) console.log('');
   }
 
   // Trailing newline if last entry didn't already add one via diff/metrics
@@ -150,4 +170,58 @@ export function showAuditLog(key: string | undefined, options: AuditCommandOptio
   if (!lastHasDetail) {
     console.log('');
   }
+}
+
+// ── Follow mode ────────────────────────────────────────────────────
+
+function matchesFilter(entry: AuditEntry, options: AuditCommandOptions, key: string | undefined): boolean {
+  const keyPrefix = key ? key + '.' : undefined;
+  return (
+    (!key || entry.key === key || !!entry.key?.startsWith(keyPrefix!)) &&
+    (!options.writes || entry.op === 'write') &&
+    (!options.mcp || entry.src === 'mcp') &&
+    (!options.cli || entry.src === 'cli') &&
+    (!options.project || entry.project === options.project) &&
+    (!options.hits || entry.hit === true) &&
+    (!options.misses || entry.hit === false) &&
+    (!options.redundant || entry.redundant === true)
+  );
+}
+
+export function followAuditLog(key: string | undefined, options: AuditCommandOptions): Promise<void> {
+  const auditPath = getAuditPath();
+  const termWidth = process.stdout.columns || 80;
+  const diffMax = termWidth - 14 - 2;
+  const ctx: FormatContext = { lastDate: '', showProject: true, detailed: Boolean(options.detailed), diffMax };
+
+  console.log(color.bold('\nFollowing audit log\u2026 (Ctrl+C to stop)\n'));
+
+  // Drain any entries already in the cache so tailAuditLog starts clean
+  tailAuditLog();
+
+  const onFileChange = (): void => {
+    const newEntries = tailAuditLog();
+    for (const entry of newEntries) {
+      if (!matchesFilter(entry, options, key)) continue;
+      if (options.json) {
+        console.log(JSON.stringify(entry));
+      } else {
+        for (const line of formatAuditEntry(entry, ctx)) {
+          console.log(line);
+        }
+      }
+    }
+  };
+
+  fs.watchFile(auditPath, { interval: 250 }, onFileChange);
+
+  return new Promise<void>((resolve) => {
+    const cleanup = (): void => {
+      fs.unwatchFile(auditPath, onFileChange);
+      console.log('');
+      resolve();
+    };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+  });
 }

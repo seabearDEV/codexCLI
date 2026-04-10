@@ -890,9 +890,15 @@ codexCLI
   .option('-D, --detailed', 'Show per-entry metrics (duration, sizes, hit/miss)')
   .option('-j, --json', 'Output as JSON')
   .option('-n, --limit <n>', 'Max entries to show (default: 50)', parseInt)
-  .action(async (key: string | undefined, options: { period: string; writes?: boolean; mcp?: boolean; cli?: boolean; project?: string; hits?: boolean; misses?: boolean; redundant?: boolean; detailed?: boolean; json?: boolean; limit?: number }) => {
-    const { showAuditLog } = await import('./commands/audit');
-    await withPager(() => showAuditLog(key, options));
+  .option('-f, --follow', 'Follow the audit log in real time')
+  .action(async (key: string | undefined, options: { period: string; writes?: boolean; mcp?: boolean; cli?: boolean; project?: string; hits?: boolean; misses?: boolean; redundant?: boolean; detailed?: boolean; json?: boolean; limit?: number; follow?: boolean }) => {
+    if (options.follow) {
+      const { followAuditLog } = await import('./commands/audit');
+      await followAuditLog(key, options);
+    } else {
+      const { showAuditLog } = await import('./commands/audit');
+      await withPager(() => showAuditLog(key, options));
+    }
   });
 
 // MCP server subcommand: allows binary/Homebrew installs to run the MCP server

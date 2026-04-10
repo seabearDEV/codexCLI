@@ -203,6 +203,18 @@ export function loadAuditLog(): AuditEntry[] {
   return cachedAuditEntries.slice();
 }
 
+/**
+ * Return only audit entries appended since the last call to any cache-reading
+ * function (loadAuditLog, queryAuditLog, or a previous tailAuditLog).
+ * Used by follow mode to stream new entries without re-scanning the whole log.
+ */
+export function tailAuditLog(): AuditEntry[] {
+  const prevCount = cachedAuditEntries.length;
+  refreshAuditCache();
+  if (cachedAuditEntries.length <= prevCount) return [];
+  return cachedAuditEntries.slice(prevCount);
+}
+
 export function queryAuditLog(options: AuditQueryOptions = {}): AuditEntry[] {
   refreshAuditCache();
 
