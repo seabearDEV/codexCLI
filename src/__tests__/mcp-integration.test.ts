@@ -241,7 +241,8 @@ describe('MCP Integration (real I/O)', () => {
       const exportResult = callMcpTool('codex_export', { type: 'entries' });
       const exportedJson = exportResult.content[0].text;
       const exported = JSON.parse(exportedJson);
-      expect(exported.a.b).toBe('original');
+      expect(exported.$codexcli?.type).toBe('entries');
+      expect(exported.entries.a.b).toBe('original');
 
       // Reset
       callMcpTool('codex_reset', { type: 'entries' });

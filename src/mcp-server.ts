@@ -36,7 +36,8 @@ import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from "./store";
 import { hasConfirm, setConfirm, removeConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
-import { version } from "../package.json";
+import { version as pkgVersion } from "../package.json";
+import { wrapExport, tryUnwrapImport } from "./utils/envelope";
 import { formatTree, resetColorCache } from "./formatting";
 import { isEncrypted, maskEncryptedValues, encryptValue, decryptValue } from "./utils/crypto";
 import { interpolate, interpolateObject, StrictInterpolationError } from "./utils/interpolate";
@@ -85,7 +86,7 @@ function consumeConfirmToken(token: string, key: string): string | null {
 const llmInstructions = getEffectiveInstructions();
 
 const server = new McpServer(
-  { name: "codexcli", version },
+  { name: "codexcli", version: pkgVersion },
   { ...(llmInstructions && { instructions: llmInstructions }) },
 );
 
@@ -1001,19 +1002,25 @@ server.tool(
     try {
       const scope = toScope(scopeParam);
       const indent = pretty ? 2 : 0;
+      const envelopeScope: 'project' | 'global' =
+        scope === 'project' ? 'project' :
+        scope === 'global' ? 'global' :
+        (findProjectFile() ? 'project' : 'global');
       const maskEntries = (d: Record<string, unknown>) => includeEncrypted ? d : maskEncryptedValues(d);
 
-      if (type === "all") {
-        const combined = { entries: maskEntries(loadData(scope)), aliases: loadAliases(scope), confirm: loadConfirmKeys(scope) };
-        return textResponse(JSON.stringify(combined, null, indent));
-      }
+      const payload: Record<string, unknown> = {};
+      if (type === 'entries' || type === 'all') payload.entries = maskEntries(loadData(scope));
+      if (type === 'aliases' || type === 'all') payload.aliases = loadAliases(scope);
+      if (type === 'confirm' || type === 'all') payload.confirm = loadConfirmKeys(scope);
 
-      if (type === "confirm") {
-        return textResponse(JSON.stringify(loadConfirmKeys(scope), null, indent));
-      }
-
-      const content = type === "entries" ? maskEntries(loadData(scope)) : loadAliases(scope);
-      return textResponse(JSON.stringify(content, null, indent));
+      const wrapped = wrapExport({
+        type,
+        scope: envelopeScope,
+        includesEncrypted: !!includeEncrypted && (type === 'entries' || type === 'all'),
+        payload,
+        version: pkgVersion,
+      });
+      return textResponse(JSON.stringify(wrapped, null, indent));
     } catch (err) {
       return errorResponse(`Error exporting: ${String(err)}`);
     }
@@ -1053,6 +1060,44 @@ server.tool(
       const obj = parsed as Record<string, unknown>;
       const scope = toScope(scopeParam);
 
+      // Try to unwrap the integrity envelope. Throws on shape errors or
+      // sha256 mismatch; envelope=null for bare-shape back-compat.
+      let envelope;
+      let envelopePayload: Record<string, unknown>;
+      let envelopeWarnings: string[];
+      try {
+        const unwrap = tryUnwrapImport(obj, pkgVersion);
+        envelope = unwrap.envelope;
+        envelopePayload = unwrap.payload;
+        envelopeWarnings = unwrap.warnings;
+      } catch (err) {
+        return errorResponse(`Envelope check failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+
+      if (envelope && envelope.type !== type && envelope.type !== 'all' && type !== 'all') {
+        return errorResponse(`Import type mismatch: file was exported as '${envelope.type}', but import requested '${type}'.`);
+      }
+
+      const isAll = type === 'all';
+      const entriesSection: Record<string, unknown> | undefined = envelope
+        ? ((type === 'entries' || isAll) && envelopePayload.entries && typeof envelopePayload.entries === 'object' && !Array.isArray(envelopePayload.entries)
+            ? envelopePayload.entries as Record<string, unknown> : undefined)
+        : (type === 'entries' ? obj :
+          isAll && obj.entries && typeof obj.entries === 'object' && !Array.isArray(obj.entries)
+            ? obj.entries as Record<string, unknown> : undefined);
+      const aliasesSection: Record<string, unknown> | undefined = envelope
+        ? ((type === 'aliases' || isAll) && envelopePayload.aliases && typeof envelopePayload.aliases === 'object' && !Array.isArray(envelopePayload.aliases)
+            ? envelopePayload.aliases as Record<string, unknown> : undefined)
+        : (type === 'aliases' ? obj :
+          isAll && obj.aliases && typeof obj.aliases === 'object' && !Array.isArray(obj.aliases)
+            ? obj.aliases as Record<string, unknown> : undefined);
+      const confirmSection: Record<string, unknown> | undefined = envelope
+        ? ((type === 'confirm' || isAll) && envelopePayload.confirm && typeof envelopePayload.confirm === 'object' && !Array.isArray(envelopePayload.confirm)
+            ? envelopePayload.confirm as Record<string, unknown> : undefined)
+        : (type === 'confirm' ? obj :
+          isAll && obj.confirm && typeof obj.confirm === 'object' && !Array.isArray(obj.confirm)
+            ? obj.confirm as Record<string, unknown> : undefined);
+
       // Preview mode: compute diff and return without modifying data
       if (preview) {
         // Validate the raw input the same way the apply path does, so a
@@ -1061,31 +1106,21 @@ server.tool(
         // dropped bad keys (e.g. __proto__) from the diff because it ran
         // through flattenObject which trips the __proto__ getter trap.
         try {
-          if (type === "entries") {
-            validateImportEntries(obj);
-          } else if (type === "aliases") {
-            validateImportAliases(obj);
-          } else if (type === "confirm") {
-            validateImportConfirm(obj);
-          } else if (type === "all") {
-            const dv = obj.entries;
-            const av = obj.aliases;
-            const cv = obj.confirm;
-            if (dv && typeof dv === "object" && !Array.isArray(dv)) {
-              validateImportEntries(dv as Record<string, unknown>);
-            }
-            if (av && typeof av === "object" && !Array.isArray(av)) {
-              validateImportAliases(av as Record<string, unknown>);
-            }
-            if (cv && typeof cv === "object" && !Array.isArray(cv)) {
-              validateImportConfirm(cv as Record<string, unknown>);
-            }
+          if (entriesSection) validateImportEntries(entriesSection);
+          if (aliasesSection) {
+            const hasNonStringValues = Object.values(aliasesSection).some(v => typeof v !== 'string');
+            if (!hasNonStringValues) validateImportAliases(aliasesSection);
           }
+          if (confirmSection) validateImportConfirm(confirmSection);
         } catch (err) {
           return errorResponse(`Preview failed: ${err instanceof Error ? err.message : String(err)}`);
         }
 
         const lines: string[] = [];
+        envelopeWarnings.forEach(w => lines.push(`⚠ ${w}`));
+        if (envelope?.includesEncrypted) {
+          lines.push('⚠ Import contains decryptable ciphertext (includesEncrypted: true).');
+        }
 
         const diffEntries = (current: Record<string, string>, incoming: Record<string, string>, doMerge: boolean): string[] => {
           const result: string[] = [];
@@ -1113,9 +1148,8 @@ server.tool(
           return result;
         };
 
-        if (type === "entries" || type === "all") {
-          const importObjRaw = type === "all" ? (obj.entries as Record<string, unknown> || {}) : obj;
-          const importObj = expandFlatKeys(importObjRaw);
+        if (entriesSection) {
+          const importObj = expandFlatKeys(entriesSection);
           const currentFlat = flattenObject(loadData(scope));
           const importFlat = flattenObject(importObj);
           lines.push(`Entries (${merge ? "merge" : "replace"}):`);
@@ -1123,25 +1157,23 @@ server.tool(
           lines.push(...(diff.length > 0 ? diff : ["  No changes"]));
         }
 
-        if (type === "aliases" || type === "all") {
-          const importObj = type === "all" ? (obj.aliases as Record<string, string> || {}) : obj as Record<string, string>;
+        if (aliasesSection) {
           const currentAliases = loadAliases(scope);
           const currentFlat: Record<string, string> = {};
           const importFlat: Record<string, string> = {};
           for (const [k, v] of Object.entries(currentAliases)) currentFlat[k] = v;
-          for (const [k, v] of Object.entries(importObj)) importFlat[k] = String(v);
+          for (const [k, v] of Object.entries(aliasesSection)) importFlat[k] = String(v);
           lines.push(`Aliases (${merge ? "merge" : "replace"}):`);
           const diff = diffEntries(currentFlat, importFlat, !!merge);
           lines.push(...(diff.length > 0 ? diff : ["  No changes"]));
         }
 
-        if (type === "confirm" || type === "all") {
-          const importObj = type === "all" ? (obj.confirm as Record<string, unknown> || {}) : obj;
+        if (confirmSection) {
           const currentConfirm = loadConfirmKeys(scope);
           const currentFlat: Record<string, string> = {};
           const importFlat: Record<string, string> = {};
           for (const k of Object.keys(currentConfirm)) currentFlat[k] = "true";
-          for (const k of Object.keys(importObj)) importFlat[k] = "true";
+          for (const k of Object.keys(confirmSection)) importFlat[k] = "true";
           lines.push(`Confirm keys (${merge ? "merge" : "replace"}):`);
           const diff = diffEntries(currentFlat, importFlat, !!merge);
           lines.push(...(diff.length > 0 ? diff : ["  No changes"]));
@@ -1151,81 +1183,56 @@ server.tool(
         return textResponse(lines.join("\n"));
       }
 
-      if (type === "all") {
-        const dataVal = obj.entries;
-        const aliasesVal = obj.aliases;
-        if (
-          typeof dataVal !== "object" || dataVal === null || Array.isArray(dataVal) ||
-          typeof aliasesVal !== "object" || aliasesVal === null || Array.isArray(aliasesVal)
-        ) {
-          return errorResponse(
-            'Import with type "all" requires {"entries": {...}, "aliases": {...}}.'
-          );
-        }
-
-        const aliasesObj = aliasesVal as Record<string, unknown>;
-
-        if (Object.values(aliasesObj).some(v => typeof v !== "string")) {
-          return errorResponse("Alias values must all be strings (dot-notation paths).");
-        }
-
-        // Validate every key BEFORE expandFlatKeys runs. expandFlatKeys
-        // silently normalizes some bad keys (e.g. ".dotleading" → "dotleading"
-        // because isSafeKey rejects the leading-empty segment, so the parent
-        // walk breaks out and the leaf is set on the root). Validating the
-        // raw input catches those before normalization erases the evidence.
-        validateImportEntries(dataVal as Record<string, unknown>);
-        validateImportAliases(aliasesObj);
-        const dataObj = expandFlatKeys(dataVal as Record<string, unknown>);
-        const confirmValPre = obj.confirm;
-        if (confirmValPre && typeof confirmValPre === "object" && !Array.isArray(confirmValPre)) {
-          validateImportConfirm(confirmValPre as Record<string, unknown>);
-        }
-
-        const currentData = merge ? loadData(scope) : {};
-        saveData((merge ? deepMerge(currentData, dataObj) : dataObj) as CodexData, scope);
-
-        const currentAliases = merge ? loadAliases(scope) : {};
-        saveAliases(merge ? { ...currentAliases, ...(aliasesObj as Record<string, string>) } : aliasesObj as Record<string, string>, scope);
-
-        // Import confirm keys if present; reset to empty when replacing and key is absent
-        const confirmVal = obj.confirm;
-        if (confirmVal && typeof confirmVal === "object" && !Array.isArray(confirmVal)) {
-          const currentConfirm = merge ? loadConfirmKeys(scope) : {};
-          saveConfirmKeys(merge ? { ...currentConfirm, ...(confirmVal as Record<string, true>) } : confirmVal as Record<string, true>, scope);
-        } else if (!merge) {
-          saveConfirmKeys({}, scope);
-        }
-      } else if (type === "entries") {
-        // Validate raw input BEFORE expandFlatKeys (which would silently
-        // normalize keys like ".dotleading" → "dotleading" and erase the
-        // evidence that the input was invalid in the first place).
-        validateImportEntries(obj);
-        const expanded = expandFlatKeys(obj);
-        const current = merge ? loadData(scope) : {};
-        const newData = merge ? deepMerge(current, expanded) : expanded;
-        saveData(newData as CodexData, scope);
-      } else if (type === "confirm") {
-        validateImportConfirm(obj);
-        const currentConfirm = merge ? loadConfirmKeys(scope) : {};
-        const newConfirm = merge ? { ...currentConfirm, ...(obj as Record<string, true>) } : obj;
-        saveConfirmKeys(newConfirm as Record<string, true>, scope);
-      } else {
-        if (Object.values(obj).some(v => typeof v !== "string")) {
-          return errorResponse("Alias values must all be strings (dot-notation paths).");
-        }
-        validateImportAliases(obj);
-
-        const current = merge ? loadAliases(scope) : {};
-        const newAliases = merge
-          ? { ...current, ...(obj as Record<string, string>) }
-          : obj;
-        saveAliases(newAliases as Record<string, string>, scope);
+      // Apply path. For 'all' imports we still require at least one non-
+      // empty section; match the CLI error text for consistency.
+      if (isAll && !entriesSection && !aliasesSection && !confirmSection) {
+        return errorResponse(
+          'Import with type "all" requires {"entries": {...}, "aliases": {...}, "confirm": {...}} (at least one section).'
+        );
       }
 
+      if (entriesSection) {
+        validateImportEntries(entriesSection);
+        const expanded = expandFlatKeys(entriesSection);
+        const current = merge ? loadData(scope) : {};
+        saveData((merge ? deepMerge(current, expanded) : expanded) as CodexData, scope);
+      }
+
+      if (aliasesSection) {
+        if (Object.values(aliasesSection).some(v => typeof v !== "string")) {
+          return errorResponse("Alias values must all be strings (dot-notation paths).");
+        }
+        validateImportAliases(aliasesSection);
+        const current = merge ? loadAliases(scope) : {};
+        saveAliases(
+          merge
+            ? { ...current, ...(aliasesSection as Record<string, string>) }
+            : aliasesSection as Record<string, string>,
+          scope,
+        );
+      } else if (isAll && !merge) {
+        // Replace-all with no aliases section → clear aliases.
+        saveAliases({}, scope);
+      }
+
+      if (confirmSection) {
+        validateImportConfirm(confirmSection);
+        const current = merge ? loadConfirmKeys(scope) : {};
+        saveConfirmKeys(
+          merge
+            ? { ...current, ...(confirmSection as Record<string, true>) }
+            : confirmSection as Record<string, true>,
+          scope,
+        );
+      } else if (isAll && !merge) {
+        // Replace-all with no confirm section → clear confirm keys.
+        saveConfirmKeys({}, scope);
+      }
+
+      const warningPrefix = envelopeWarnings.length > 0 ? envelopeWarnings.map(w => `⚠ ${w}\n`).join('') : '';
       const typeLabel = { all: "Entries, aliases, and confirm keys", entries: "Entries", aliases: "Aliases", confirm: "Confirm keys" }[type];
       return textResponse(
-        `${typeLabel} ${merge ? "merged" : "imported"} successfully.`
+        `${warningPrefix}${typeLabel} ${merge ? "merged" : "imported"} successfully.`
       );
     } catch (err) {
       return errorResponse(`Error importing: ${String(err)}`);

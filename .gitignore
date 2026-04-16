@@ -159,6 +159,12 @@ audit.jsonl
 # dogfooding premise of the project).
 .codexcli.json.backup
 
+# Project-scope auto-backups written by `ccli data import` and `ccli data
+# reset` (added in #74 for v1.12.1). Sibling to `.codexcli/` rather than
+# inside it so the store stays clean and the hand-edit-warning contract
+# holds. Per-machine rollback history — not meant to be committed.
+.codexcli.backups/
+
 # Seqlock generation counter (added in #58 for torn-read detection).
 # Bumps by 2 on every store write — tracking it would create constant
 # diff noise on every codex update. The codex tools manage it; git

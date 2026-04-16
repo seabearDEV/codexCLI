@@ -59,7 +59,8 @@ describe('CLI Integration Tests — Advanced', () => {
       expect(fs.existsSync(exportFile)).toBe(true);
 
       const exported = JSON.parse(fs.readFileSync(exportFile, 'utf8'));
-      expect(exported.roundtrip).toBeDefined();
+      expect(exported.$codexcli?.type).toBe('entries');
+      expect(exported.entries.roundtrip).toBeDefined();
 
       // Reset and reimport
       run('data reset entries --force');

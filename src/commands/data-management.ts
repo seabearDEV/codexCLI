@@ -12,6 +12,8 @@ import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
 import { findProjectFile, clearProjectFileCache } from '../store';
+import { wrapExport, tryUnwrapImport } from '../utils/envelope';
+import { version as pkgVersion } from '../../package.json';
 import { getAuditPath } from '../utils/audit';
 import { getTelemetryPath, getMissPathsPath } from '../utils/telemetry';
 import { scanCodebase, ScaffoldEntry } from './scan';
@@ -21,6 +23,15 @@ function resolveScope(options: { global?: boolean | undefined, project?: boolean
   if (options.global) return 'global';
   if (options.project) return 'project';
   return undefined;
+}
+
+// Concrete scope for the envelope meta field. 'auto' (undefined) resolves to
+// project when a project store exists, else global — mirroring the lookup
+// fallthrough that actually produced the exported data.
+function resolveExportScope(scope?: Scope): 'project' | 'global' {
+  if (scope === 'project') return 'project';
+  if (scope === 'global') return 'global';
+  return findProjectFile() ? 'project' : 'global';
 }
 
 export function exportData(type: string, options: ExportOptions): void {
@@ -45,26 +56,50 @@ export function exportData(type: string, options: ExportOptions): void {
       return `${base}-${typeName}${ext || '.json'}`;
     };
 
+    const envelopeScope = resolveExportScope(scope);
+    const includesEncrypted = !!options.includeEncrypted;
+
     if (type === 'entries' || type === 'all') {
       const outputFile = getOutputFile('entries', `codexcli-entries-${timestamp}.json`);
       const entries = loadData(scope);
-      const payload = options.includeEncrypted ? entries : maskEncryptedValues(entries);
-      fs.writeFileSync(outputFile, JSON.stringify(payload, null, indent), { encoding: 'utf8', mode: 0o600 });
+      const entriesPayload = includesEncrypted ? entries : maskEncryptedValues(entries);
+      const wrapped = wrapExport({
+        type: 'entries',
+        scope: envelopeScope,
+        includesEncrypted,
+        payload: { entries: entriesPayload },
+        version: pkgVersion,
+      });
+      fs.writeFileSync(outputFile, JSON.stringify(wrapped, null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Entries exported to: ${color.cyan(outputFile)}`);
-      if (options.includeEncrypted) {
+      if (includesEncrypted) {
         printWarning('Export contains decryptable ciphertext. Store the file securely.');
       }
     }
 
     if (type === 'aliases' || type === 'all') {
       const outputFile = getOutputFile('aliases', `codexcli-aliases-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadAliases(scope), null, indent), { encoding: 'utf8', mode: 0o600 });
+      const wrapped = wrapExport({
+        type: 'aliases',
+        scope: envelopeScope,
+        includesEncrypted: false,
+        payload: { aliases: loadAliases(scope) },
+        version: pkgVersion,
+      });
+      fs.writeFileSync(outputFile, JSON.stringify(wrapped, null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Aliases exported to: ${color.cyan(outputFile)}`);
     }
 
     if (type === 'confirm' || type === 'all') {
       const outputFile = getOutputFile('confirm', `codexcli-confirm-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(loadConfirmKeys(scope), null, indent), { encoding: 'utf8', mode: 0o600 });
+      const wrapped = wrapExport({
+        type: 'confirm',
+        scope: envelopeScope,
+        includesEncrypted: false,
+        payload: { confirm: loadConfirmKeys(scope) },
+        version: pkgVersion,
+      });
+      fs.writeFileSync(outputFile, JSON.stringify(wrapped, null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Confirm keys exported to: ${color.cyan(outputFile)}`);
     }
   } catch (error) {
@@ -88,13 +123,6 @@ export async function importData(type: string, file: string, options: ImportOpti
       return;
     }
 
-    // Confirm before overwriting unless --force or --preview is used
-    if (!options.force && !options.preview) {
-      console.log(color.yellow(`⚠ This will ${options.merge ? 'merge' : 'replace'} your ${type} file.`));
-      const confirmed = await confirmOrAbort('Continue? [y/N] ');
-      if (!confirmed) return;
-    }
-
     // Parse and validate JSON
     let importedData: unknown;
     try {
@@ -111,33 +139,68 @@ export async function importData(type: string, file: string, options: ImportOpti
 
     const validData = importedData as Record<string, unknown>;
 
-    // For type=all, the file is shaped { entries: {...}, aliases: {...},
-    // confirm: {...} } and each section needs its own validator + handler.
-    // For the single-type imports, validData is the section itself.
-    //
-    // Pre-fix, the CLI ran type=all through three separate top-level
-    // branches that all treated `validData` as the section payload — so
-    // an --all import file got saved as entries with keys "entries"/
-    // "aliases"/"confirm", and the alias branch rejected validData because
-    // its values were objects, not strings. The MCP codex_import handler
-    // already does the per-section split correctly; this brings the CLI
-    // into line.
+    // Try to unwrap the integrity envelope. Throws on shape errors or
+    // sha256 mismatch; returns envelope=null for bare-shape files (back-
+    // compat path for pre-v1.12.2 exports and hand-written JSON).
+    let envelope;
+    let envelopePayload: Record<string, unknown>;
+    let envelopeWarnings: string[];
+    try {
+      const unwrap = tryUnwrapImport(validData, pkgVersion);
+      envelope = unwrap.envelope;
+      envelopePayload = unwrap.payload;
+      envelopeWarnings = unwrap.warnings;
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+
+    // Type compatibility: envelope.type must match user's requested type,
+    // or one side must be 'all' (compatible as a subset extraction).
+    if (envelope && envelope.type !== type && envelope.type !== 'all' && type !== 'all') {
+      printError(`Import type mismatch: file was exported as '${envelope.type}', but import requested '${type}'.`);
+      return;
+    }
+
+    envelopeWarnings.forEach(w => printWarning(w));
+
+    // Confirm before overwriting unless --force or --preview is used.
+    // Surface includesEncrypted so the user knows decryptable ciphertext
+    // is about to land in the store.
+    if (!options.force && !options.preview) {
+      console.log(color.yellow(`⚠ This will ${options.merge ? 'merge' : 'replace'} your ${type} file.`));
+      if (envelope?.includesEncrypted) {
+        console.log(color.yellow('⚠ Import contains decryptable ciphertext (includesEncrypted: true).'));
+      }
+      const confirmed = await confirmOrAbort('Continue? [y/N] ');
+      if (!confirmed) return;
+    }
+
     const isAll = type === 'all';
-    const entriesSection: Record<string, unknown> | undefined =
-      type === 'entries' ? validData :
-      isAll && validData.entries && typeof validData.entries === 'object' && !Array.isArray(validData.entries)
-        ? validData.entries as Record<string, unknown>
-        : undefined;
-    const aliasesSection: Record<string, unknown> | undefined =
-      type === 'aliases' ? validData :
-      isAll && validData.aliases && typeof validData.aliases === 'object' && !Array.isArray(validData.aliases)
-        ? validData.aliases as Record<string, unknown>
-        : undefined;
-    const confirmSection: Record<string, unknown> | undefined =
-      type === 'confirm' ? validData :
-      isAll && validData.confirm && typeof validData.confirm === 'object' && !Array.isArray(validData.confirm)
-        ? validData.confirm as Record<string, unknown>
-        : undefined;
+    const entriesSection: Record<string, unknown> | undefined = envelope
+      ? ((type === 'entries' || isAll) && envelopePayload.entries && typeof envelopePayload.entries === 'object' && !Array.isArray(envelopePayload.entries)
+          ? envelopePayload.entries as Record<string, unknown>
+          : undefined)
+      : (type === 'entries' ? validData :
+        isAll && validData.entries && typeof validData.entries === 'object' && !Array.isArray(validData.entries)
+          ? validData.entries as Record<string, unknown>
+          : undefined);
+    const aliasesSection: Record<string, unknown> | undefined = envelope
+      ? ((type === 'aliases' || isAll) && envelopePayload.aliases && typeof envelopePayload.aliases === 'object' && !Array.isArray(envelopePayload.aliases)
+          ? envelopePayload.aliases as Record<string, unknown>
+          : undefined)
+      : (type === 'aliases' ? validData :
+        isAll && validData.aliases && typeof validData.aliases === 'object' && !Array.isArray(validData.aliases)
+          ? validData.aliases as Record<string, unknown>
+          : undefined);
+    const confirmSection: Record<string, unknown> | undefined = envelope
+      ? ((type === 'confirm' || isAll) && envelopePayload.confirm && typeof envelopePayload.confirm === 'object' && !Array.isArray(envelopePayload.confirm)
+          ? envelopePayload.confirm as Record<string, unknown>
+          : undefined)
+      : (type === 'confirm' ? validData :
+        isAll && validData.confirm && typeof validData.confirm === 'object' && !Array.isArray(validData.confirm)
+          ? validData.confirm as Record<string, unknown>
+          : undefined);
 
     if (isAll && !entriesSection && !aliasesSection && !confirmSection) {
       printError('Import with type "all" requires {"entries": {...}, "aliases": {...}, "confirm": {...}} (at least one section).');
@@ -161,7 +224,7 @@ export async function importData(type: string, file: string, options: ImportOpti
         printError(err instanceof Error ? err.message : String(err));
         return;
       }
-      showImportPreview(type, validData, !!options.merge);
+      showImportPreview({ entries: entriesSection, aliases: aliasesSection, confirm: confirmSection }, !!options.merge);
       return;
     }
 
@@ -331,29 +394,12 @@ function computeDiff(current: Record<string, string>, incoming: Record<string, s
   return lines;
 }
 
-function showImportPreview(type: string, validData: Record<string, unknown>, merge: boolean): void {
-  // Mirror the same section dispatch the apply path uses. Pre-fix, this
-  // function ran three top-level branches all against `validData`, so an
-  // --all import file shaped {entries:..., aliases:..., confirm:...} got
-  // diffed as if the wrapper itself were the entries (showing
-  // "[add] entries.foo: bar", "[add] aliases.alias: target", etc.).
-  const isAll = type === 'all';
-  const entriesSection: Record<string, unknown> | undefined =
-    type === 'entries' ? validData :
-    isAll && validData.entries && typeof validData.entries === 'object' && !Array.isArray(validData.entries)
-      ? validData.entries as Record<string, unknown>
-      : undefined;
-  const aliasesSection: Record<string, unknown> | undefined =
-    type === 'aliases' ? validData :
-    isAll && validData.aliases && typeof validData.aliases === 'object' && !Array.isArray(validData.aliases)
-      ? validData.aliases as Record<string, unknown>
-      : undefined;
-  const confirmSection: Record<string, unknown> | undefined =
-    type === 'confirm' ? validData :
-    isAll && validData.confirm && typeof validData.confirm === 'object' && !Array.isArray(validData.confirm)
-      ? validData.confirm as Record<string, unknown>
-      : undefined;
-
+function showImportPreview(sections: {
+  entries?: Record<string, unknown> | undefined;
+  aliases?: Record<string, unknown> | undefined;
+  confirm?: Record<string, unknown> | undefined;
+}, merge: boolean): void {
+  const { entries: entriesSection, aliases: aliasesSection, confirm: confirmSection } = sections;
   let hasChanges = false;
 
   if (entriesSection) {

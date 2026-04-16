@@ -715,28 +715,31 @@ describe('MCP Server Tools', () => {
   });
 
   describe('codex_export', () => {
-    it('exports data only as valid JSON', async () => {
+    it('exports data only as valid JSON wrapped in the envelope', async () => {
       Object.assign(mockData, { a: '1' });
       const result = await toolHandlers['codex_export']({ type: 'entries', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed).toEqual({ a: '1' });
-      expect(result.content[0].text).not.toContain('---');
+      expect(parsed.$codexcli.type).toBe('entries');
+      expect(parsed.entries).toEqual({ a: '1' });
     });
 
-    it('exports aliases only as valid JSON', async () => {
+    it('exports aliases only as valid JSON wrapped in the envelope', async () => {
       Object.assign(mockAliases, { srv: 'server.ip' });
       const result = await toolHandlers['codex_export']({ type: 'aliases', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed).toEqual({ srv: 'server.ip' });
-      expect(result.content[0].text).not.toContain('---');
+      expect(parsed.$codexcli.type).toBe('aliases');
+      expect(parsed.aliases).toEqual({ srv: 'server.ip' });
     });
 
-    it('exports all as structured JSON with data and aliases keys', async () => {
+    it('exports all as wrapped JSON with entries/aliases/confirm sections', async () => {
       Object.assign(mockData, { a: '1' });
       Object.assign(mockAliases, { x: 'y' });
       const result = await toolHandlers['codex_export']({ type: 'all', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed).toEqual({ entries: { a: '1' }, aliases: { x: 'y' }, confirm: {} });
+      expect(parsed.$codexcli.type).toBe('all');
+      expect(parsed.entries).toEqual({ a: '1' });
+      expect(parsed.aliases).toEqual({ x: 'y' });
+      expect(parsed.confirm).toEqual({});
     });
 
     it('pretty-prints when requested', async () => {
@@ -750,8 +753,9 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { api: { key: encrypted }, plain: 'visible' });
       const result = await toolHandlers['codex_export']({ type: 'entries', pretty: undefined });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed.api.key).toBe('[encrypted]');
-      expect(parsed.plain).toBe('visible');
+      expect(parsed.entries.api.key).toBe('[encrypted]');
+      expect(parsed.entries.plain).toBe('visible');
+      expect(parsed.$codexcli.includesEncrypted).toBe(false);
       expect(result.content[0].text).not.toContain('encrypted::v1:');
     });
 
@@ -768,7 +772,8 @@ describe('MCP Server Tools', () => {
       Object.assign(mockData, { api: { key: encrypted } });
       const result = await toolHandlers['codex_export']({ type: 'entries', includeEncrypted: true });
       const parsed = JSON.parse(result.content[0].text);
-      expect(parsed.api.key).toBe(encrypted);
+      expect(parsed.entries.api.key).toBe(encrypted);
+      expect(parsed.$codexcli.includesEncrypted).toBe(true);
       expect(result.content[0].text).toContain('encrypted::v1:');
       expect(result.content[0].text).not.toContain('[encrypted]');
     });
@@ -779,6 +784,7 @@ describe('MCP Server Tools', () => {
       const result = await toolHandlers['codex_export']({ type: 'all', includeEncrypted: true });
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.entries.api.key).toBe(encrypted);
+      expect(parsed.$codexcli.includesEncrypted).toBe(true);
     });
   });
 

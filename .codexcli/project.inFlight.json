@@ -1,7 +1,7 @@
 {
-  "value": "v1.12.0 stable cut on 2026-04-16 from beta.0 (no source changes during ~5-day soak past 2026-04-11). User reports daily v1.11.1 use was clean. Tag pending: user runs `cclid run rel`. Next: open v1.12.1 with #74 (auto-backup scope) + #75 (encrypted roundtrip). Then v1.12.2 — land #78 envelope first to unblock #75/#76 reshape. v1.12.3 = #79/#80. See project.v112patches.",
+  "value": "v1.12.1 shipping now on 2026-04-16 — HIGH-severity export/import integrity fixes (#74 auto-backup project scope, #75 encrypted roundtrip protection). Release commit 6cd751f pending tag push via `cclid run rel`. Next: consolidated v1.12.2 covering #76-80 (MEDIUM + LOW from the 2026-04-09 audit, folded from original .2/.3 split because v1.12.0 felt thin and a single patch ships cleaner than a three-patch chain). See project.v112patches for sequencing. Milestone v1.12.3 closed; #79 and #80 re-milestoned to v1.12.2.",
   "meta": {
     "created": 1775761844860,
-    "updated": 1776351451833
+    "updated": 1776356837646
   }
 }
