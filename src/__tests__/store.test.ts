@@ -28,6 +28,7 @@ import {
   clearStoreCaches, loadMeta, touchMeta, removeMeta,
   saveEntriesAndTouchMeta, saveEntriesAndRemoveMeta,
   loadMetaMerged, getStalenessTag, STALE_DAYS, STALE_MS,
+  saveAll,
 } from '../store';
 
 beforeEach(() => {
@@ -105,6 +106,45 @@ describe('ScopedStore load/save cycle', () => {
     const alphaIdx = raw.indexOf('"alpha"');
     const zuluIdx = raw.indexOf('"zulu"');
     expect(alphaIdx).toBeLessThan(zuluIdx);
+  });
+});
+
+// ── saveAll: transactional multi-section writes (#77) ─────────────────
+
+describe('saveAll', () => {
+  it('writes every provided section in a single cycle', () => {
+    writeData({ entries: {}, aliases: {}, confirm: {} });
+    clearStoreCaches();
+
+    saveAll(
+      {
+        entries: { proj: { name: 'x' } },
+        aliases: { short: 'proj.name' },
+        confirm: { 'commands.dangerous': true },
+      },
+      'global',
+    );
+    clearStoreCaches();
+
+    expect(loadEntries('global')).toEqual({ proj: { name: 'x' } });
+    expect(loadAliasMap('global')).toEqual({ short: 'proj.name' });
+    expect(loadConfirmMap('global')).toEqual({ 'commands.dangerous': true });
+  });
+
+  it('preserves untouched sections when only some are provided', () => {
+    writeData({
+      entries: { a: '1' },
+      aliases: { preserved: 'a' },
+      confirm: { 'keep.this': true },
+    });
+    clearStoreCaches();
+
+    saveAll({ entries: { a: '2' } }, 'global');
+    clearStoreCaches();
+
+    expect(loadEntries('global')).toEqual({ a: '2' });
+    expect(loadAliasMap('global')).toEqual({ preserved: 'a' });
+    expect(loadConfirmMap('global')).toEqual({ 'keep.this': true });
   });
 });
 

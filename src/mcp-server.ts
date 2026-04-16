@@ -32,7 +32,7 @@ import {
   setProjectRootOverride,
 } from "./utils/paths";
 import { fileURLToPath } from "url";
-import { findProjectFile, loadEntries, saveEntriesAndTouchMeta } from "./store";
+import { findProjectFile, loadEntries, saveEntriesAndTouchMeta, saveAll } from "./store";
 import { hasConfirm, setConfirm, removeConfirm, loadConfirmKeys, saveConfirmKeys, removeConfirmForKey } from "./confirm";
 import { loadConfig, getConfigSetting, setConfigSetting, VALID_CONFIG_KEYS } from "./config";
 import { deepMerge } from "./utils/deepMerge";
@@ -1191,43 +1191,46 @@ server.tool(
         );
       }
 
-      if (entriesSection) {
-        validateImportEntries(entriesSection);
-        const expanded = expandFlatKeys(entriesSection);
-        const current = merge ? loadData(scope) : {};
-        saveData((merge ? deepMerge(current, expanded) : expanded) as CodexData, scope);
-      }
-
+      // Validate + shape-check everything BEFORE any save. #77: multi-
+      // section imports need to be transactional — one validation failure
+      // must not leave a half-applied store.
+      if (entriesSection) validateImportEntries(entriesSection);
       if (aliasesSection) {
         if (Object.values(aliasesSection).some(v => typeof v !== "string")) {
           return errorResponse("Alias values must all be strings (dot-notation paths).");
         }
         validateImportAliases(aliasesSection);
-        const current = merge ? loadAliases(scope) : {};
-        saveAliases(
-          merge
-            ? { ...current, ...(aliasesSection as Record<string, string>) }
-            : aliasesSection as Record<string, string>,
-          scope,
-        );
-      } else if (isAll && !merge) {
-        // Replace-all with no aliases section → clear aliases.
-        saveAliases({}, scope);
       }
+      if (confirmSection) validateImportConfirm(confirmSection);
 
-      if (confirmSection) {
-        validateImportConfirm(confirmSection);
-        const current = merge ? loadConfirmKeys(scope) : {};
-        saveConfirmKeys(
-          merge
-            ? { ...current, ...(confirmSection as Record<string, true>) }
-            : confirmSection as Record<string, true>,
-          scope,
-        );
-      } else if (isAll && !merge) {
-        // Replace-all with no confirm section → clear confirm keys.
-        saveConfirmKeys({}, scope);
-      }
+      // Compute each section's final value, then commit all sections in a
+      // single saveAll cycle. For replace-all semantics (isAll && !merge)
+      // any section the import omitted gets cleared to match the CLI-side
+      // "replace everything" contract.
+      const nextEntries: CodexData | undefined = entriesSection
+        ? ((merge
+            ? deepMerge(loadData(scope), expandFlatKeys(entriesSection))
+            : expandFlatKeys(entriesSection)) as CodexData)
+        : undefined;
+      const nextAliases: Record<string, string> | undefined = aliasesSection
+        ? (merge
+            ? { ...loadAliases(scope), ...(aliasesSection as Record<string, string>) }
+            : aliasesSection as Record<string, string>)
+        : (isAll && !merge ? {} : undefined);
+      const nextConfirm: Record<string, true> | undefined = confirmSection
+        ? (merge
+            ? { ...loadConfirmKeys(scope), ...(confirmSection as Record<string, true>) }
+            : confirmSection as Record<string, true>)
+        : (isAll && !merge ? {} : undefined);
+
+      saveAll(
+        {
+          ...(nextEntries !== undefined && { entries: nextEntries }),
+          ...(nextAliases !== undefined && { aliases: nextAliases }),
+          ...(nextConfirm !== undefined && { confirm: nextConfirm }),
+        },
+        scope,
+      );
 
       const warningPrefix = envelopeWarnings.length > 0 ? envelopeWarnings.map(w => `⚠ ${w}\n`).join('') : '';
       const typeLabel = { all: "Entries, aliases, and confirm keys", entries: "Entries", aliases: "Aliases", confirm: "Confirm keys" }[type];

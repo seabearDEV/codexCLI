@@ -238,6 +238,34 @@ export function saveConfirmMap(data: Record<string, true>, scope?: Scope  ): voi
   store.save({ ...current, confirm: data });
 }
 
+/**
+ * Write one or more sections inside a single store.save cycle so multi-
+ * section imports are atomic. Section keys left undefined preserve the
+ * current on-disk value. Closes the torn-store window that existed when
+ * callers ran saveEntries/saveAliasMap/saveConfirmMap sequentially — each
+ * of those is its own load+save pair, leaving a tear between sections on
+ * process death or disk error.
+ *
+ * See #77 for the failure modes this guards against.
+ */
+export function saveAll(
+  sections: {
+    entries?: CodexData | undefined;
+    aliases?: Record<string, string> | undefined;
+    confirm?: Record<string, true> | undefined;
+  },
+  scope?: Scope,
+): void {
+  const store = resolveStore(scope);
+  const current = store.load();
+  store.save({
+    ...current,
+    ...(sections.entries !== undefined && { entries: sections.entries }),
+    ...(sections.aliases !== undefined && { aliases: sections.aliases }),
+    ...(sections.confirm !== undefined && { confirm: sections.confirm }),
+  });
+}
+
 // ── Merged accessors (project + global fallthrough) ────────────────────
 
 export function loadEntriesMerged(): CodexData {

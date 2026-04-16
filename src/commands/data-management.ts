@@ -11,7 +11,7 @@ import { flattenObject, expandFlatKeys } from '../utils/objectPath';
 import { maskEncryptedValues } from '../utils/crypto';
 import { debug } from '../utils/debug';
 import { createAutoBackup } from '../utils/autoBackup';
-import { findProjectFile, clearProjectFileCache } from '../store';
+import { findProjectFile, clearProjectFileCache, saveAll } from '../store';
 import { wrapExport, tryUnwrapImport } from '../utils/envelope';
 import { version as pkgVersion } from '../../package.json';
 import { getAuditPath } from '../utils/audit';
@@ -267,64 +267,59 @@ export async function importData(type: string, file: string, options: ImportOpti
       }
     }
 
-    if (entriesSection) {
-      // Validate raw input BEFORE expandFlatKeys runs. expandFlatKeys
-      // silently normalizes some bad keys (e.g. ".dotleading" → "dotleading")
-      // and erases the evidence that the input was invalid.
-      try {
-        validateImportEntries(entriesSection);
-      } catch (err) {
-        printError(err instanceof Error ? err.message : String(err));
-        return;
-      }
-      const expanded = expandFlatKeys(entriesSection);
-      const currentData = options.merge ? loadData(scope) : {};
-
-      const newData = options.merge
-        ? deepMerge(currentData, expanded)
-        : expanded;
-
-      saveData(newData as CodexData, scope);
-      printSuccess(`Entries ${options.merge ? 'merged' : 'imported'} successfully`);
-    }
-
-    if (aliasesSection) {
-      const hasNonStringValues = Object.values(aliasesSection).some(v => typeof v !== 'string');
-      if (hasNonStringValues) {
-        printError('Alias values must all be strings (dot-notation paths).');
-        return;
-      }
-      try {
+    // Validate every section up front BEFORE any save. This fixes #77
+    // failure mode #2: a validation error in aliases or confirm used to
+    // fire AFTER entries had already been written, leaving the store
+    // partially applied. Validators also run before expandFlatKeys because
+    // flattenObject's __proto__ getter trap silently normalizes some bad
+    // keys and erases the evidence that the input was invalid.
+    try {
+      if (entriesSection) validateImportEntries(entriesSection);
+      if (aliasesSection) {
+        if (Object.values(aliasesSection).some(v => typeof v !== 'string')) {
+          printError('Alias values must all be strings (dot-notation paths).');
+          return;
+        }
         validateImportAliases(aliasesSection);
-      } catch (err) {
-        printError(err instanceof Error ? err.message : String(err));
-        return;
       }
-
-      const currentAliases = options.merge ? loadAliases(scope) : {};
-
-      const newAliases = options.merge
-        ? { ...currentAliases, ...(aliasesSection as Record<string, string>) }
-        : aliasesSection;
-
-      saveAliases(newAliases as Record<string, string>, scope);
-      printSuccess(`Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
+      if (confirmSection) validateImportConfirm(confirmSection);
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+      return;
     }
 
-    if (confirmSection) {
-      try {
-        validateImportConfirm(confirmSection);
-      } catch (err) {
-        printError(err instanceof Error ? err.message : String(err));
-        return;
-      }
-      const currentConfirm = options.merge ? loadConfirmKeys(scope) : {};
-      const newConfirm = options.merge
-        ? { ...currentConfirm, ...(confirmSection as Record<string, true>) }
-        : confirmSection;
-      saveConfirmKeys(newConfirm as Record<string, true>, scope);
-      printSuccess(`Confirm keys ${options.merge ? 'merged' : 'imported'} successfully`);
-    }
+    // Compute the final per-section payloads, then commit them together in
+    // a single saveAll call. Closes the cross-section tear window: even
+    // with process death or disk error mid-apply, the store never ends up
+    // with new entries and stale aliases / confirm (or vice versa).
+    const nextEntries: CodexData | undefined = entriesSection
+      ? (options.merge
+          ? deepMerge(loadData(scope), expandFlatKeys(entriesSection)) as CodexData
+          : expandFlatKeys(entriesSection) as CodexData)
+      : undefined;
+    const nextAliases: Record<string, string> | undefined = aliasesSection
+      ? (options.merge
+          ? { ...loadAliases(scope), ...(aliasesSection as Record<string, string>) }
+          : aliasesSection as Record<string, string>)
+      : undefined;
+    const nextConfirm: Record<string, true> | undefined = confirmSection
+      ? (options.merge
+          ? { ...loadConfirmKeys(scope), ...(confirmSection as Record<string, true>) }
+          : confirmSection as Record<string, true>)
+      : undefined;
+
+    saveAll(
+      {
+        ...(nextEntries !== undefined && { entries: nextEntries }),
+        ...(nextAliases !== undefined && { aliases: nextAliases }),
+        ...(nextConfirm !== undefined && { confirm: nextConfirm }),
+      },
+      scope,
+    );
+
+    if (entriesSection) printSuccess(`Entries ${options.merge ? 'merged' : 'imported'} successfully`);
+    if (aliasesSection) printSuccess(`Aliases ${options.merge ? 'merged' : 'imported'} successfully`);
+    if (confirmSection) printSuccess(`Confirm keys ${options.merge ? 'merged' : 'imported'} successfully`);
   } catch (error) {
     handleError('Error importing data:', error);
   }

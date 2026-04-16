@@ -198,6 +198,20 @@ vi.mock('../store', () => ({
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
   }),
+  saveAll: vi.fn((sections: { entries?: any; aliases?: any; confirm?: any }) => {
+    if (sections.entries !== undefined) {
+      Object.keys(mockData).forEach(k => delete mockData[k]);
+      Object.assign(mockData, sections.entries);
+    }
+    if (sections.aliases !== undefined) {
+      Object.keys(mockAliases).forEach(k => delete mockAliases[k]);
+      Object.assign(mockAliases, sections.aliases);
+    }
+    if (sections.confirm !== undefined) {
+      Object.keys(mockConfirmKeys).forEach(k => delete mockConfirmKeys[k]);
+      Object.assign(mockConfirmKeys, sections.confirm);
+    }
+  }),
   saveEntriesAndTouchMeta: vi.fn((d: any, key: string) => {
     Object.keys(mockData).forEach(k => delete mockData[k]);
     Object.assign(mockData, d);
@@ -853,6 +867,25 @@ describe('MCP Server Tools', () => {
       expect(result.content[0].text).toContain('Entries, aliases, and confirm keys merged successfully');
       expect(mockData).toEqual({ existing: 'data', added: 'data' });
       expect(mockAliases).toEqual({ existing: 'alias.path', added: 'alias.path' });
+    });
+
+    it('does not half-apply a multi-section import when a later section fails validation (#77)', async () => {
+      // Entries valid, aliases has a non-string value — alias validation
+      // must fail BEFORE entries are written. Pre-fix the MCP path wrote
+      // entries first and tripped on aliases, leaving a torn store.
+      Object.assign(mockData, { preserved: 'before' });
+      Object.assign(mockAliases, { preservedAlias: 'some.path' });
+      const json = JSON.stringify({ entries: { ok: 'value' }, aliases: { bad: { not: 'a string' } } });
+
+      const result = await toolHandlers['codex_import']({
+        type: 'all', data: json, merge: false,
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('Alias values must all be strings');
+      // Store must be exactly as it was before.
+      expect(mockData).toEqual({ preserved: 'before' });
+      expect(mockAliases).toEqual({ preservedAlias: 'some.path' });
     });
 
     it('returns error when importing all without data/aliases keys', async () => {

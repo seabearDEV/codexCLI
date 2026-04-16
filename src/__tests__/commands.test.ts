@@ -71,17 +71,25 @@ vi.mock('../store', () => {
   // Deep clone helper to prevent tests from mutating shared state
   const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
   const saveEntries = vi.fn((d: CodexData) => { storeState.entries = clone(d); });
+  const saveAliasMap = vi.fn((d: Record<string, string>) => { storeState.aliases = clone(d); });
+  const saveConfirmMap = vi.fn((d: Record<string, true>) => { storeState.confirm = clone(d); });
+  const saveAll = vi.fn((sections: { entries?: CodexData; aliases?: Record<string, string>; confirm?: Record<string, true> }) => {
+    if (sections.entries !== undefined) saveEntries(sections.entries);
+    if (sections.aliases !== undefined) saveAliasMap(sections.aliases);
+    if (sections.confirm !== undefined) saveConfirmMap(sections.confirm);
+  });
   return {
     loadEntries:        vi.fn(()  => clone(storeState.entries)),
     saveEntries,
+    saveAll,
     saveEntriesAndTouchMeta: vi.fn((d: CodexData) => { saveEntries(d); }),
     saveEntriesAndRemoveMeta: vi.fn((d: CodexData) => { saveEntries(d); }),
     loadEntriesMerged:  vi.fn(()  => clone(storeState.entries)),
     loadAliasMap:       vi.fn(()  => clone(storeState.aliases)),
-    saveAliasMap:       vi.fn((d: Record<string, string>) => { storeState.aliases = clone(d); }),
+    saveAliasMap,
     loadAliasMapMerged: vi.fn(()  => clone(storeState.aliases)),
     loadConfirmMap:       vi.fn(()  => clone(storeState.confirm)),
-    saveConfirmMap:       vi.fn((d: Record<string, true>) => { storeState.confirm = clone(d); }),
+    saveConfirmMap,
     loadConfirmMapMerged: vi.fn(()  => clone(storeState.confirm)),
     clearStoreCaches:   vi.fn(),
     findProjectFile:    vi.fn(() => null),
@@ -945,6 +953,39 @@ describe('Commands', () => {
       // Should save entries, aliases, and confirm keys
       expect(saveEntries).toHaveBeenCalled();
       expect(saveAliasMap).toHaveBeenCalled();
+    });
+
+    it('does not half-apply a multi-section import when a later section fails validation (#77)', async () => {
+      // Construct a bare-shape 'all' import where entries are valid but
+      // aliases contain a non-string value. Pre-fix, the CLI wrote
+      // entries FIRST and then tripped on aliases validation, leaving
+      // the store with new entries and stale aliases — a torn state.
+      // Post-fix, all validation runs up front and the one saveAll call
+      // never fires because validation failed first.
+      const torn = {
+        entries: { ok: 'value' },
+        aliases: { bad: { not: 'a string' } },
+      };
+      (fs.readFileSync as Mock).mockImplementation((p: string) => {
+        if (p === importFile) return JSON.stringify(torn);
+        return JSON.stringify({});
+      });
+      storeState.entries = { preserved: 'before' };
+      storeState.aliases = { preservedAlias: 'some.path' };
+
+      await importData('all', importFile, { force: true });
+
+      // Nothing was saved — the store is exactly as it was before.
+      expect(saveEntries).not.toHaveBeenCalled();
+      expect(saveAliasMap).not.toHaveBeenCalled();
+      expect(storeState.entries).toEqual({ preserved: 'before' });
+      expect(storeState.aliases).toEqual({ preservedAlias: 'some.path' });
+
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Alias values must all be strings'))
+      );
+      expect(showedError).toBe(true);
     });
 
     it('rejects imports all without proper section shape', async () => {

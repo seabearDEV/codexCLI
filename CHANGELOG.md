@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 ### Fixed
 
 - **`data export all` and `data import all` now share a file shape**: `ccli data export all -o backup.json` previously wrote three suffixed files (`backup-entries.json`, `backup-aliases.json`, `backup-confirm.json`) that the single-file `data import all` couldn't consume. Default now produces one wrapped file containing all three sections that round-trips cleanly. Pass `--split` for the legacy three-file layout. Closes #76.
+- **Transactional multi-section imports**: `data import all` (CLI + MCP) now validates every section up front and commits all sections in a single `saveAll` cycle via the new `saveAll` store primitive. Previously, a validation failure in the aliases section AFTER entries had already been saved left the store half-applied, and process death between section writes had the same effect. Closes #77.
 - **Auto-backup timestamp**: `createAutoBackup` now includes milliseconds in its directory names so back-to-back calls in the same second no longer collide with `mkdirSync EEXIST`.
 
 ## [1.12.1] - 2026-04-16
