@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.12.2-beta.0] - 2026-04-16
+
+First prerelease of v1.12.2 — the consolidated export/import integrity patch. Five audit findings from the 2026-04-09 review, batched into one beta for soak testing. Install via `brew install seabearDEV/ccli/ccli-beta` for side-by-side testing with stable.
+
 ### Added
 
 - **Export integrity envelope**: CLI `data export` and MCP `codex_export` now wrap output in a `$codexcli` envelope carrying version, type, scope, `exportedAt` timestamp, `includesEncrypted` flag, and a `sha256` hash of the payload. Imports verify the hash (tamper detection), surface `includesEncrypted` in the confirmation prompt / preview, and warn on future version. Bare-shape files (pre-v1.12.2 exports, hand-written JSON) still import via the backwards-compat path. Closes #78.
@@ -17,6 +21,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - **Leaf value-type validation**: `validateImportEntries` now rejects non-string leaves (numbers, booleans, arrays, `null`) with a clear error listing the offending keys. Previously these slipped through structural validation and surfaced as confusing errors in downstream read paths. Closes #79.
 - **Import size cap**: CLI and MCP imports now reject payloads larger than `import_max_bytes` (default 50 MB) before reading them, so a misplaced heap dump or adversarial input can't OOM the process with a cryptic V8 error. Override via `ccli config set import_max_bytes <bytes>`. Closes #80.
 - **Auto-backup timestamp**: `createAutoBackup` now includes milliseconds in its directory names so back-to-back calls in the same second no longer collide with `mkdirSync EEXIST`.
+
+### Notes for testers
+
+Main surfaces to flog:
+
+- **Export-all roundtrip**: `ccli-beta data export all -o backup.json && ccli-beta data reset all --force && ccli-beta data import all backup.json --force` — store should be identical before and after. Try with entries, aliases, and `--confirm`-marked commands all present.
+- **`--split` compat**: `ccli-beta data export all -o split.json --split` still produces `split-entries.json` / `split-aliases.json` / `split-confirm.json` for workflows that depend on per-section files.
+- **Envelope integrity**: hand-edit an exported `backup.json` (change a value, add a key), then `ccli-beta data import all backup.json --force` — expect a clear sha256-mismatch error, no store mutation.
+- **Encrypted roundtrip**: `ccli-beta set api.key secret --encrypt`, then export with `--include-encrypted`, reset, reimport, `ccli-beta get api.key --decrypt` — should return the original plaintext. Without `--include-encrypted`, the export contains `[encrypted]` placeholders and a subsequent import must be *rejected* with a clear error.
+- **Backwards compat**: any pre-v1.12.2 export file (bare `{entries, aliases, confirm}` shape, no `$codexcli` envelope) should still import cleanly.
+- **Size cap**: create a >50 MB garbage JSON (`yes | head -c 60M > huge.json`), attempt `ccli-beta data import entries huge.json` — expect a clear pre-read rejection naming `import_max_bytes`.
+- **Transactionality**: a manually-shaped import with valid entries but a malformed aliases section (e.g. non-string value) must leave entries unchanged. Pre-fix, entries would have been written before aliases validation tripped.
 
 ## [1.12.1] - 2026-04-16
 
