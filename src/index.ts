@@ -632,9 +632,10 @@ dataCommand
   .option('-o, --output <file>', 'Output file path')
   .option('--pretty', 'Pretty-print the output')
   .option('--include-encrypted', 'Emit real ciphertext for encrypted values instead of the [encrypted] placeholder. Produces a file suitable for backup/restore; the output contains sensitive material.')
+  .option('--split', 'For `export all`: write per-section files (entries/aliases/confirm) instead of a single wrapped file. Default is one file that `import all` can consume directly.')
   .option('-G, --global', 'Export from global data store only')
   .option('-P, --project', 'Export from project data store only')
-  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean, includeEncrypted?: boolean, global?: boolean, project?: boolean }) => {
+  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean, includeEncrypted?: boolean, split?: boolean, global?: boolean, project?: boolean }) => {
     const scope = options.global ? 'global' as const : options.project ? 'project' as const : undefined;
     await withCliInstrumentation(
       { tool: 'codex_export', scope, params: { type } },

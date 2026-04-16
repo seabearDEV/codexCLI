@@ -230,7 +230,8 @@ export function showExamples(): void {
   section('IMPORT & EXPORT:');
   ex(`${b} ${g('data export')} entries`, '# Export data to a timestamped file');
   ex(`${b} ${g('data export')} aliases ${y('-o')} aliases.json`, '# Export aliases to a specific file');
-  ex(`${b} ${g('data export')} all ${y('-o')} backup.json`, '# Export everything');
+  ex(`${b} ${g('data export')} all ${y('-o')} backup.json`, '# Export everything in one file (roundtrips with import all)');
+  ex(`${b} ${g('data export')} all ${y('-o')} backup.json ${y('--split')}`, '# Legacy per-section files (entries/aliases/confirm)');
   ex(`${b} ${g('data import')} entries backup.json`, '# Import data from a file');
   ex(`${b} ${g('data import')} entries backup.json ${y('-m -p')}`, '# Preview merge changes without importing');
   ex(`${b} ${g('data import')} all backup.json`, '# Import data and aliases');

@@ -641,8 +641,11 @@ ccli data export entries --pretty
 # Export confirm metadata
 ccli data export confirm
 
-# Export everything (entries, aliases, confirm metadata)
-ccli data export all
+# Export everything to a single file (roundtrips with `data import all`)
+ccli data export all -o backup.json
+
+# Legacy behavior: write per-section files (entries/aliases/confirm)
+ccli data export all -o backup.json --split
 
 # Export only global data (when a project file exists)
 ccli data export entries -G

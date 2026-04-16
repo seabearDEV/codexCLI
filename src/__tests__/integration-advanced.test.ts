@@ -71,6 +71,47 @@ describe('CLI Integration Tests — Advanced', () => {
       const result2 = run('get roundtrip.key2');
       expect(result2).toContain('value2');
     });
+
+    it('data export all → data import all roundtrips in a single file (#76)', () => {
+      run('set --force rt.ent "entryVal"');
+      run('set --force rt.target "targetVal" -a rtalias');
+      run('set --force rt.cmd "echo hi" --confirm');
+
+      const exportFile = path.join(testDir, 'all.json');
+      run(`data export all -o ${exportFile}`);
+      expect(fs.existsSync(exportFile)).toBe(true);
+
+      // No suffixed siblings when --split is not passed.
+      expect(fs.existsSync(path.join(testDir, 'all-entries.json'))).toBe(false);
+      expect(fs.existsSync(path.join(testDir, 'all-aliases.json'))).toBe(false);
+      expect(fs.existsSync(path.join(testDir, 'all-confirm.json'))).toBe(false);
+
+      const exported = JSON.parse(fs.readFileSync(exportFile, 'utf8'));
+      expect(exported.$codexcli?.type).toBe('all');
+      expect(exported.entries?.rt?.ent).toBe('entryVal');
+      expect(exported.aliases?.rtalias).toBe('rt.target');
+      expect(exported.confirm?.['rt.cmd']).toBeDefined();
+
+      run('data reset all --force');
+      run(`data import all ${exportFile} --force`);
+
+      expect(run('get rt.ent')).toContain('entryVal');
+      // Alias get confirms alias map restored.
+      expect(run('get rtalias')).toContain('targetVal');
+    });
+
+    it('data export all --split preserves the legacy 3-file layout', () => {
+      run('set --force sp.ent "splitVal"');
+
+      const base = path.join(testDir, 'split.json');
+      run(`data export all -o ${base} --split`);
+
+      expect(fs.existsSync(path.join(testDir, 'split-entries.json'))).toBe(true);
+      expect(fs.existsSync(path.join(testDir, 'split-aliases.json'))).toBe(true);
+      expect(fs.existsSync(path.join(testDir, 'split-confirm.json'))).toBe(true);
+      // The unwrapped base path is NOT written in split mode.
+      expect(fs.existsSync(base)).toBe(false);
+    });
   });
 
   // ── Config commands ────────────────────────────────────────────────

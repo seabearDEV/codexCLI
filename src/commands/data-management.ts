@@ -46,8 +46,38 @@ export function exportData(type: string, options: ExportOptions): void {
     const defaultDir = process.cwd();
     const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0];
     const indent = options.pretty ? 2 : 0;
+    const envelopeScope = resolveExportScope(scope);
+    const includesEncrypted = !!options.includeEncrypted;
 
-    // When exporting 'all' with -o, suffix the filename per type to avoid overwriting
+    // Single-file 'all' export (default in v1.12.2+). Produces one wrapped
+    // file that `data import all` can consume directly — restores the
+    // advertised export-all → import-all round-trip (#76). Pass --split
+    // to get the legacy per-section files.
+    if (type === 'all' && !options.split) {
+      const outputFile = options.output ?? path.join(defaultDir, `codexcli-all-${timestamp}.json`);
+      const entries = loadData(scope);
+      const entriesPayload = includesEncrypted ? entries : maskEncryptedValues(entries);
+      const wrapped = wrapExport({
+        type: 'all',
+        scope: envelopeScope,
+        includesEncrypted,
+        payload: {
+          entries: entriesPayload,
+          aliases: loadAliases(scope),
+          confirm: loadConfirmKeys(scope),
+        },
+        version: pkgVersion,
+      });
+      fs.writeFileSync(outputFile, JSON.stringify(wrapped, null, indent), { encoding: 'utf8', mode: 0o600 });
+      printSuccess(`All data exported to: ${color.cyan(outputFile)}`);
+      if (includesEncrypted) {
+        printWarning('Export contains decryptable ciphertext. Store the file securely.');
+      }
+      return;
+    }
+
+    // Split path: each section gets its own wrapped file. Runs for single-
+    // type exports (entries/aliases/confirm) and for `all --split`.
     const getOutputFile = (typeName: string, defaultName: string): string => {
       if (!options.output) return path.join(defaultDir, defaultName);
       if (type !== 'all') return options.output;
@@ -55,9 +85,6 @@ export function exportData(type: string, options: ExportOptions): void {
       const base = options.output.slice(0, options.output.length - ext.length);
       return `${base}-${typeName}${ext || '.json'}`;
     };
-
-    const envelopeScope = resolveExportScope(scope);
-    const includesEncrypted = !!options.includeEncrypted;
 
     if (type === 'entries' || type === 'all') {
       const outputFile = getOutputFile('entries', `codexcli-entries-${timestamp}.json`);

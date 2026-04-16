@@ -992,10 +992,22 @@ describe('Commands', () => {
       expect(showedSuccess).toBe(true);
     });
 
-    it('exports all to three files', () => {
+    it('exports all to a single wrapped file by default (#76)', () => {
       exportData('all', {});
 
-      // entries + aliases + confirm
+      // Single file contains all sections under the envelope.
+      expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
+      const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
+      const parsed = JSON.parse(writeCall[1] as string);
+      expect(parsed.$codexcli.type).toBe('all');
+      expect(parsed.entries).toBeDefined();
+      expect(parsed.aliases).toBeDefined();
+      expect(parsed.confirm).toBeDefined();
+    });
+
+    it('exports all to three files with --split', () => {
+      exportData('all', { split: true });
+
       expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
     });
 

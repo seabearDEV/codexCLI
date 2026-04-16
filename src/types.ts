@@ -33,6 +33,7 @@ export interface ExportOptions {
   global?: boolean | undefined;
   project?: boolean | undefined;
   includeEncrypted?: boolean;
+  split?: boolean;
 }
 
 export interface ImportOptions {

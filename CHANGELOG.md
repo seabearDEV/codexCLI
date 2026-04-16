@@ -10,6 +10,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **Export integrity envelope**: CLI `data export` and MCP `codex_export` now wrap output in a `$codexcli` envelope carrying version, type, scope, `exportedAt` timestamp, `includesEncrypted` flag, and a `sha256` hash of the payload. Imports verify the hash (tamper detection), surface `includesEncrypted` in the confirmation prompt / preview, and warn on future version. Bare-shape files (pre-v1.12.2 exports, hand-written JSON) still import via the backwards-compat path. Closes #78.
 
+### Fixed
+
+- **`data export all` and `data import all` now share a file shape**: `ccli data export all -o backup.json` previously wrote three suffixed files (`backup-entries.json`, `backup-aliases.json`, `backup-confirm.json`) that the single-file `data import all` couldn't consume. Default now produces one wrapped file containing all three sections that round-trips cleanly. Pass `--split` for the legacy three-file layout. Closes #76.
+- **Auto-backup timestamp**: `createAutoBackup` now includes milliseconds in its directory names so back-to-back calls in the same second no longer collide with `mkdirSync EEXIST`.
+
 ## [1.12.1] - 2026-04-16
 
 Patch release covering two HIGH-severity export/import integrity bugs uncovered in the 2026-04-09 audit.

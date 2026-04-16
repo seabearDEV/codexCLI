@@ -279,6 +279,7 @@ const CLI_TREE: Record<string, CommandDef> = {
           '--output': FLAG_DESCRIPTIONS['--output'], '-o': FLAG_DESCRIPTIONS['-o'],
           '--pretty': 'Pretty-print output',
           '--include-encrypted': 'Emit real ciphertext instead of [encrypted] placeholder',
+          '--split': 'For `export all`: write per-section files instead of one wrapped file',
           '--global': FLAG_DESCRIPTIONS['--global'], '-G': FLAG_DESCRIPTIONS['-G'],
           '--project': FLAG_DESCRIPTIONS['--project'], '-P': FLAG_DESCRIPTIONS['-P'],
         },

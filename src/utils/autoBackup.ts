@@ -97,7 +97,10 @@ function backupGlobalStore(label: string): string | null {
 }
 
 function timestamp(): string {
-  return new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
+  // Include milliseconds — callers can spin two backups inside the same
+  // second (e.g. integration tests doing back-to-back resets), and a
+  // second-precision stamp collided on mkdirSync EEXIST.
+  return new Date().toISOString().replace(/:/g, '-').replace(/\.(\d+)Z$/, '-$1');
 }
 
 function rotateBackups(backupDir: string): void {
