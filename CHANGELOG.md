@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-04-16
+
+Patch release covering two HIGH-severity export/import integrity bugs uncovered in the 2026-04-09 audit.
+
+### Fixed
+
+- **Auto-backup now honors project scope**: `createAutoBackup` previously only copied the global store (`~/.codexcli/`), so `ccli data import` and `ccli data reset` inside a project with `.codexcli/` had no rollback point — the destructive op proceeded against the project store with nothing backed up. Backups now go to `<projectRoot>/.codexcli.backups/` for project scope, and the destructive op aborts if the backup can't be written. Closes #74.
+- **Encrypted values survive export/import roundtrip**: exports ran every encrypted leaf through `maskEncryptedValues`, emitting the literal string `[encrypted]`. Re-importing that file silently overwrote real ciphertext in the store with the placeholder, destroying every encrypted entry. Masking on export is still the default (safe for sharing); opt into real ciphertext with `--include-encrypted` (CLI) or `includeEncrypted: true` (MCP `codex_export`). `validateImportEntries` now rejects any import containing the `[encrypted]` sentinel with a clear error naming the offending keys. Closes #75.
+
 ## [1.12.0] - 2026-04-16
 
 Stable promotion of v1.12.0-beta.0 after successful soak (2026-04-11 weekend → 2026-04-16). No source-code changes since the beta tag — soak passed clean. See the beta.0 entry below for full detail; the consolidated summary follows.
