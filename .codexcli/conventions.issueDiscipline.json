@@ -1,7 +1,7 @@
 {
-  "value": "All new work requires a GitHub issue assigned to a milestone before implementation starts. No exceptions for \"quick fixes\" or \"while I'm here\" scope creep. File first, then build. See project.tracking for issue/milestone conventions.",
+  "value": "**New features** require a GitHub issue assigned to a milestone before implementation starts. **Bug fixes** (including lint debt, broken builds, regressions) found during other work can be fixed inline without a pre-filed issue. The rule guards against feature scope creep, not against fixing things that are already broken. When in doubt: would this expand user-visible capability? Yes → issue first. No → fix it. See project.tracking for issue/milestone conventions.",
   "meta": {
     "created": 1775842661857,
-    "updated": 1775842661857
+    "updated": 1776351763739
   }
 }

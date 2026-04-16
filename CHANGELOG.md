@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-04-16
+
+Stable promotion of v1.12.0-beta.0 after successful soak (2026-04-11 weekend → 2026-04-16). No source-code changes since the beta tag — soak passed clean. See the beta.0 entry below for full detail; the consolidated summary follows.
+
+### Added
+
+- **`ccli audit --follow` / `-f`**: Live audit log streaming. Tails `audit.jsonl` with the same colored format as snapshot mode and supports all existing filters (`--writes`, `--key`, `--src`, `--mcp`, `--cli`, `--project`, `--hits`, `--misses`, `--redundant`, `--detailed`). `--json` emits NDJSON. Closes #41.
+- **LLM bootstrap nudge**: `DEFAULT_LLM_INSTRUCTIONS` now tells agents to run `gh issue list --state open` after `codex_context` at session start, so in-flight work is cross-referenced before coding begins. Closes #68.
+
+### Performance
+
+- **Telemetry tail cache**: `loadTelemetry()` caches parsed entries and reads only new tail bytes on subsequent calls, mirroring the `loadAuditLog()` pattern from v1.11.1. Eliminates full file re-read on every `computeStats()` call. Closes #81.
+- **Audit query**: `queryAuditLog()` reads cached audit entries directly instead of allocating a defensive `.slice()` copy on every query.
+
 ## [1.12.0-beta.0] - 2026-04-10
 
 First prerelease of v1.12.0 — perf + observability mini-release. Install via `brew install seabearDEV/ccli/ccli-beta` for side-by-side testing with stable.
