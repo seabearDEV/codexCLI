@@ -7,16 +7,23 @@ interface Config {
   colors: boolean;
   theme: string;
   max_backups: number;
+  import_max_bytes: number;
 }
 
 const VALID_THEMES = ['default', 'dark', 'light'] as const;
-export const VALID_CONFIG_KEYS = ['colors', 'theme', 'max_backups'] as const;
+export const VALID_CONFIG_KEYS = ['colors', 'theme', 'max_backups', 'import_max_bytes'] as const;
+
+// 50 MB — a generous ceiling for any realistic codex store. Real stores
+// are KB-scale; this catches pathological inputs (misplaced heap dump,
+// adversarial payload) before they OOM the process.
+const DEFAULT_IMPORT_MAX_BYTES = 50 * 1024 * 1024;
 
 // Default configuration
 const defaultConfig: Config = {
   colors: true,
   theme: 'default',
   max_backups: 10,
+  import_max_bytes: DEFAULT_IMPORT_MAX_BYTES,
 };
 
 // Mtime-based cache for config
@@ -61,6 +68,9 @@ export function loadConfig(): Config {
       colors: typeof config.colors === 'boolean' ? config.colors : defaultConfig.colors,
       theme: typeof config.theme === 'string' ? config.theme : defaultConfig.theme,
       max_backups: typeof config.max_backups === 'number' ? config.max_backups : defaultConfig.max_backups,
+      import_max_bytes: typeof config.import_max_bytes === 'number' && config.import_max_bytes > 0
+        ? config.import_max_bytes
+        : defaultConfig.import_max_bytes,
     };
 
     configCache = result;
@@ -125,6 +135,14 @@ export function setConfigSetting(key: string, value: string | boolean): void {
       return;
     }
     config.max_backups = num;
+    saveConfig(config);
+  } else if (key === 'import_max_bytes') {
+    const num = Number(value);
+    if (!Number.isInteger(num) || num <= 0) {
+      console.error(`Invalid import_max_bytes: '${value}'. Must be a positive integer (bytes).`);
+      return;
+    }
+    config.import_max_bytes = num;
     saveConfig(config);
   } else {
     console.error(`Unknown configuration key: ${key}`);

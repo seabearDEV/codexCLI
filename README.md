@@ -523,11 +523,12 @@ ccli config examples
 
 Available settings:
 
-| Setting       | Values                       | Description                                      |
-|---------------|------------------------------|--------------------------------------------------|
-| `colors`      | `true` / `false`             | Enable/disable colored output                    |
-| `theme`       | `default` / `dark` / `light` | UI theme                                         |
-| `max_backups` | integer (default: `10`)      | Number of auto-backups to keep (`0` to disable)  |
+| Setting            | Values                       | Description                                                    |
+|--------------------|------------------------------|----------------------------------------------------------------|
+| `colors`           | `true` / `false`             | Enable/disable colored output                                  |
+| `theme`            | `default` / `dark` / `light` | UI theme                                                       |
+| `max_backups`      | integer (default: `10`)      | Number of auto-backups to keep (`0` to disable)                |
+| `import_max_bytes` | integer (default: `52428800` / 50 MB) | Reject import files larger than this (bytes) to prevent OOM |
 
 ### Project-Scoped Data
 

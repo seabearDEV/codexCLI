@@ -271,6 +271,41 @@ describe('Storage', () => {
         expect(() => validateImportEntries(obj))
           .toThrow(/(__proto__.*_aliases|_aliases.*__proto__)/);
       });
+
+      // #79 — CodexValue leaves are strings only. Non-string leaves used
+      // to pass structural validation and get written through, then
+      // surface as confusing errors in downstream read paths.
+      it('rejects number leaf values', () => {
+        expect(() => validateImportEntries({ count: 42 as unknown as string }))
+          .toThrow(/non-string leaf values.*count/);
+      });
+
+      it('rejects boolean leaf values', () => {
+        expect(() => validateImportEntries({ flag: true as unknown as string }))
+          .toThrow(/non-string leaf values.*flag/);
+      });
+
+      it('rejects array leaf values', () => {
+        expect(() => validateImportEntries({ items: ['a', 'b'] as unknown as string }))
+          .toThrow(/non-string leaf values.*items/);
+      });
+
+      it('rejects null leaf values', () => {
+        expect(() => validateImportEntries({ empty: null as unknown as string }))
+          .toThrow(/non-string leaf values.*empty/);
+      });
+
+      it('reports every non-string leaf in a mixed import', () => {
+        const bad = {
+          a: 'ok',
+          num: 1 as unknown as string,
+          bool: false as unknown as string,
+          arr: [] as unknown as string,
+          nested: { n: null as unknown as string },
+        };
+        expect(() => validateImportEntries(bad))
+          .toThrow(/non-string leaf values.*(num.*bool.*arr.*nested\.n|nested\.n.*num)/);
+      });
     });
 
     describe('validateImportAliases', () => {

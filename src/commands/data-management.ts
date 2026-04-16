@@ -14,6 +14,22 @@ import { createAutoBackup } from '../utils/autoBackup';
 import { findProjectFile, clearProjectFileCache, saveAll } from '../store';
 import { wrapExport, tryUnwrapImport } from '../utils/envelope';
 import { version as pkgVersion } from '../../package.json';
+import { getConfigSetting } from '../config';
+
+function resolveImportMaxBytes(): number {
+  const configured = Number(getConfigSetting('import_max_bytes'));
+  // Fall back to 50 MB if the config is missing, corrupted, or non-positive.
+  // The config loader already clamps negatives to the default, but guard
+  // again here so a hand-edited config file can't disable the cap.
+  return Number.isFinite(configured) && configured > 0 ? configured : 50 * 1024 * 1024;
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
 import { getAuditPath } from '../utils/audit';
 import { getTelemetryPath, getMissPathsPath } from '../utils/telemetry';
 import { scanCodebase, ScaffoldEntry } from './scan';
@@ -147,6 +163,19 @@ export async function importData(type: string, file: string, options: ImportOpti
     // Check if file exists
     if (!fs.existsSync(file)) {
       printError(`Import file not found: ${file}`);
+      return;
+    }
+
+    // Reject oversized files before reading into memory (#80). Prevents a
+    // misplaced heap dump or adversarial payload from OOM'ing the Node
+    // process with a cryptic V8 error instead of a clear user message.
+    const maxBytes = resolveImportMaxBytes();
+    const fileSize = fs.statSync(file).size;
+    if (fileSize > maxBytes) {
+      printError(
+        `Import file too large: ${formatBytes(fileSize)} exceeds the ${formatBytes(maxBytes)} limit. ` +
+        `Set the 'import_max_bytes' config if you really need to import a file this size:\n  ccli config set import_max_bytes ${fileSize}`
+      );
       return;
     }
 

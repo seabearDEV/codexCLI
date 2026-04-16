@@ -249,6 +249,7 @@ vi.mock('../config', () => ({
   loadConfig: vi.fn(() => ({ ...mockConfig })),
   getConfigSetting: vi.fn((key: string) => {
     if (key === 'colors' || key === 'theme') return mockConfig[key];
+    if (key === 'import_max_bytes') return mockConfig.import_max_bytes ?? null;
     return null;
   }),
   setConfigSetting: vi.fn((key: string, value: any) => {
@@ -867,6 +868,21 @@ describe('MCP Server Tools', () => {
       expect(result.content[0].text).toContain('Entries, aliases, and confirm keys merged successfully');
       expect(mockData).toEqual({ existing: 'data', added: 'data' });
       expect(mockAliases).toEqual({ existing: 'alias.path', added: 'alias.path' });
+    });
+
+    it('rejects oversized string payloads (#80)', async () => {
+      mockConfig.import_max_bytes = 100;
+      try {
+        const big = JSON.stringify({ k: 'x'.repeat(500) });
+        const result = await toolHandlers['codex_import']({
+          type: 'entries', data: big, merge: false,
+        });
+        expect(result.isError).toBe(true);
+        expect(result.content[0].text).toContain('too large');
+        expect(result.content[0].text).toContain('import_max_bytes');
+      } finally {
+        delete mockConfig.import_max_bytes;
+      }
     });
 
     it('does not half-apply a multi-section import when a later section fails validation (#77)', async () => {

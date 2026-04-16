@@ -14,6 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 - **`data export all` and `data import all` now share a file shape**: `ccli data export all -o backup.json` previously wrote three suffixed files (`backup-entries.json`, `backup-aliases.json`, `backup-confirm.json`) that the single-file `data import all` couldn't consume. Default now produces one wrapped file containing all three sections that round-trips cleanly. Pass `--split` for the legacy three-file layout. Closes #76.
 - **Transactional multi-section imports**: `data import all` (CLI + MCP) now validates every section up front and commits all sections in a single `saveAll` cycle via the new `saveAll` store primitive. Previously, a validation failure in the aliases section AFTER entries had already been saved left the store half-applied, and process death between section writes had the same effect. Closes #77.
+- **Leaf value-type validation**: `validateImportEntries` now rejects non-string leaves (numbers, booleans, arrays, `null`) with a clear error listing the offending keys. Previously these slipped through structural validation and surfaced as confusing errors in downstream read paths. Closes #79.
+- **Import size cap**: CLI and MCP imports now reject payloads larger than `import_max_bytes` (default 50 MB) before reading them, so a misplaced heap dump or adversarial input can't OOM the process with a cryptic V8 error. Override via `ccli config set import_max_bytes <bytes>`. Closes #80.
 - **Auto-backup timestamp**: `createAutoBackup` now includes milliseconds in its directory names so back-to-back calls in the same second no longer collide with `mkdirSync EEXIST`.
 
 ## [1.12.1] - 2026-04-16

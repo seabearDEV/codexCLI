@@ -1044,6 +1044,18 @@ server.tool(
       const merge = mergeParam ?? true;
       let parsed: unknown;
       if (typeof data === "string") {
+        // Size cap (#80) for string payloads — keep OOM out of the MCP
+        // server process. Objects passed in-process skip this because
+        // the caller already materialized them.
+        const configured = Number(getConfigSetting('import_max_bytes'));
+        const maxBytes = Number.isFinite(configured) && configured > 0 ? configured : 50 * 1024 * 1024;
+        const byteLength = Buffer.byteLength(data, 'utf8');
+        if (byteLength > maxBytes) {
+          return errorResponse(
+            `Import payload too large: ${byteLength} bytes exceeds the ${maxBytes}-byte limit. ` +
+            `Raise 'import_max_bytes' via ccli config set if this is expected.`
+          );
+        }
         try {
           parsed = JSON.parse(data);
         } catch {

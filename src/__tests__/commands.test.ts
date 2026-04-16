@@ -1144,6 +1144,27 @@ describe('Commands', () => {
       );
     });
 
+    it('rejects oversized import files without reading them (#80)', async () => {
+      const largeFile = '/tmp/huge.json';
+      (fs.existsSync as Mock).mockImplementation((p: string) => p === largeFile);
+      (fs.statSync as Mock).mockImplementation((p: string) => {
+        if (p === largeFile) return { size: 100 * 1024 * 1024 };
+        return { size: 0 };
+      });
+      storeState.entries = { preserved: 'v' };
+
+      await importData('entries', largeFile, { force: true });
+
+      expect(saveEntries).not.toHaveBeenCalled();
+      expect(storeState.entries).toEqual({ preserved: 'v' });
+
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('Import file too large'))
+      );
+      expect(showedError).toBe(true);
+    });
+
     it('rejects import containing [encrypted] sentinel and leaves store untouched', async () => {
       storeState.entries = { preserved: 'value' };
 

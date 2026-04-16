@@ -207,6 +207,7 @@ export function getEntriesFlat(scope?: Scope  ): Record<string, string> {
 export function validateImportEntries(obj: Record<string, unknown>): void {
   const invalid: string[] = [];
   const masked: string[] = [];
+  const nonString: string[] = [];
 
   function walk(node: Record<string, unknown>, prefix: string): void {
     for (const key of Object.getOwnPropertyNames(node)) {
@@ -227,6 +228,11 @@ export function validateImportEntries(obj: Record<string, unknown>): void {
         // value. Reject up-front — the user needs to re-export with
         // --include-encrypted to get a restorable file.
         if (value === '[encrypted]') masked.push(fullKey);
+        // CodexValue leaves are strings only (#79). Non-string leaves —
+        // numbers, booleans, arrays, null — pass structural validation but
+        // violate the type contract and would surface as confusing errors
+        // in downstream read paths. Catch them at the import boundary.
+        if (typeof value !== 'string') nonString.push(fullKey);
       }
     }
   }
@@ -244,6 +250,10 @@ export function validateImportEntries(obj: Record<string, unknown>): void {
       `This file was produced by a masking export and cannot be used to restore values. ` +
       `Re-export with --include-encrypted (CLI) or includeEncrypted: true (MCP) to get a restorable file.`
     );
+  }
+  if (nonString.length > 0) {
+    const list = nonString.map(k => JSON.stringify(k)).join(', ');
+    throw new Error(`Import contains non-string leaf values at keys: ${list}. Entry values must be strings.`);
   }
 }
 
