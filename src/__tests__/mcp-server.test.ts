@@ -108,22 +108,26 @@ function removeNestedMock(obj: any, path: string): boolean {
   delete cur[parts[parts.length - 1]];
   return true;
 }
-vi.mock('../storage', () => ({
-  loadData: vi.fn(() => ({ ...mockData })),
-  saveData: vi.fn((d: any) => {
-    Object.keys(mockData).forEach(k => delete mockData[k]);
-    Object.assign(mockData, d);
-  }),
-  getValue: vi.fn((key: string) => getNestedMock(mockData, key)),
-  setValue: vi.fn((key: string, value: string) => setNestedMock(mockData, key, value)),
-  removeValue: vi.fn((key: string) => removeNestedMock(mockData, key)),
-  getEntriesFlat: vi.fn(() => flattenMock(mockData)),
-  // Round-2 import validators — mock as no-ops since the test fixtures only
-  // use safe keys. Real validation behavior is covered by storage.test.ts.
-  validateImportEntries: vi.fn(),
-  validateImportAliases: vi.fn(),
-  validateImportConfirm: vi.fn(),
-}));
+vi.mock('../storage', async () => {
+  // Pull the real validateImportEntries so the sentinel guard (#75) and
+  // key-safety checks exercise real logic at the MCP handler level. Other
+  // validators stay as no-ops — the fixtures in this file use safe keys.
+  const actual = await vi.importActual<typeof import('../storage')>('../storage');
+  return {
+    loadData: vi.fn(() => ({ ...mockData })),
+    saveData: vi.fn((d: any) => {
+      Object.keys(mockData).forEach(k => delete mockData[k]);
+      Object.assign(mockData, d);
+    }),
+    getValue: vi.fn((key: string) => getNestedMock(mockData, key)),
+    setValue: vi.fn((key: string, value: string) => setNestedMock(mockData, key, value)),
+    removeValue: vi.fn((key: string) => removeNestedMock(mockData, key)),
+    getEntriesFlat: vi.fn(() => flattenMock(mockData)),
+    validateImportEntries: actual.validateImportEntries,
+    validateImportAliases: vi.fn(),
+    validateImportConfirm: vi.fn(),
+  };
+});
 
 // Mock alias
 vi.mock('../alias', () => ({
@@ -296,7 +300,7 @@ function resetMocks() {
 }
 
 // Import crypto for test data
-import { encryptValue } from '../utils/crypto';
+import { encryptValue, decryptValue } from '../utils/crypto';
 
 // Import the module which triggers tool registrations
 beforeAll(async () => {
@@ -758,6 +762,24 @@ describe('MCP Server Tools', () => {
       const parsed = JSON.parse(result.content[0].text);
       expect(parsed.entries.secret).toBe('[encrypted]');
     });
+
+    it('emits real ciphertext when includeEncrypted: true', async () => {
+      const encrypted = encryptValue('secret', 'pass');
+      Object.assign(mockData, { api: { key: encrypted } });
+      const result = await toolHandlers['codex_export']({ type: 'entries', includeEncrypted: true });
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.api.key).toBe(encrypted);
+      expect(result.content[0].text).toContain('encrypted::v1:');
+      expect(result.content[0].text).not.toContain('[encrypted]');
+    });
+
+    it('emits real ciphertext on all export when includeEncrypted: true', async () => {
+      const encrypted = encryptValue('secret', 'pass');
+      Object.assign(mockData, { api: { key: encrypted } });
+      const result = await toolHandlers['codex_export']({ type: 'all', includeEncrypted: true });
+      const parsed = JSON.parse(result.content[0].text);
+      expect(parsed.entries.api.key).toBe(encrypted);
+    });
   });
 
   describe('codex_import', () => {
@@ -856,6 +878,44 @@ describe('MCP Server Tools', () => {
       expect(result.content[0].text).toContain('Entries, aliases, and confirm keys imported successfully');
       expect(mockData).toEqual({ server: { ip: '10.0.0.1' } });
       expect(mockAliases).toEqual({ srv: 'server.ip' });
+    });
+
+    it('round-trips encrypted values when includeEncrypted is set', async () => {
+      const plaintext = 'top-secret';
+      const password = 'pw';
+      const encrypted = encryptValue(plaintext, password);
+      Object.assign(mockData, { api: { key: encrypted } });
+
+      const exported = await toolHandlers['codex_export']({ type: 'entries', includeEncrypted: true });
+      const json = exported.content[0].text;
+
+      Object.keys(mockData).forEach(k => delete mockData[k]);
+
+      const result = await toolHandlers['codex_import']({ type: 'entries', data: json, merge: false });
+      expect(result.isError).toBeFalsy();
+      expect(mockData.api).toBeDefined();
+      const restored = (mockData.api as Record<string, string>).key;
+      expect(restored).toBe(encrypted);
+      expect(decryptValue(restored, password)).toBe(plaintext);
+    });
+
+    it('rejects import of a masking-export file (preserves encrypted values in store)', async () => {
+      const encrypted = encryptValue('secret', 'pw');
+      Object.assign(mockData, { api: { key: encrypted } });
+
+      // Export WITHOUT includeEncrypted — produces the lossy [encrypted] sentinel
+      const exported = await toolHandlers['codex_export']({ type: 'entries' });
+      const json = exported.content[0].text;
+      expect(json).toContain('[encrypted]');
+
+      // Import must fail with a clear message instead of silently overwriting
+      // the ciphertext in the store with the literal string '[encrypted]'.
+      const result = await toolHandlers['codex_import']({ type: 'entries', data: json, merge: false });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain('masked encrypted placeholders');
+
+      // Store should still hold the original ciphertext, untouched.
+      expect((mockData.api as Record<string, string>).key).toBe(encrypted);
     });
   });
 

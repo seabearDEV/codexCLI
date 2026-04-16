@@ -15,7 +15,7 @@ import {
   configSet,
 } from '../commands';
 import { displayAliases } from '../commands/helpers';
-import { encryptValue, isEncrypted } from '../utils/crypto';
+import { encryptValue, decryptValue, isEncrypted } from '../utils/crypto';
 import { copyToClipboard } from '../utils/clipboard';
 import { stripAnsi } from '../utils/wordWrap';
 import { clearStoreCaches } from '../store';
@@ -1028,11 +1028,82 @@ describe('Commands', () => {
       expect(written).not.toContain('encrypted::v1:');
     });
 
+    it('emits real ciphertext when --include-encrypted is set', () => {
+      const encryptedVal = encryptValue('secret', 'pass');
+      storeState.entries = { api: { key: encryptedVal } };
+
+      exportData('entries', { includeEncrypted: true });
+
+      const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
+      const written = writeCall[1] as string;
+      expect(written).toContain('encrypted::v1:');
+      expect(written).not.toContain('[encrypted]');
+    });
+
+    it('CLI encrypted roundtrip: export --include-encrypted → reset → import → decrypt returns plaintext', async () => {
+      const plaintext = 'top-secret';
+      const password = 'pw';
+      const encryptedVal = encryptValue(plaintext, password);
+      storeState.entries = { api: { key: encryptedVal } };
+
+      // Export with ciphertext intact
+      exportData('entries', { includeEncrypted: true });
+      const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
+      const exportedJson = writeCall[1] as string;
+      const exportedPath = writeCall[0] as string;
+
+      // Simulate `data reset entries`
+      storeState.entries = {};
+      (saveEntries as Mock).mockClear();
+
+      // Feed the exported JSON back through import
+      (fs.existsSync as Mock).mockImplementation(() => true);
+      (fs.readFileSync as Mock).mockImplementation((p: string) =>
+        p === exportedPath ? exportedJson : JSON.stringify({})
+      );
+
+      await importData('entries', exportedPath, { force: true });
+
+      expect(saveEntries).toHaveBeenCalled();
+      const restored = storeState.entries as Record<string, Record<string, string>>;
+      expect(restored.api?.key).toBe(encryptedVal);
+      expect(isEncrypted(restored.api!.key!)).toBe(true);
+      expect(decryptValue(restored.api!.key!, password)).toBe(plaintext);
+    });
+
     it('writes to custom output path', () => {
       exportData('entries', { output: '/tmp/custom-export.json' });
 
       const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
       expect(writeCall[0]).toBe('/tmp/custom-export.json');
+    });
+  });
+
+  describe('import sentinel guard', () => {
+    const sentinelFile = '/tmp/sentinel.json';
+
+    beforeEach(() => {
+      (fs.existsSync as Mock).mockImplementation(() => true);
+      (fs.readFileSync as Mock).mockImplementation((p: string) =>
+        p === sentinelFile
+          ? JSON.stringify({ api: { key: '[encrypted]' }, other: 'visible' })
+          : JSON.stringify({})
+      );
+    });
+
+    it('rejects import containing [encrypted] sentinel and leaves store untouched', async () => {
+      storeState.entries = { preserved: 'value' };
+
+      await importData('entries', sentinelFile, { force: true });
+
+      expect(saveEntries).not.toHaveBeenCalled();
+      expect(storeState.entries).toEqual({ preserved: 'value' });
+
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes('masked encrypted placeholders'))
+      );
+      expect(showedError).toBe(true);
     });
   });
 

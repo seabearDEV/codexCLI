@@ -206,6 +206,7 @@ export function getEntriesFlat(scope?: Scope  ): Record<string, string> {
  */
 export function validateImportEntries(obj: Record<string, unknown>): void {
   const invalid: string[] = [];
+  const masked: string[] = [];
 
   function walk(node: Record<string, unknown>, prefix: string): void {
     for (const key of Object.getOwnPropertyNames(node)) {
@@ -220,6 +221,12 @@ export function validateImportEntries(obj: Record<string, unknown>): void {
         walk(value as Record<string, unknown>, fullKey);
       } else {
         if (!isValidEntryKey(fullKey)) invalid.push(fullKey);
+        // Catch the [encrypted] sentinel that maskEncryptedValues writes on
+        // export. Importing it would overwrite real ciphertext in the store
+        // with the literal string, silently destroying every encrypted
+        // value. Reject up-front — the user needs to re-export with
+        // --include-encrypted to get a restorable file.
+        if (value === '[encrypted]') masked.push(fullKey);
       }
     }
   }
@@ -229,6 +236,14 @@ export function validateImportEntries(obj: Record<string, unknown>): void {
   if (invalid.length > 0) {
     const list = invalid.map(k => JSON.stringify(k)).join(', ');
     throw new Error(`Import contains invalid entry keys: ${list}`);
+  }
+  if (masked.length > 0) {
+    const list = masked.map(k => JSON.stringify(k)).join(', ');
+    throw new Error(
+      `Import contains masked encrypted placeholders at keys: ${list}. ` +
+      `This file was produced by a masking export and cannot be used to restore values. ` +
+      `Re-export with --include-encrypted (CLI) or includeEncrypted: true (MCP) to get a restorable file.`
+    );
   }
 }
 

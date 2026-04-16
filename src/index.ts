@@ -631,9 +631,10 @@ dataCommand
   .description('Export data or aliases to a file')
   .option('-o, --output <file>', 'Output file path')
   .option('--pretty', 'Pretty-print the output')
+  .option('--include-encrypted', 'Emit real ciphertext for encrypted values instead of the [encrypted] placeholder. Produces a file suitable for backup/restore; the output contains sensitive material.')
   .option('-G, --global', 'Export from global data store only')
   .option('-P, --project', 'Export from project data store only')
-  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean, global?: boolean, project?: boolean }) => {
+  .action(async (type: string, options: { format?: string, output?: string, pretty?: boolean, includeEncrypted?: boolean, global?: boolean, project?: boolean }) => {
     const scope = options.global ? 'global' as const : options.project ? 'project' as const : undefined;
     await withCliInstrumentation(
       { tool: 'codex_export', scope, params: { type } },

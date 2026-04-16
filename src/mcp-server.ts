@@ -994,15 +994,17 @@ server.tool(
   {
     type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to export"),
     pretty: z.boolean().optional().describe("Pretty-print the JSON (default false)"),
+    includeEncrypted: z.boolean().optional().describe("Emit real ciphertext for encrypted values instead of the [encrypted] placeholder. Produces a file suitable for backup/restore; output contains sensitive material."),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
   },
-  async ({ type, pretty, scope: scopeParam }) => {
+  async ({ type, pretty, includeEncrypted, scope: scopeParam }) => {
     try {
       const scope = toScope(scopeParam);
       const indent = pretty ? 2 : 0;
+      const maskEntries = (d: Record<string, unknown>) => includeEncrypted ? d : maskEncryptedValues(d);
 
       if (type === "all") {
-        const combined = { entries: maskEncryptedValues(loadData(scope)), aliases: loadAliases(scope), confirm: loadConfirmKeys(scope) };
+        const combined = { entries: maskEntries(loadData(scope)), aliases: loadAliases(scope), confirm: loadConfirmKeys(scope) };
         return textResponse(JSON.stringify(combined, null, indent));
       }
 
@@ -1010,7 +1012,7 @@ server.tool(
         return textResponse(JSON.stringify(loadConfirmKeys(scope), null, indent));
       }
 
-      const content = type === "entries" ? maskEncryptedValues(loadData(scope)) : loadAliases(scope);
+      const content = type === "entries" ? maskEntries(loadData(scope)) : loadAliases(scope);
       return textResponse(JSON.stringify(content, null, indent));
     } catch (err) {
       return errorResponse(`Error exporting: ${String(err)}`);

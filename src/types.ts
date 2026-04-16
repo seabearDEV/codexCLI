@@ -32,6 +32,7 @@ export interface ExportOptions {
   pretty?: boolean;
   global?: boolean | undefined;
   project?: boolean | undefined;
+  includeEncrypted?: boolean;
 }
 
 export interface ImportOptions {

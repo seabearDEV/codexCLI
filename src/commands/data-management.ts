@@ -47,8 +47,13 @@ export function exportData(type: string, options: ExportOptions): void {
 
     if (type === 'entries' || type === 'all') {
       const outputFile = getOutputFile('entries', `codexcli-entries-${timestamp}.json`);
-      fs.writeFileSync(outputFile, JSON.stringify(maskEncryptedValues(loadData(scope)), null, indent), { encoding: 'utf8', mode: 0o600 });
+      const entries = loadData(scope);
+      const payload = options.includeEncrypted ? entries : maskEncryptedValues(entries);
+      fs.writeFileSync(outputFile, JSON.stringify(payload, null, indent), { encoding: 'utf8', mode: 0o600 });
       printSuccess(`Entries exported to: ${color.cyan(outputFile)}`);
+      if (options.includeEncrypted) {
+        printWarning('Export contains decryptable ciphertext. Store the file securely.');
+      }
     }
 
     if (type === 'aliases' || type === 'all') {
