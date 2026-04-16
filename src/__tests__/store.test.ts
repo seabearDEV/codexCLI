@@ -146,6 +146,63 @@ describe('saveAll', () => {
     expect(loadAliasMap('global')).toEqual({ preserved: 'a' });
     expect(loadConfirmMap('global')).toEqual({ 'keep.this': true });
   });
+
+  // #87 — imported entries used to land bare (no meta block), surfacing as
+  // [untracked] after every backup restore. saveAll now stamps _meta.
+  it('stamps _meta for new leaves arriving from an import (replace)', () => {
+    writeData({ entries: {}, aliases: {}, confirm: {} });
+    clearStoreCaches();
+
+    const before = Date.now();
+    saveAll({ entries: { fresh: { import: 'value' } } }, 'global');
+    clearStoreCaches();
+    const after = Date.now();
+
+    const meta = loadMeta('global');
+    expect(meta['fresh.import']).toBeGreaterThanOrEqual(before);
+    expect(meta['fresh.import']).toBeLessThanOrEqual(after);
+    expect(getStalenessTag('fresh.import', meta)).toBe('');
+  });
+
+  it('preserves _meta for leaves whose value is unchanged (merge import)', () => {
+    const oldTs = Date.now() - 10 * 86400000;
+    writeData({
+      entries: { kept: 'same', changed: 'old' },
+      aliases: {},
+      confirm: {},
+      _meta: { kept: oldTs, changed: oldTs },
+    });
+    clearStoreCaches();
+
+    saveAll({ entries: { kept: 'same', changed: 'new', added: 'value' } }, 'global');
+    clearStoreCaches();
+
+    const meta = loadMeta('global');
+    // Unchanged value → old timestamp preserved.
+    expect(meta.kept).toBe(oldTs);
+    // Changed value → stamped now.
+    expect(meta.changed).toBeGreaterThan(oldTs);
+    // New leaf → stamped now.
+    expect(meta.added).toBeGreaterThan(oldTs);
+  });
+
+  it('drops _meta entries for leaves no longer present after a replace', () => {
+    const oldTs = Date.now() - 10 * 86400000;
+    writeData({
+      entries: { retained: '1', removed: '2' },
+      aliases: {},
+      confirm: {},
+      _meta: { retained: oldTs, removed: oldTs },
+    });
+    clearStoreCaches();
+
+    saveAll({ entries: { retained: '1' } }, 'global');
+    clearStoreCaches();
+
+    const meta = loadMeta('global');
+    expect(meta.retained).toBe(oldTs);
+    expect(meta.removed).toBeUndefined();
+  });
 });
 
 // ── Mtime caching ────────────────────────────────────────────────────

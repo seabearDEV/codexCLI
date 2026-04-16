@@ -16,6 +16,7 @@ import {
 export { findProjectFile, clearProjectFileCache } from './utils/paths';
 import { saveJsonSorted } from './utils/saveJsonSorted';
 import { createDirectoryStore, migrateFileToDirectory } from './utils/directoryStore';
+import { flattenObject } from './utils/objectPath';
 import { debug } from './utils/debug';
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -258,12 +259,40 @@ export function saveAll(
 ): void {
   const store = resolveStore(scope);
   const current = store.load();
+
+  // Stamp _meta for new/changed leaves when entries are written. Without
+  // this, imported entries land bare and surface as [untracked]. Preserve
+  // the existing timestamp when the value is unchanged so --merge imports
+  // don't bump every untouched entry. See #87.
+  const nextMeta = sections.entries !== undefined
+    ? stampImportMeta(sections.entries, current.entries ?? {}, current._meta ?? {})
+    : undefined;
+
   store.save({
     ...current,
-    ...(sections.entries !== undefined && { entries: sections.entries }),
+    ...(sections.entries !== undefined && {
+      entries: sections.entries,
+      _meta: nextMeta,
+    }),
     ...(sections.aliases !== undefined && { aliases: sections.aliases }),
     ...(sections.confirm !== undefined && { confirm: sections.confirm }),
   });
+}
+
+function stampImportMeta(
+  next: CodexData,
+  current: CodexData,
+  existing: Record<string, number>,
+): Record<string, number> {
+  const now = Date.now();
+  const newFlat = flattenObject(next as Record<string, unknown>);
+  const currentFlat = flattenObject(current as Record<string, unknown>);
+  const fresh: Record<string, number> = {};
+  for (const [key, value] of Object.entries(newFlat)) {
+    const prev = existing[key];
+    fresh[key] = (prev !== undefined && currentFlat[key] === value) ? prev : now;
+  }
+  return fresh;
 }
 
 // ── Merged accessors (project + global fallthrough) ────────────────────
