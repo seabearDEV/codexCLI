@@ -37,6 +37,12 @@ vi.mock('child_process', () => ({
   execSync: vi.fn(),
 }));
 
+// autoBackup does real filesystem work (mkdir, cp, stat). These tests mock
+// fs broadly and aren't verifying backup mechanics — stub the module out.
+vi.mock('../utils/autoBackup', () => ({
+  createAutoBackup: vi.fn(() => null),
+}));
+
 // Mock file system operations (still needed for export/import files, config, autoBackup)
 vi.mock('fs', () => {
   const mock = {

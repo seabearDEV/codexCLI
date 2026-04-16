@@ -160,9 +160,16 @@ export async function importData(type: string, file: string, options: ImportOpti
       return;
     }
 
-    // Auto-backup before destructive import (replace, not merge)
+    // Auto-backup before destructive import (replace, not merge). If the
+    // backup throws, abort — a destructive import with no rollback point
+    // is exactly the failure mode #74 was filed to prevent.
     if (!options.merge) {
-      createAutoBackup('pre-import');
+      try {
+        createAutoBackup('pre-import', scope);
+      } catch (err) {
+        printError(`Aborting: auto-backup failed (${err instanceof Error ? err.message : String(err)}). No changes were made.`);
+        return;
+      }
     }
 
     if (entriesSection) {
@@ -256,8 +263,14 @@ export async function resetData(type: string, options: ResetOptions): Promise<vo
       return;
     }
 
-    // Auto-backup before reset
-    createAutoBackup('pre-reset');
+    // Auto-backup before reset. Abort if the backup can't be written —
+    // see #74.
+    try {
+      createAutoBackup('pre-reset', scope);
+    } catch (err) {
+      printError(`Aborting: auto-backup failed (${err instanceof Error ? err.message : String(err)}). No changes were made.`);
+      return;
+    }
 
     // Reset entries
     if (type === 'entries' || type === 'all') {

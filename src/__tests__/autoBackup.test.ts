@@ -4,9 +4,11 @@ import os from 'os';
 import { createAutoBackup } from '../utils/autoBackup';
 
 let tmpDir: string;
+let projectStoreDir: string | null;
 
 vi.mock('../utils/paths', () => ({
   getDataDirectory: () => tmpDir,
+  findProjectStoreDir: () => projectStoreDir,
 }));
 
 vi.mock('../config', () => ({
@@ -18,17 +20,18 @@ vi.mock('../config', () => ({
 
 beforeEach(() => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-backup-'));
+  projectStoreDir = null;
 });
 
 afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe('createAutoBackup', () => {
+describe('createAutoBackup — global scope', () => {
   it('creates a backup directory with data.json copy', () => {
     fs.writeFileSync(path.join(tmpDir, 'data.json'), '{"entries":{}}');
 
-    const result = createAutoBackup('test');
+    const result = createAutoBackup('test', 'global');
 
     expect(result).toBeTruthy();
     expect(fs.existsSync(result!)).toBe(true);
@@ -36,8 +39,7 @@ describe('createAutoBackup', () => {
   });
 
   it('returns null when no files to back up', () => {
-    // No data files in tmpDir
-    const result = createAutoBackup('test');
+    const result = createAutoBackup('test', 'global');
     expect(result).toBeNull();
   });
 
@@ -45,21 +47,17 @@ describe('createAutoBackup', () => {
     fs.writeFileSync(path.join(tmpDir, 'data.json'), '{}');
     const backupDir = path.join(tmpDir, '.backups');
 
-    // Create 5 existing backups
     fs.mkdirSync(backupDir, { recursive: true });
     for (let i = 0; i < 5; i++) {
       const dir = path.join(backupDir, `old-${String(i).padStart(3, '0')}`);
       fs.mkdirSync(dir);
-      // Give them staggered mtimes
       const time = new Date(2020, 0, 1 + i);
       fs.utimesSync(dir, time, time);
     }
 
-    // Create a new backup (max_backups = 3)
-    createAutoBackup('new');
+    createAutoBackup('new', 'global');
 
     const remaining = fs.readdirSync(backupDir);
-    // Should keep 3 total (pruned the oldest)
     expect(remaining.length).toBe(3);
   });
 
@@ -67,7 +65,7 @@ describe('createAutoBackup', () => {
     fs.writeFileSync(path.join(tmpDir, 'entries.json'), '{}');
     fs.writeFileSync(path.join(tmpDir, 'aliases.json'), '{}');
 
-    const result = createAutoBackup('legacy');
+    const result = createAutoBackup('legacy', 'global');
 
     expect(result).toBeTruthy();
     expect(fs.existsSync(path.join(result!, 'entries.json'))).toBe(true);
@@ -77,9 +75,62 @@ describe('createAutoBackup', () => {
   it('labels backup directory with the provided label', () => {
     fs.writeFileSync(path.join(tmpDir, 'data.json'), '{}');
 
-    const result = createAutoBackup('pre-import');
+    const result = createAutoBackup('pre-import', 'global');
 
     expect(result).toBeTruthy();
     expect(path.basename(result!)).toMatch(/^pre-import-/);
+  });
+});
+
+describe('createAutoBackup — project scope', () => {
+  let projectRoot: string;
+
+  beforeEach(() => {
+    projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-project-'));
+    projectStoreDir = path.join(projectRoot, '.codexcli');
+    fs.mkdirSync(projectStoreDir, { mode: 0o700 });
+    fs.writeFileSync(path.join(projectStoreDir, 'foo.json'), '{"value":"bar"}');
+    fs.writeFileSync(path.join(projectStoreDir, '_aliases.json'), '{"a":"foo"}');
+  });
+
+  afterEach(() => {
+    fs.rmSync(projectRoot, { recursive: true, force: true });
+  });
+
+  it('copies the project .codexcli/ dir into <projectRoot>/.codexcli.backups/', () => {
+    const result = createAutoBackup('pre-reset', 'project');
+
+    expect(result).toBeTruthy();
+    expect(result!.startsWith(path.join(projectRoot, '.codexcli.backups'))).toBe(true);
+    expect(fs.existsSync(path.join(result!, '.codexcli', 'foo.json'))).toBe(true);
+    expect(fs.existsSync(path.join(result!, '.codexcli', '_aliases.json'))).toBe(true);
+  });
+
+  it('does not touch the global .backups/ dir', () => {
+    createAutoBackup('pre-reset', 'project');
+    expect(fs.existsSync(path.join(tmpDir, '.backups'))).toBe(false);
+  });
+
+  it('returns null when project scope requested but no project store exists', () => {
+    projectStoreDir = null;
+    const result = createAutoBackup('pre-reset', 'project');
+    expect(result).toBeNull();
+  });
+
+  it('auto-resolves to project when scope is omitted and project store exists', () => {
+    const result = createAutoBackup('pre-import');
+    expect(result).toBeTruthy();
+    expect(result!.startsWith(path.join(projectRoot, '.codexcli.backups'))).toBe(true);
+  });
+
+  it('throws when the backup write fails', () => {
+    // Make the project root read-only so mkdir of .codexcli.backups/ fails.
+    // fs.cpSync/mkdirSync will throw EACCES or EPERM.
+    fs.chmodSync(projectRoot, 0o500);
+    try {
+      expect(() => createAutoBackup('pre-reset', 'project')).toThrow();
+    } finally {
+      fs.chmodSync(projectRoot, 0o700);
+    }
   });
 });
