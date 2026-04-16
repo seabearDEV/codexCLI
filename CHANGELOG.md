@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.12.2-beta.1] - 2026-04-16
+
+Second prerelease of v1.12.2. Adds one bug fix found during beta.0 soak flogging; all beta.0 changes carry forward unchanged.
+
+### Fixed
+
+- **Imported entries no longer land `[untracked]`**: `saveAll` now stamps `_meta` for new/changed leaves on import so a fresh backup restore doesn't surface every entry as the highest-suspicion staleness tier. Unchanged leaves (under `--merge`) keep their existing timestamps. `_meta` entries for leaves no longer present are dropped. Closes #87.
+
 ## [1.12.2-beta.0] - 2026-04-16
 
 First prerelease of v1.12.2 — the consolidated export/import integrity patch. Five audit findings from the 2026-04-09 review, batched into one beta for soak testing. Install via `brew install seabearDEV/ccli/ccli-beta` for side-by-side testing with stable.
