@@ -1,7 +1,7 @@
 {
-  "value": "v1.12.1 shipped 2026-04-16 (#74 auto-backup project scope, #75 encrypted roundtrip). v1.12.2 consolidated export/import integrity patch covers #78 (export envelope), #76 (single-file export-all), #77 (transactional multi-section imports via new saveAll), #79 (non-string leaf rejection), #80 (import_max_bytes size cap, default 50 MB).\n\nCURRENT STATE: v1.12.2-beta.1 released 2026-04-16 and soaking. Beta.1 adds #87 (saveAll stamps _meta on import so restored entries aren't [untracked]) on top of beta.0. Install via brew install seabearDEV/ccli/ccli-beta for side-by-side testing.\n\nNext: soak clean → cut stable v1.12.2 → v1.12.x export/import integrity chain done.\n\nAlso filed during the beta.0 soak session: #88 (askPassword non-interactive path, v1.13.0 milestone) — out-of-scope enhancement surfaced while flogging encrypted roundtrip. Don't address during 1.12.x.",
+  "value": "v1.12.2 shipped 2026-04-16. Consolidated export/import integrity patch covers #76/#77/#78/#79/#80/#87. v1.12.x integrity chain is DONE.\n\nSide findings from the v1.12.2-beta.1 soak verification (2026-04-16), filed for later:\n- #89 — data import silently drops shape-invalid sections at the extraction filter (src/commands/data-management.ts:244-259). Transactional guarantee only engages for content-invalid sections; shape-invalid (e.g. aliases: \"not-an-object\") bypasses it.\n- #90 — import-size error hint hardcodes 'ccli' instead of getBinaryName(). CLI (data-management.ts:177) + MCP (mcp-server.ts:1056).\n\nStill parked: #88 askPassword non-interactive path (v1.13.0 milestone).\n\nNext: no active release. Pick up #89/#90 as bug fixes when ready, or move to Layer 2 seed-density tooling (#82 lint, #83 topology).",
   "meta": {
     "created": 1775761844860,
-    "updated": 1776364651434
+    "updated": 1776369707618
   }
 }
