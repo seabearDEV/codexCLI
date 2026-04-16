@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-04-16
+
+Stable promotion of v1.12.2-beta.1 after successful soak. Beta.0 shipped the consolidated export/import integrity patch (five audit findings from the 2026-04-09 review); beta.1 added one fix found during beta.0 flogging (#87 `_meta` stamping on import). No source-code changes since the beta.1 tag — soak passed clean. See beta entries below for full detail; consolidated summary follows.
+
+### Added
+
+- **Export integrity envelope**: CLI `data export` and MCP `codex_export` now wrap output in a `$codexcli` envelope carrying version, type, scope, `exportedAt`, `includesEncrypted` flag, and a `sha256` of the payload. Imports verify the hash (tamper detection) and surface `includesEncrypted` in the confirmation prompt / preview. Bare-shape files (pre-v1.12.2 exports, hand-written JSON) still import via the backwards-compat path. Closes #78.
+
+### Fixed
+
+- **`data export all` and `data import all` share a file shape**: default is one wrapped file that round-trips cleanly; `--split` preserves the legacy three-file layout. Closes #76.
+- **Transactional multi-section imports**: `data import all` (CLI + MCP) validates every section up front and commits all sections in a single `saveAll` cycle. A validation failure in any section rolls back the entire import. Closes #77.
+- **Leaf value-type validation**: `validateImportEntries` now rejects non-string leaves (numbers, booleans, arrays, `null`) with a clear error listing the offending keys. Closes #79.
+- **Import size cap**: CLI and MCP imports reject payloads larger than `import_max_bytes` (default 50 MB) before reading them. Override via `ccli config set import_max_bytes <bytes>`. Closes #80.
+- **Imported entries no longer land `[untracked]`**: `saveAll` stamps `_meta` for new/changed leaves on import so a fresh backup restore doesn't surface every entry as the highest-suspicion staleness tier. Unchanged leaves (under `--merge`) keep their existing timestamps. `_meta` entries for leaves no longer present are dropped. Closes #87.
+- **Auto-backup timestamp**: `createAutoBackup` now includes milliseconds in its directory names so back-to-back calls in the same second no longer collide with `mkdirSync EEXIST`.
+
 ## [1.12.2-beta.1] - 2026-04-16
 
 Second prerelease of v1.12.2. Adds one bug fix found during beta.0 soak flogging; all beta.0 changes carry forward unchanged.
