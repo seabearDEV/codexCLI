@@ -583,7 +583,7 @@ export function computeStats(periodDays = 0): TelemetryStats {
   // poisoning every object in the process and silently breaking the MCP SDK's
   // request dispatch on the next call. Same applies to the other dict-shaped
   // accumulators below.
-  const nsCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }> = Object.create(null);
+  const nsCoverage = Object.create(null) as Record<string, { reads: number; writes: number; lastWrite: number | undefined }>;
   for (const e of entries) {
     if (e.ns === '*') continue;
     if (e.success === false) continue;
@@ -617,7 +617,7 @@ export function computeStats(periodDays = 0): TelemetryStats {
   }
 
   // Project breakdown — null-prototype, see nsCoverage rationale above.
-  const projectBreakdown: Record<string, number> = Object.create(null);
+  const projectBreakdown = Object.create(null) as Record<string, number>;
   for (const e of entries) {
     if (e.project) {
       projectBreakdown[e.project] = (projectBreakdown[e.project] ?? 0) + 1;
@@ -677,8 +677,8 @@ export function computeStats(periodDays = 0): TelemetryStats {
 
   // Exploration-weighted token savings (namespace-aware, calibrated when possible)
   // Null-prototype, see nsCoverage rationale above.
-  const explorationBreakdown: Record<string, { hits: number; tokensSaved: number }> = Object.create(null);
-  const calibration: Record<string, ExplorationCostResult> = Object.create(null);
+  const explorationBreakdown = Object.create(null) as Record<string, { hits: number; tokensSaved: number }>;
+  const calibration = Object.create(null) as Record<string, ExplorationCostResult>;
   let estimatedExplorationTokensSaved = 0;
 
   // Load miss-path data once for calibration
@@ -716,7 +716,7 @@ export function computeStats(periodDays = 0): TelemetryStats {
   const netTokensSaved = estimatedTotalTokensSaved - deliveryCostTokens;
 
   // Agent breakdown — null-prototype, see nsCoverage rationale above.
-  const agentBreakdown: Record<string, { calls: number; reads: number; writes: number }> = Object.create(null);
+  const agentBreakdown = Object.create(null) as Record<string, { calls: number; reads: number; writes: number }>;
   for (const e of entries) {
     const agent = e.agent;
     if (!agent) continue;
