@@ -67,7 +67,7 @@ export async function withCliInstrumentation<T>(
 
   const startTime = Date.now();
   const op = classifyOp(ctx.tool);
-  const isWrite = op === 'write' || op === 'exec';
+  const isWrite = op === 'write' || op === 'exec' || op === 'remove';
   const scope: Scope = ctx.scope ?? 'auto';
 
   // Alias resolution tracking

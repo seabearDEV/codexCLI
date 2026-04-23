@@ -177,8 +177,10 @@ codexCLI
   .option('--chain', 'Treat stored value as space-separated key references to resolve and chain')
   .option('-G, --global', 'Target global data store')
   .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, chain?: boolean, global?: boolean }) => {
+    const scope = options.global ? 'global' as const : undefined;
+    const resolvedKey = keys[0] ? resolveKey(keys[0], scope) : undefined;
     await withCliInstrumentation(
-      { tool: 'codex_run', key: keys[0], scope: options.global ? 'global' : undefined, params: { keys } },
+      { tool: 'codex_run', key: resolvedKey, rawKey: keys[0], scope, params: { keys } },
       () => commands.runCommand(keys, options)
     );
   });
