@@ -58,3 +58,17 @@ v1.11 taught us how to dogfood a fix. v1.13 is teaching us how to dogfood a road
 The audit log becomes the mirror. You see what works, what earns its complexity, what users — human or agent — actually reach for. You stop guessing what to build next.
 
 Real usage is the only stress test that tells you what to build.
+
+## Addendum: the loop closed
+
+A day after filing the issues above, v1.13.0 shipped — eleven issues closed in a single cleanup session. Three came directly from the dataset (#91, #92, #93). The rest fell naturally once the milestone was trimmed to match:
+
+- **#94** was a narrow aliasResolved follow-up the #93 audit surfaced. No alias-using `codex_copy` calls in the 584-call window, so the bug stayed silently wrong until we looked with the right question.
+- **#82** (seed-quality lint) and **#83** (topology) are Layer 2 tools from the seedRoadmap. They weren't blocked on code — they were blocked on calibration data. Fifteen days of real use finally gave them something to tune against.
+- **#86/#89/#90** were soak findings from v1.12.2's release flog — same dogfooding loop, earlier turn of the crank.
+
+What the data surfaced beyond the filed issues: sequencing. **#92 was the lowest-risk highest-leverage move** — shipping it first makes every future agent session better at tool selection, including the session that would later design #91. **#93 followed as plumbing** so the next dataset cycle's signal would be cleaner. Only then did **#91 get its design pass**, with the tool descriptions already improved and the audit log already trustworthy.
+
+That ordering didn't come from a random walk through the milestone. It came from reading the data and picking the move that makes every subsequent move cheaper.
+
+The loop doesn't just tell you what to build. It tells you the order.
