@@ -46,6 +46,7 @@ import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams, getAuditPath } 
 import { getEffectiveInstructions } from "./llm-instructions";
 import { parsePeriodDays } from "./utils";
 import { getBinaryName } from "./utils/binaryName";
+import { HANDOFF_KEY, buildHandoffBanner } from "./utils/handoff";
 
 function toScope(scopeParam?: string): Scope {
   return (scopeParam ?? 'auto') as Scope;
@@ -1316,16 +1317,24 @@ server.tool(
       const filtered = filterEntriesByTier(flat, effectiveTier);
       const aliases = loadAliases(effectiveScope);
 
-      if (Object.keys(filtered).length === 0 && Object.keys(aliases).length === 0) {
+      // Load meta for age indicators (needed both for banner and entry tags)
+      const { loadMeta, loadMetaMerged, getStalenessTag } = await import("./store");
+      const meta = effectiveScope === 'auto' ? loadMetaMerged() : loadMeta(effectiveScope);
+
+      // Handoff banner runs against the unfiltered flat map so it appears
+      // regardless of tier. When present, the key is dropped from the entries
+      // list below so the banner content isn't duplicated (#91).
+      const handoff = buildHandoffBanner(flat, meta);
+      if (handoff) {
+        delete filtered[HANDOFF_KEY];
+      }
+
+      if (!handoff && Object.keys(filtered).length === 0 && Object.keys(aliases).length === 0) {
         const header = hasProject
           ? `[project: ${projectFile}]\n\n`
           : `[project: NONE — auto-scope writes will fall through to global. Pin CODEX_PROJECT in the MCP server env, or pass scope:"project"/"global" explicitly on writes.]\n\n`;
         return textResponse(`${header}No entries stored. Use codex_set to add project knowledge.`);
       }
-
-      // Load meta for age indicators
-      const { loadMeta, loadMetaMerged, getStalenessTag } = await import("./store");
-      const meta = effectiveScope === 'auto' ? loadMetaMerged() : loadMeta(effectiveScope);
 
       const lines: string[] = [];
 
@@ -1336,6 +1345,14 @@ server.tool(
         lines.push(`[project: NONE — auto-scope writes will fall through to global. Pin CODEX_PROJECT in the MCP server env, or pass scope:"project"/"global" explicitly on writes.]`);
       }
       lines.push('');
+
+      // Banner before entries — first thing the agent sees after project line.
+      if (handoff) {
+        lines.push(...handoff.lines);
+        if (Object.keys(filtered).length > 0 || Object.keys(aliases).length > 0) {
+          lines.push('');
+        }
+      }
 
       if (Object.keys(filtered).length > 0) {
         for (const [k, v] of Object.entries(filtered)) {

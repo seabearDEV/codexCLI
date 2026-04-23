@@ -10,13 +10,14 @@ HOW TO USE:
 - Do NOT store things easily derived from package.json, README, or the code itself. Store insights, decisions, and context that would otherwise be lost between sessions.
 
 SCHEMA (recommended namespaces):
-- project.*      — name, description, stack, repo URL
-- commands.*     — build, test, lint, deploy commands
-- arch.*         — architecture notes, patterns, key decisions
-- conventions.*  — coding patterns, naming rules, style notes
-- context.*      — non-obvious gotchas, edge cases, historical decisions
-- files.*        — key file paths and their roles
-- deps.*         — notable dependencies and why they are used
+- project.*            — name, description, stack, repo URL
+- commands.*           — build, test, lint, deploy commands
+- arch.*               — architecture notes, patterns, key decisions
+- conventions.*        — coding patterns, naming rules, style notes
+- context.*            — non-obvious gotchas, edge cases, historical decisions
+- context.next_session — special: short handoff note for the next session's bootstrap. Surfaces in codex_context as a top banner, auto-labeled "[likely stale]" after 7 days.
+- files.*              — key file paths and their roles
+- deps.*               — notable dependencies and why they are used
 
 SCOPE:
 - If a .codexcli/ project store directory exists, reads/writes default to the project scope.
@@ -74,6 +75,7 @@ EFFECTIVE USAGE:
   - omit (standard) — multi-file changes, bug fixes, new features
   - tier:"full" — refactoring subsystems, changing architecture, onboarding to the codebase
 - Write back: when you learn something non-obvious, store it before the session ends.
+- Hand off: at session end, consider writing context.next_session with a short note about where things stand — what was in-flight, what to pick up, any blockers. The next session's codex_context will surface it as a top banner. Ephemeral by design; treated as stale after 7 days.
 - All mutations are audited — codex_audit shows what changed, when, and by whom.
 
 FIRST SESSION (fresh project):

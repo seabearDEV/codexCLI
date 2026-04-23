@@ -4,6 +4,7 @@ import { loadMeta, loadMetaMerged, getStalenessTag } from '../store';
 import { isEncrypted } from '../utils/crypto';
 import { color } from '../formatting';
 import { getBinaryName } from '../utils/binaryName';
+import { HANDOFF_KEY, buildHandoffBanner } from '../utils/handoff';
 
 // ── Tier filtering (shared with MCP server) ──────────────────────────
 
@@ -44,7 +45,16 @@ export function showContext(options: ContextOptions = {}): void {
   const aliases = loadAliases(scope);
   const meta = scope === 'global' ? loadMeta('global') : loadMetaMerged();
 
-  if (Object.keys(filtered).length === 0 && Object.keys(aliases).length === 0) {
+  // Handoff banner runs against the unfiltered map — it must render
+  // regardless of tier since its whole point is to be impossible to miss
+  // on session bootstrap (#91). When rendered, the key is dropped from
+  // the entries list below so the content isn't duplicated.
+  const handoff = buildHandoffBanner(flat, meta);
+  if (handoff) {
+    delete filtered[HANDOFF_KEY];
+  }
+
+  if (!handoff && Object.keys(filtered).length === 0 && Object.keys(aliases).length === 0) {
     if (!options.plain) {
       console.log(color.gray(`No entries stored. Add one with "${getBinaryName()} set <key> <value>"`));
     }
@@ -54,6 +64,13 @@ export function showContext(options: ContextOptions = {}): void {
   // JSON output
   if (options.json) {
     const result: Record<string, unknown> = {};
+    if (handoff) {
+      result.handoff = {
+        value: flat[HANDOFF_KEY],
+        ageDays: handoff.ageDays,
+        stale: handoff.isStale,
+      };
+    }
     if (Object.keys(filtered).length > 0) {
       result.entries = filtered;
     }
@@ -65,7 +82,23 @@ export function showContext(options: ContextOptions = {}): void {
     return;
   }
 
-  // Formatted output
+  // Formatted output — banner first so it's the first thing the reader sees.
+  if (handoff) {
+    for (const line of handoff.lines) {
+      if (options.plain) {
+        console.log(line);
+      } else {
+        const colored = line.startsWith('→')
+          ? (handoff.isStale ? color.yellow(line) : color.cyan(line))
+          : color.white(line);
+        console.log(colored);
+      }
+    }
+    if (Object.keys(filtered).length > 0 || Object.keys(aliases).length > 0) {
+      console.log('');
+    }
+  }
+
   if (Object.keys(filtered).length > 0) {
     for (const [k, v] of Object.entries(filtered)) {
       const ageTag = getStalenessTag(k, meta);
