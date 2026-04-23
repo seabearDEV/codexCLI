@@ -165,15 +165,3 @@ audit.jsonl
 # holds. Per-machine rollback history — not meant to be committed.
 .codexcli.backups/
 
-# Seqlock generation counter (added in #58 for torn-read detection).
-# Bumps by 2 on every store write — tracking it would create constant
-# diff noise on every codex update. The codex tools manage it; git
-# should never see it.
-.codexcli/_epoch.json
-
-# Personal session continuity entry (per-user, per-machine, per-pair).
-# Holds collaboration texture, mood, "where we left off" notes for the
-# specific user-agent pair. Project-level open threads belong in
-# project.inFlight (committed); session.last is the personal overlay.
-.codexcli/session.last.json
-
