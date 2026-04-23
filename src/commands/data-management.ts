@@ -234,30 +234,51 @@ export async function importData(type: string, file: string, options: ImportOpti
     }
 
     const isAll = type === 'all';
-    const entriesSection: Record<string, unknown> | undefined = envelope
-      ? ((type === 'entries' || isAll) && envelopePayload.entries && typeof envelopePayload.entries === 'object' && !Array.isArray(envelopePayload.entries)
-          ? envelopePayload.entries as Record<string, unknown>
-          : undefined)
-      : (type === 'entries' ? validData :
-        isAll && validData.entries && typeof validData.entries === 'object' && !Array.isArray(validData.entries)
-          ? validData.entries as Record<string, unknown>
-          : undefined);
-    const aliasesSection: Record<string, unknown> | undefined = envelope
-      ? ((type === 'aliases' || isAll) && envelopePayload.aliases && typeof envelopePayload.aliases === 'object' && !Array.isArray(envelopePayload.aliases)
-          ? envelopePayload.aliases as Record<string, unknown>
-          : undefined)
-      : (type === 'aliases' ? validData :
-        isAll && validData.aliases && typeof validData.aliases === 'object' && !Array.isArray(validData.aliases)
-          ? validData.aliases as Record<string, unknown>
-          : undefined);
-    const confirmSection: Record<string, unknown> | undefined = envelope
-      ? ((type === 'confirm' || isAll) && envelopePayload.confirm && typeof envelopePayload.confirm === 'object' && !Array.isArray(envelopePayload.confirm)
-          ? envelopePayload.confirm as Record<string, unknown>
-          : undefined)
-      : (type === 'confirm' ? validData :
-        isAll && validData.confirm && typeof validData.confirm === 'object' && !Array.isArray(validData.confirm)
-          ? validData.confirm as Record<string, unknown>
-          : undefined);
+
+    // Pick the raw per-section values out of the source, preserving the
+    // undefined-vs-present distinction. A present-but-malformed section
+    // (e.g. `aliases: "not-an-object"`) used to be silently coerced to
+    // undefined here and then dropped from the import — letting a torn
+    // backup half-apply with no error. Shape-validate explicitly below
+    // so #77's transactional guarantee holds for shape errors too (#89).
+    const rawEntries: unknown = envelope
+      ? envelopePayload.entries
+      : (type === 'entries' ? importedData : validData.entries);
+    const rawAliases: unknown = envelope
+      ? envelopePayload.aliases
+      : (type === 'aliases' ? importedData : validData.aliases);
+    const rawConfirm: unknown = envelope
+      ? envelopePayload.confirm
+      : (type === 'confirm' ? importedData : validData.confirm);
+
+    const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+      !!v && typeof v === 'object' && !Array.isArray(v);
+    const shapeTypeName = (v: unknown): string =>
+      v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
+
+    const wantsEntries = type === 'entries' || isAll;
+    const wantsAliases = type === 'aliases' || isAll;
+    const wantsConfirm = type === 'confirm' || isAll;
+
+    if (wantsEntries && rawEntries !== undefined && !isPlainObject(rawEntries)) {
+      printError(`Import section 'entries' must be an object (got ${shapeTypeName(rawEntries)}).`);
+      return;
+    }
+    if (wantsAliases && rawAliases !== undefined && !isPlainObject(rawAliases)) {
+      printError(`Import section 'aliases' must be an object (got ${shapeTypeName(rawAliases)}).`);
+      return;
+    }
+    if (wantsConfirm && rawConfirm !== undefined && !isPlainObject(rawConfirm)) {
+      printError(`Import section 'confirm' must be an object (got ${shapeTypeName(rawConfirm)}).`);
+      return;
+    }
+
+    const entriesSection: Record<string, unknown> | undefined =
+      wantsEntries && isPlainObject(rawEntries) ? rawEntries : undefined;
+    const aliasesSection: Record<string, unknown> | undefined =
+      wantsAliases && isPlainObject(rawAliases) ? rawAliases : undefined;
+    const confirmSection: Record<string, unknown> | undefined =
+      wantsConfirm && isPlainObject(rawConfirm) ? rawConfirm : undefined;
 
     if (isAll && !entriesSection && !aliasesSection && !confirmSection) {
       printError('Import with type "all" requires {"entries": {...}, "aliases": {...}, "confirm": {...}} (at least one section).');

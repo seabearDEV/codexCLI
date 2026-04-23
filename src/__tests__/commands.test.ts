@@ -1008,6 +1008,77 @@ describe('Commands', () => {
       expect(saveEntries).not.toHaveBeenCalled();
       expect(saveAliasMap).not.toHaveBeenCalled();
     });
+
+    it('aborts when a section is a string instead of an object (#89)', async () => {
+      // Pre-fix, a malformed section (non-object type) was silently coerced
+      // to undefined and dropped — the other sections would apply and the
+      // user would see success with no hint that aliases was discarded.
+      // Post-fix, the shape check aborts before any save.
+      const bad = {
+        entries: { ok: 'value' },
+        aliases: 'THIS_IS_NOT_AN_OBJECT',
+      };
+      (fs.readFileSync as Mock).mockImplementation((p: string) => {
+        if (p === importFile) return JSON.stringify(bad);
+        return JSON.stringify({});
+      });
+      storeState.entries = { preserved: 'before' };
+
+      await importData('all', importFile, { force: true });
+
+      expect(saveEntries).not.toHaveBeenCalled();
+      expect(saveAliasMap).not.toHaveBeenCalled();
+      expect(storeState.entries).toEqual({ preserved: 'before' });
+
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes("'aliases'") && arg.includes('string'))
+      );
+      expect(showedError).toBe(true);
+    });
+
+    it('aborts when a section is an array instead of an object (#89)', async () => {
+      const bad = {
+        entries: { ok: 'value' },
+        aliases: [1, 2, 3],
+      };
+      (fs.readFileSync as Mock).mockImplementation((p: string) => {
+        if (p === importFile) return JSON.stringify(bad);
+        return JSON.stringify({});
+      });
+
+      await importData('all', importFile, { force: true });
+
+      expect(saveEntries).not.toHaveBeenCalled();
+      expect(saveAliasMap).not.toHaveBeenCalled();
+
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes("'aliases'") && arg.includes('array'))
+      );
+      expect(showedError).toBe(true);
+    });
+
+    it('aborts when the confirm section is a number instead of an object (#89)', async () => {
+      const bad = {
+        entries: { ok: 'value' },
+        confirm: 42,
+      };
+      (fs.readFileSync as Mock).mockImplementation((p: string) => {
+        if (p === importFile) return JSON.stringify(bad);
+        return JSON.stringify({});
+      });
+
+      await importData('all', importFile, { force: true });
+
+      expect(saveEntries).not.toHaveBeenCalled();
+
+      const errorCalls = (console.error as Mock).mock.calls;
+      const showedError = errorCalls.some(call =>
+        call.some((arg: unknown) => typeof arg === 'string' && arg.includes("'confirm'") && arg.includes('number'))
+      );
+      expect(showedError).toBe(true);
+    });
   });
 
   describe('exportData', () => {
