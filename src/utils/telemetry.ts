@@ -318,6 +318,7 @@ export function classifyOp(tool: string): TelemetryEntry['op'] {
     case 'codex_config_get':
     case 'codex_stale':
     case 'codex_lint':
+    case 'codex_topology':
     case 'codex_confirm_list':
       return 'read';
     case 'codex_init':

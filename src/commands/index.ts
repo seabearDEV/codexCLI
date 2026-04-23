@@ -6,3 +6,4 @@ export { showInfo } from './info';
 export { lintEntries } from './lint';
 export { showAuditLog } from './audit';
 export { showContext } from './context';
+export { showTopology } from './topology';

@@ -552,6 +552,22 @@ codexCLI
     );
   });
 
+// Topology command
+codexCLI
+  .command('topology')
+  .description('Co-occurrence analysis on the audit log — which entries get read together')
+  .option('-p, --period <period>', 'Time period: 7d, 30d, 90d, all', '30d')
+  .option('-n, --limit <n>', 'Max pairs to show (default: 20)', parseInt)
+  .option('-m, --min-sessions <n>', 'Only show pairs co-occurring in at least N sessions (default: 1)', parseInt)
+  .option('--dot', 'Emit graphviz DOT for visualization (pipe to `dot -Tsvg`)')
+  .option('-j, --json', 'Output as JSON')
+  .action(async (options: { period?: string, limit?: number, minSessions?: number, dot?: boolean, json?: boolean }) => {
+    await withCliInstrumentation(
+      { tool: 'codex_topology', params: { period: options.period } },
+      () => commands.showTopology(options)
+    );
+  });
+
 // Configuration commands
 const configCommand = codexCLI
   .command('config')
