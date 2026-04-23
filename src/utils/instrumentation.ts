@@ -70,10 +70,19 @@ export async function withCliInstrumentation<T>(
   const isWrite = op === 'write' || op === 'exec' || op === 'remove';
   const scope: Scope = ctx.scope ?? 'auto';
 
-  // Alias resolution tracking
-  const aliasResolved = (ctx.rawKey && ctx.key && ctx.rawKey !== ctx.key)
-    ? ctx.key
-    : undefined;
+  // Alias resolution tracking. codex_copy is special-cased: its context
+  // carries rawKey=source (user input) and copySourceKey=resolvedSource, so
+  // the generic rawKey-vs-key check (which compares source to dest) would
+  // always be trivially true — always setting aliasResolved to dest,
+  // regardless of whether source was actually an alias. #94.
+  let aliasResolved: string | undefined;
+  if (ctx.tool === 'codex_copy') {
+    if (ctx.rawKey && ctx.copySourceKey && ctx.rawKey !== ctx.copySourceKey) {
+      aliasResolved = ctx.copySourceKey;
+    }
+  } else if (ctx.rawKey && ctx.key && ctx.rawKey !== ctx.key) {
+    aliasResolved = ctx.key;
+  }
 
   // Before-value capture (for writes)
   let before: string | undefined;

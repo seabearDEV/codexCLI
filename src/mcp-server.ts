@@ -153,9 +153,19 @@ server.tool = ((...args: any[]) => {
         ? (findProjectFile() ? 'project' : 'global')
         : scope as 'project' | 'global' | undefined;
 
-    // Resolve alias for audit trail
+    // Resolve alias for audit trail. codex_copy is special-cased: extractKey
+    // returns dest for the audit-key field, but the alias that matters is the
+    // source alias (dest is usually a new canonical key, not an alias). #94.
     let aliasResolved: string | undefined;
-    if (key) {
+    if (name === 'codex_copy') {
+      const source = params.source as string | undefined;
+      if (source) {
+        try {
+          const resolved = resolveKey(source, scope);
+          if (resolved !== source) aliasResolved = resolved;
+        } catch { /* ignore — alias resolution is best-effort */ }
+      }
+    } else if (key) {
       try {
         const resolved = resolveKey(key, scope);
         if (resolved !== key) aliasResolved = resolved;
