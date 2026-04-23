@@ -60,16 +60,21 @@ describe('logToolCall', () => {
 
   it('classifies writes correctly', async () => {
     await logToolCall('codex_set', 'x');
-    await logToolCall('codex_remove', 'x');
     await logToolCall('codex_copy', 'x');
     await logToolCall('codex_import');
-    await logToolCall('codex_reset');
     await logToolCall('codex_alias_set', 'a');
-    await logToolCall('codex_alias_remove', 'a');
     await logToolCall('codex_config_set');
     await logToolCall('codex_rename', 'x');
     const entries = loadTelemetry();
     expect(entries.every(e => e.op === 'write')).toBe(true);
+  });
+
+  it('classifies removes correctly', async () => {
+    await logToolCall('codex_remove', 'x');
+    await logToolCall('codex_alias_remove', 'a');
+    await logToolCall('codex_reset');
+    const entries = loadTelemetry();
+    expect(entries.every(e => e.op === 'remove')).toBe(true);
   });
 
   it('classifies reads correctly', async () => {

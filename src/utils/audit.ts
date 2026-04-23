@@ -10,7 +10,7 @@ export interface AuditEntry {
   session: string;
   src: 'mcp' | 'cli';
   tool: string;
-  op: 'read' | 'write' | 'exec' | 'meta';
+  op: 'read' | 'write' | 'remove' | 'exec' | 'meta';
   key?: string | undefined;
   scope?: string | undefined;
   project?: string | undefined;

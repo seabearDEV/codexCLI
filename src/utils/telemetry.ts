@@ -7,7 +7,7 @@ export interface TelemetryEntry {
   ts: number;
   tool: string;
   session: string;
-  op: 'read' | 'write' | 'exec' | 'meta';
+  op: 'read' | 'write' | 'remove' | 'exec' | 'meta';
   ns: string;
   src?: 'mcp' | 'cli';
   scope?: 'project' | 'global' | undefined;
@@ -296,17 +296,18 @@ export function getExplorationCost(namespace: string, missPaths?: MissPath[]): E
 export function classifyOp(tool: string): TelemetryEntry['op'] {
   switch (tool) {
     case 'codex_set':
-    case 'codex_remove':
     case 'codex_copy':
     case 'codex_rename':
     case 'codex_import':
-    case 'codex_reset':
     case 'codex_alias_set':
-    case 'codex_alias_remove':
     case 'codex_config_set':
     case 'codex_confirm_set':
-    case 'codex_confirm_remove':
       return 'write';
+    case 'codex_remove':
+    case 'codex_alias_remove':
+    case 'codex_confirm_remove':
+    case 'codex_reset':
+      return 'remove';
     case 'codex_run':
       return 'exec';
     case 'codex_context':
@@ -480,6 +481,7 @@ export interface TelemetryStats {
   writeBackRate: number;
   reads: number;
   writes: number;
+  removes: number;
   execs: number;
   readWriteRatio: string;
   namespaceCoverage: Record<string, { reads: number; writes: number; lastWrite: number | undefined }>;
@@ -562,6 +564,7 @@ export function computeStats(periodDays = 0): TelemetryStats {
 
   const reads = entries.filter(e => e.op === 'read').length;
   const writes = entries.filter(e => e.op === 'write').length;
+  const removes = entries.filter(e => e.op === 'remove').length;
   const execs = entries.filter(e => e.op === 'exec').length;
 
   // Namespace coverage
@@ -765,6 +768,7 @@ export function computeStats(periodDays = 0): TelemetryStats {
     writeBackRate: mcpSessions > 0 ? wroteBack / mcpSessions : 0,
     reads,
     writes,
+    removes,
     execs,
     readWriteRatio: writes > 0 ? `${(reads / writes).toFixed(1)}:1` : reads > 0 ? '∞:1' : '0:0',
     namespaceCoverage: nsCoverage,

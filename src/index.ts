@@ -732,16 +732,16 @@ codexCLI
     if (stats.mcpSessions > 0) {
       const bootstrapPct = (stats.bootstrapRate * 100).toFixed(0);
       const bootstrapColor = stats.bootstrapRate >= 0.8 ? color.green : stats.bootstrapRate >= 0.5 ? color.yellow : color.red;
-      console.log(`    Bootstrap rate:  ${bootstrapColor(`${bootstrapPct}%`)} of sessions call codex_context first`);
+      console.log(`    Bootstrap rate:  ${bootstrapColor(`${bootstrapPct}%`)} of MCP sessions call codex_context first`);
 
       const writeBackPct = (stats.writeBackRate * 100).toFixed(0);
       const writeBackColor = stats.writeBackRate >= 0.5 ? color.green : stats.writeBackRate >= 0.25 ? color.yellow : color.red;
-      console.log(`    Write-back rate: ${writeBackColor(`${writeBackPct}%`)} of sessions store at least 1 entry`);
+      console.log(`    Write-back rate: ${writeBackColor(`${writeBackPct}%`)} of MCP sessions store at least 1 entry`);
     }
 
     console.log(`  CLI calls:       ${color.white(String(stats.cliCalls))}`);
     console.log(`  Total calls:     ${color.white(String(stats.totalCalls))}`);
-    console.log(`  Read:write:      ${color.white(stats.readWriteRatio)} (${stats.reads} reads, ${stats.writes} writes, ${stats.execs} execs)`);
+    console.log(`  Read:write:      ${color.white(stats.readWriteRatio)} (${stats.reads} reads, ${stats.writes} writes, ${stats.removes} removes, ${stats.execs} execs)`);
 
     const { project, global: glob, unscoped } = stats.scopeBreakdown;
     if (project > 0 || glob > 0) {

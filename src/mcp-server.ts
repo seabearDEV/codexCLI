@@ -164,7 +164,7 @@ server.tool = ((...args: any[]) => {
     if (!shouldAudit) return origHandler(params, extra);
 
     const op = classifyOp(name);
-    const isWrite = op === 'write' || op === 'exec';
+    const isWrite = op === 'write' || op === 'exec' || op === 'remove';
 
     // Capture before-value for writes
     let before: string | undefined;
@@ -1427,12 +1427,12 @@ server.tool(
       lines.push(`MCP sessions:    ${stats.mcpSessions}`);
       lines.push(`MCP calls:       ${stats.mcpCalls}`);
       if (stats.mcpSessions > 0) {
-        lines.push(`  Bootstrap rate:  ${(stats.bootstrapRate * 100).toFixed(0)}% of sessions call codex_context first`);
-        lines.push(`  Write-back rate: ${(stats.writeBackRate * 100).toFixed(0)}% of sessions store at least 1 entry`);
+        lines.push(`  Bootstrap rate:  ${(stats.bootstrapRate * 100).toFixed(0)}% of MCP sessions call codex_context first`);
+        lines.push(`  Write-back rate: ${(stats.writeBackRate * 100).toFixed(0)}% of MCP sessions store at least 1 entry`);
       }
       lines.push(`CLI calls:       ${stats.cliCalls}`);
       lines.push(`Total calls:     ${stats.totalCalls}`);
-      lines.push(`Read:write:      ${stats.readWriteRatio} (${stats.reads} reads, ${stats.writes} writes, ${stats.execs} execs)`);
+      lines.push(`Read:write:      ${stats.readWriteRatio} (${stats.reads} reads, ${stats.writes} writes, ${stats.removes} removes, ${stats.execs} execs)`);
 
       const { project, global: glob, unscoped } = stats.scopeBreakdown;
       if (project > 0 || glob > 0) {
