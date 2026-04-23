@@ -142,7 +142,13 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: softprops/action-gh-release@v3
+      # Pinned to v2.6.2 after v3.0.0 emitted a GitHub-API-side "Error
+      # creating policy" during upload on the v1.13.0 release run. Root
+      # cause is unclear (the string isn't in v3's source, so it surfaces
+      # from the GitHub API response). Revisit before 2026-06-02, the
+      # forced-Node-24 cutover — we have ~6 weeks to properly diagnose
+      # or wait for a v3 patch. Tracked in #95.
+      - uses: softprops/action-gh-release@v2.6.2
         with:
           generate_release_notes: true
           prerelease: ${{ steps.prerelease.outputs.prerelease == 'true' }}
