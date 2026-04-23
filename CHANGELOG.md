@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-04-23
+
+Agent-first release driven by mining a 584-call, 15-day real-usage dataset (see `docs/dogfooding-real-usage.md`). Eleven issues closed across three themes: make agent tool-selection unambiguous (#92), make the audit signal clean enough to mine again (#93 + #94), and formalize the cross-session handoff pattern agents organically converged on (#91). The rest — small bug fixes, soak findings, and the first two Layer 2 tools from the seedRoadmap — fell into the same cycle once the milestone was trimmed to match.
+
+Test count: 1269 → 1325 (+56). No breaking behavior changes; MCP tool shapes unchanged.
+
+### Added
+
+- **Cross-session handoff protocol** (`#91`): `codex_context` (CLI + MCP) now renders a top banner when `context.next_session` exists, with relative age (`3h ago`, `2d ago`) and a `[likely stale — Nd]` marker past 7 days. The key is omitted from the entries list below the banner to avoid duplicating content. Tier-independent — appears even at `tier:'essential'`. `DEFAULT_LLM_INSTRUCTIONS` gained a nudge so agents learn to write the key at session end. No new MCP tool; the convention works with existing `codex_set`.
+- **Non-interactive password resolution** (`#88`): `askPassword` now resolves from `--password-file <path>` (explicit flag on `set --encrypt`, `get --decrypt`, `run --decrypt`, `edit --decrypt`; refuses world-readable files) and from the `CCLI_PASSWORD` env var (ambient fallback with a one-shot stderr warning). Interactive TTY prompt remains the fallback. Unblocks CI, cron, and script workflows for encrypted entries.
+- **`ccli lint --seed-quality`** (`#82`): new heuristic pass on `ccli lint` that flags low-amplification entries (too short with no project-specific signal, matching a known low-amp phrase pattern, or carrying an interpolation landmine). Soft warnings ("consider rewriting"), exempting `commands.*`, `deps.*`, `session.*`, `project.*`, `context.next_session`, and `conventions.seedDensity`. Operationalizes the seed-density principle.
+- **`ccli topology`** (`#83`): co-occurrence analysis on the audit log. Surfaces which entries get pulled in the same focused-read sessions and which sit isolated. Signal source is `codex_get` with a specific key; bootstraps (`codex_context`), searches (`codex_find`), and misses are deliberately excluded. `--dot` emits graphviz for visualization; `--json` for pipelines; `--period`, `--limit`, `--min-sessions` for filtering. Alias-canonical (reads via an alias and via the resolved key count as the same entry).
+
+### Changed
+
+- **MCP tool descriptions rewritten for agent tool-selection clarity** (`#92`): all 19 MCP tool descriptions now explicitly disambiguate overlapping pairs. The core behavioral lever: `codex_get` no longer advertises "list all entries" — that affordance was driving a 48% empty-key rate in the dataset (agents using `codex_get` when `codex_context` was the intended tool). Added "prefer X over Y when…" hints for `codex_context` vs `codex_get` vs `codex_find`, `codex_set` vs `codex_alias_set`, `codex_remove` vs `codex_alias_remove`, `codex_copy` vs `codex_rename` vs `codex_alias_set`, `codex_config_*` vs `codex_*`, and `codex_stats` vs `codex_audit`. Documentation-only — no behavior change.
+- **CI: `softprops/action-gh-release` v2 → v3** (`#86`): last remaining Node-20 action in `.github/workflows/release.yml`. Gets ahead of the 2026-06-02 forced-Node-24 cutover and the 2026-09-16 Node 20 removal from GitHub Actions runners.
+
+### Fixed
+
+- **`codex_remove` and siblings log `op:"remove"`, not `op:"write"`** (`#93` part 1): `classifyOp` routes `codex_remove`, `codex_alias_remove`, `codex_confirm_remove`, and `codex_reset` to a new distinct `'remove'` op category. Stats output shows removes as a separate count; `readWriteRatio` is now pure (reads / true writes) instead of being inflated ~15% by conflated removes. `codex_audit --writes-only` correspondingly narrows to true writes only.
+- **`aliasResolved` reliably captured on CLI `codex_run`** (`#93` part 2): the CLI callsite now pre-resolves the target key and passes both `rawKey` (user input) and `key` (resolved) to the instrumentation wrapper, matching the convention already used by `set`, `get`, and `rename`. Closes the dominant gap surfaced by the dataset (alias `sgdie` captured on only 3 of 6 runs).
+- **`codex_copy`'s `aliasResolved` tracks source, not dest** (`#94`): both MCP and CLI wrappers now resolve the source key (the thing that might be an alias) rather than the dest (a new canonical key). Audit `key` semantic preserved — the operation target is still dest.
+- **`bootstrapRate` and `writeBackRate` labels clarify MCP-sessions-only** (`#93` part 3): stats output now says "of MCP sessions" instead of the ambiguous "of sessions" — CLI one-shot sessions can't bootstrap, and lumping them in overstated overall discipline.
+- **`data import` rejects shape-invalid sections instead of silently dropping them** (`#89`): section extraction was split from the shape check; a present-but-malformed section (e.g. `aliases: "not-an-object"`) now aborts the import with a typed error rather than silently coercing to `undefined` and leaving the other sections to apply. Closes a loophole in the `#77` transactional-import guarantee.
+- **Error hints use `getBinaryName()` instead of hardcoded `ccli`** (`#90`): `import_max_bytes` rejection message (CLI + MCP) and the `handleProjectFile` already-exists error no longer point users to a command they may not have installed under a renamed distribution (e.g. `ccli-beta`).
+- **Interpolation syntax landmines rewritten** (`#39`): `files.interpolate` and `context.execInterpolation` contained literal `${key}` / `$(key)` references that would fail interpolation. Backslash-escaped each occurrence; post-fix all 77 stored entries interpolate cleanly. Display still renders the unescaped syntax (interpolate resolves the escape before returning).
+
 ## [1.12.2] - 2026-04-16
 
 Stable promotion of v1.12.2-beta.1 after successful soak. Beta.0 shipped the consolidated export/import integrity patch (five audit findings from the 2026-04-09 review); beta.1 added one fix found during beta.0 flogging (#87 `_meta` stamping on import). No source-code changes since the beta.1 tag — soak passed clean. See beta entries below for full detail; consolidated summary follows.
