@@ -543,8 +543,9 @@ codexCLI
   .command('lint')
   .description('Check entries against the recommended namespace schema')
   .option('-j, --json', 'Output as JSON')
+  .option('--seed-quality', 'Flag entries with low activation-per-byte (soft warnings)')
   .option('-G, --global', 'Target global data store')
-  .action(async (options: { json?: boolean, global?: boolean }) => {
+  .action(async (options: { json?: boolean, global?: boolean, seedQuality?: boolean }) => {
     await withCliInstrumentation(
       { tool: 'codex_lint', scope: options.global ? 'global' : undefined, params: {} },
       () => commands.lintEntries(options)
