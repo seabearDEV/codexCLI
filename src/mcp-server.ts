@@ -310,7 +310,7 @@ server.tool = ((...args: any[]) => {
 // --- codex_set ---
 server.tool(
   "codex_set",
-  "Store project knowledge as a key-value entry (dot notation, e.g. arch.api). Use to persist non-obvious insights across sessions.",
+  "Store a project-knowledge entry at a dot-notation key (e.g. arch.api). Use to persist non-obvious insights across sessions. For creating a nickname that points at an existing key, use codex_alias_set instead — aliases do not store data.",
   { key: z.string().describe("Dot-notation key (e.g. server.prod.ip)"), value: z.string().describe("Value to store"), alias: z.string().optional().describe("Create an alias for this key"), encrypt: z.boolean().optional().describe("Encrypt the value with the provided password"), password: z.string().optional().describe("Password for encryption (required when encrypt is true)"), scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
   async ({ key, value, alias, encrypt, password, scope: scopeParam }) => {
     try {
@@ -358,7 +358,7 @@ server.tool(
 // --- codex_get ---
 server.tool(
   "codex_get",
-  "Retrieve stored project knowledge by dot-notation key, or list all entries. Check here before exploring code.",
+  "Retrieve a specific stored entry by dot-notation key (e.g. arch.api, files.store). Use when you already know the key you want. For browsing or listing everything stored, use codex_context — that is the bootstrap/overview tool. For keyword search, use codex_find.",
   {
     key: z.string().optional().describe("Dot-notation key to retrieve (omit for all entries)"),
     format: z.enum(["flat", "tree"]).optional().describe("Output format: flat (default) or tree"),
@@ -508,7 +508,7 @@ server.tool(
 // --- codex_remove ---
 server.tool(
   "codex_remove",
-  "Remove a stored entry by dot-notation key. Use when knowledge is outdated or incorrect.",
+  "Remove a stored entry by dot-notation key. Aliases pointing at this key (or its children) are cascade-removed automatically. Use when knowledge is outdated or incorrect. For removing a nickname only (keeping the entry), use codex_alias_remove or pass is_alias:true.",
   {
     key: z.string().describe("Dot-notation key to remove"),
     is_alias: z.boolean().optional().describe("If true, remove the alias only (keep the entry)"),
@@ -545,7 +545,7 @@ server.tool(
 // --- codex_copy ---
 server.tool(
   "codex_copy",
-  "Copy an entry to a new key in the CodexCLI data store",
+  "Duplicate an entry's value to a new key (creates a full copy). For giving an existing key a short nickname without duplication, use codex_alias_set. For moving/renaming, use codex_rename.",
   {
     source: z.string().describe("Source dot-notation key to copy from"),
     dest: z.string().describe("Destination dot-notation key to copy to"),
@@ -589,7 +589,7 @@ server.tool(
 // --- codex_rename ---
 server.tool(
   "codex_rename",
-  "Rename an entry key or alias in the CodexCLI data store",
+  "Move an entry key to a new name (or rename an alias when is_alias:true). Preserves the value and metadata — distinct from codex_copy, which duplicates.",
   {
     oldKey: z.string().describe("Current dot-notation key (or alias name when is_alias is true)"),
     newKey: z.string().describe("New dot-notation key (or alias name when is_alias is true)"),
@@ -686,7 +686,7 @@ server.tool(
 // --- codex_find ---
 server.tool(
   "codex_find",
-  "Find stored project knowledge by keyword. Use to locate relevant context before reading code.",
+  "Search stored entries by keyword or regex across keys and values. Use when you know roughly what you want but not the exact key. For listing all entries, use codex_context. For exact-key lookup, use codex_get.",
   {
     query: z.string().describe("Query string to find (case-insensitive substring, or regex if regex=true)"),
     regex: z.boolean().optional().describe("Treat query as a regular expression"),
@@ -754,7 +754,7 @@ server.tool(
 // --- codex_alias_set ---
 server.tool(
   "codex_alias_set",
-  "Create or update an alias for a dot-notation key",
+  "Create a short nickname that resolves to an existing entry key (e.g. 'api' -> 'arch.api'). Use when a long key is referenced repeatedly. Does NOT store data — the alias resolves to whatever codex_set wrote. For storing new content, use codex_set.",
   {
     alias: z.string().describe("Alias name"),
     key: z.string().describe("Dot-notation key the alias points to"),
@@ -774,7 +774,7 @@ server.tool(
 // --- codex_alias_remove ---
 server.tool(
   "codex_alias_remove",
-  "Remove an alias",
+  "Remove a nickname (alias) without touching the entry it points at. For removing the underlying entry, use codex_remove.",
   { alias: z.string().describe("Alias name to remove"), scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
   async ({ alias, scope: scopeParam }) => {
     try {
@@ -793,7 +793,7 @@ server.tool(
 // --- codex_alias_list ---
 server.tool(
   "codex_alias_list",
-  "List all aliases",
+  "List all nicknames (alias -> key mappings). For browsing entries themselves, use codex_context.",
   { scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)") },
   async ({ scope: scopeParam }) => {
     try {
@@ -814,7 +814,7 @@ server.tool(
 // --- codex_run ---
 server.tool(
   "codex_run",
-  "Execute a stored shell command by key (e.g. commands.build). Supports interpolation and confirmation prompts.",
+  "Execute a stored shell command by key (e.g. commands.build) and return its output. Supports ${key}/$(key) interpolation and &&-chaining via chain:true. For entries marked --confirm, a two-step flow applies: the first call returns a confirm_token and command preview; pass the token on the second call to execute. Use dry:true to preview without executing.",
   {
     key: z.string().describe("Dot-notation key (or alias) whose value is a shell command"),
     dry: z.boolean().optional().describe("If true, return the command without executing it"),
@@ -940,7 +940,7 @@ server.tool(
 // --- codex_config_get ---
 server.tool(
   "codex_config_get",
-  "Get configuration settings",
+  "Get a CodexCLI user-preference setting (colors, theme, pager). Distinct from codex_get, which retrieves stored project knowledge.",
   {
     key: z.string().optional().describe("Config key (colors, theme). Omit for all settings."),
   },
@@ -966,7 +966,7 @@ server.tool(
 // --- codex_config_set ---
 server.tool(
   "codex_config_set",
-  "Set a configuration setting",
+  "Set a CodexCLI user-preference setting (colors, theme, pager). Distinct from codex_set, which stores project knowledge.",
   {
     key: z.string().describe("Config key to set (colors, theme)"),
     value: z.string().describe("Value to set"),
@@ -991,7 +991,7 @@ server.tool(
 // --- codex_export ---
 server.tool(
   "codex_export",
-  "Export entries and/or aliases as JSON text",
+  "Export entries/aliases/confirm as a structured JSON envelope suitable for backup, sharing, or version control. Wrapped in a $codexcli envelope with version + sha256. For viewing entries interactively, use codex_context. For targeted lookup, use codex_get.",
   {
     type: z.enum(["entries", "aliases", "confirm", "all"]).describe("What to export"),
     pretty: z.boolean().optional().describe("Pretty-print the JSON (default false)"),
@@ -1030,7 +1030,7 @@ server.tool(
 // --- codex_import ---
 server.tool(
   "codex_import",
-  "Import entries and/or aliases. Pass `data` as either an object or a JSON string. Example: codex_import({ data: { arch: { api: 'GraphQL' } } })",
+  "Import entries/aliases/confirm from a JSON payload (object or string). Accepts codex_export's envelope format or a bare {entries:{...}} shape. Merges by default; pass merge:false to replace. Use preview:true to see the diff without writing. Example: codex_import({ data: { arch: { api: 'GraphQL' } } })",
   {
     data: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Data to import — either a JSON string or an object literal"),
     type: z.enum(["entries", "aliases", "confirm", "all"]).optional().describe("What to import (default: entries)"),
@@ -1258,7 +1258,7 @@ server.tool(
 // --- codex_reset ---
 server.tool(
   "codex_reset",
-  "Reset entries and/or aliases to empty state, or clear audit/telemetry/miss-path logs",
+  "Wipe entries/aliases/confirm to empty state (type:'all') OR clear audit/telemetry/miss-path log files. Destructive and scope-wide. For single-entry deletion, use codex_remove. Run codex_export first if you want a backup.",
   {
     type: z.enum(["entries", "aliases", "confirm", "all", "audit", "telemetry", "miss-paths"]).describe("What to reset ('all' covers entries+aliases+confirm, not logs)"),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global). Ignored for audit/telemetry/miss-paths."),
@@ -1299,7 +1299,7 @@ import { filterEntriesByTier } from "./commands/context";
 
 server.tool(
   "codex_context",
-  "Get a compact summary of stored project knowledge (use at session start). Supports tier param: essential (minimal), standard (default, excludes arch), full (everything)",
+  "Browse all stored project knowledge as a compact summary. Use this at session start to bootstrap context, or any time you want to see what is stored without having a specific key in mind. Prefer over codex_get when you do not have a specific key — this is the 'list everything' tool. Tiers: essential (minimal), standard (default, excludes arch), full (everything).",
   {
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
     tier: z.enum(["essential", "standard", "full"]).optional().describe("Context tier: essential (project/commands/conventions only), standard (default, excludes arch.*), full (everything)"),
@@ -1367,7 +1367,7 @@ server.tool(
 // --- codex_stale ---
 server.tool(
   "codex_stale",
-  "Find entries that haven't been updated recently (helps identify stale knowledge)",
+  "List entries not written in the last N days (default 30). Use to find knowledge that may have drifted out of date. Based on write timestamps, not read patterns — a stale entry may still be actively consulted.",
   {
     days: z.coerce.number().int().min(0).optional().describe("Threshold in days (default: 30). Entries not updated in this many days are returned."),
     scope: z.enum(["project", "global"]).optional().describe("Data scope (omit for auto: project if available, else global)"),
@@ -1408,7 +1408,7 @@ server.tool(
 // --- codex_stats ---
 server.tool(
   "codex_stats",
-  "View MCP usage telemetry and trending metrics for AI agent effectiveness",
+  "Aggregate usage stats across sessions — read/write ratio, bootstrap rate, top tools, namespace activity. High-level health of the store. For per-call granular history with filters, use codex_audit.",
   {
     period: z.enum(["7d", "30d", "90d", "all"]).optional().describe("Time period to analyze (default: 30d)"),
     detailed: z.boolean().optional().describe("Include namespace activity, project breakdown, and top tools (default: false)"),
@@ -1577,7 +1577,7 @@ server.tool(
 // --- codex_audit ---
 server.tool(
   "codex_audit",
-  "Query the audit log of data mutations and operations",
+  "Query the per-call audit log with filters (key prefix, time period, writes-only, hits/misses, source). Per-call granular history suitable for debugging or usage forensics. For aggregated stats across the log, use codex_stats.",
   {
     key: z.string().optional().describe("Filter by exact key or key prefix"),
     period: z.enum(["7d", "30d", "90d", "all"]).optional().describe("Time period to query (default: 30d)"),
