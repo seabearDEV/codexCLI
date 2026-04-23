@@ -45,6 +45,7 @@ import { logToolCall, computeStats, classifyOp, getTelemetryPath, getMissPathsPa
 import { logAudit, queryAuditLog, sanitizeValue, sanitizeParams, getAuditPath } from "./utils/audit";
 import { getEffectiveInstructions } from "./llm-instructions";
 import { parsePeriodDays } from "./utils";
+import { getBinaryName } from "./utils/binaryName";
 
 function toScope(scopeParam?: string): Scope {
   return (scopeParam ?? 'auto') as Scope;
@@ -1053,7 +1054,7 @@ server.tool(
         if (byteLength > maxBytes) {
           return errorResponse(
             `Import payload too large: ${byteLength} bytes exceeds the ${maxBytes}-byte limit. ` +
-            `Raise 'import_max_bytes' via ccli config set if this is expected.`
+            `Raise 'import_max_bytes' via ${getBinaryName()} config set if this is expected.`
           );
         }
         try {

@@ -15,6 +15,7 @@ import { findProjectFile, clearProjectFileCache, saveAll } from '../store';
 import { wrapExport, tryUnwrapImport } from '../utils/envelope';
 import { version as pkgVersion } from '../../package.json';
 import { getConfigSetting } from '../config';
+import { getBinaryName } from '../utils/binaryName';
 
 function resolveImportMaxBytes(): number {
   const configured = Number(getConfigSetting('import_max_bytes'));
@@ -174,7 +175,7 @@ export async function importData(type: string, file: string, options: ImportOpti
     if (fileSize > maxBytes) {
       printError(
         `Import file too large: ${formatBytes(fileSize)} exceeds the ${formatBytes(maxBytes)} limit. ` +
-        `Set the 'import_max_bytes' config if you really need to import a file this size:\n  ccli config set import_max_bytes ${fileSize}`
+        `Set the 'import_max_bytes' config if you really need to import a file this size:\n  ${getBinaryName()} config set import_max_bytes ${fileSize}`
       );
       return;
     }
@@ -544,7 +545,7 @@ export function handleProjectFile(options: {
     const kind = targetStat.isFile() ? 'file' : targetStat.isSymbolicLink() ? 'symlink' : 'non-directory';
     printError(
       `Cannot initialize: '${target}' already exists as a ${kind}. ` +
-      `Remove it manually before running 'ccli init'.`
+      `Remove it manually before running '${getBinaryName()} init'.`
     );
     return;
   }
