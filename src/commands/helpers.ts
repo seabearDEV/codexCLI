@@ -1,4 +1,5 @@
 import readline from 'readline';
+import fs from 'fs';
 import { colorizePathByLevels, displayTree } from '../formatting';
 import { color } from '../formatting';
 import { buildKeyToAliasMap } from '../alias';
@@ -128,9 +129,66 @@ export function askConfirmation(prompt: string, output?: NodeJS.WritableStream):
   });
 }
 
-export function askPassword(prompt: string): Promise<string> {
+/**
+ * Read a password from the first line of a file. Refuses world-readable files
+ * (chmod 600 recommended) — mirrors the ssh_config password-file convention.
+ * Strips a trailing newline and surrounding whitespace from the line.
+ */
+export function readPasswordFile(filePath: string): string {
+  const stat = fs.statSync(filePath);
+  // Refuse world-readable files. Group-readable is permitted (common in CI
+  // where the deploying user and service user share a group); strict shops
+  // can chmod 600.
+  if ((stat.mode & 0o004) !== 0) {
+    throw new Error(
+      `Refusing to read password from '${filePath}': file is world-readable. Run \`chmod 600 ${filePath}\` first.`,
+    );
+  }
+  const content = fs.readFileSync(filePath, 'utf8');
+  const firstLine = content.split(/\r?\n/)[0] ?? '';
+  return firstLine.trim();
+}
+
+// Module-local: ensure the CCLI_PASSWORD warning only fires once per process
+// even if askPassword is called multiple times (e.g. promptAndEncrypt does a
+// prompt + confirm pair).
+let ccliPasswordWarningShown = false;
+
+export interface AskPasswordOptions {
+  /** Path to a file whose first line is the password. Overrides env var. */
+  passwordFile?: string | undefined;
+}
+
+export function askPassword(prompt: string, options?: AskPasswordOptions): Promise<string> {
+  // 1. Explicit file path wins over everything — an explicit flag signals
+  //    the caller has chosen a non-interactive source deliberately.
+  if (options?.passwordFile) {
+    try {
+      return Promise.resolve(readPasswordFile(options.passwordFile));
+    } catch (err) {
+      return Promise.reject(err instanceof Error ? err : new Error(String(err)));
+    }
+  }
+
+  // 2. CCLI_PASSWORD env var — one-shot fallback for CI/scripting. Emit a
+  //    single stderr warning so the user knows the secret is in their
+  //    environment and should be cleared after the command.
+  const envPassword = process.env.CCLI_PASSWORD;
+  if (envPassword !== undefined && envPassword !== '') {
+    if (!ccliPasswordWarningShown) {
+      process.stderr.write(
+        color.yellow('⚠ password read from CCLI_PASSWORD — clear your environment after use\n'),
+      );
+      ccliPasswordWarningShown = true;
+    }
+    return Promise.resolve(envPassword);
+  }
+
+  // 3. Interactive TTY prompt (original behavior).
   if (!process.stdin.isTTY) {
-    return Promise.reject(new Error('Password input requires an interactive terminal.'));
+    return Promise.reject(new Error(
+      'Password input requires an interactive terminal, --password-file <path>, or the CCLI_PASSWORD env var.',
+    ));
   }
 
   return new Promise((resolve, reject) => {

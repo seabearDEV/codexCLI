@@ -56,8 +56,9 @@ codexCLI
   .option('-c, --clear', 'Clear terminal and scrollback after setting (removes sensitive input from history)')
   .option('--confirm', 'Require confirmation before running this entry')
   .option('--no-confirm', 'Remove confirmation requirement from this entry')
+  .option('--password-file <path>', 'Read encryption password from the first line of a file (chmod 600)')
   .option('-G, --global', 'Target global data store')
-  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean, global?: boolean }) => {
+  .action(async (key: string, valueArray: string[], options: { force?: boolean, encrypt?: boolean, alias?: string, prompt?: boolean, show?: boolean, clear?: boolean, confirm?: boolean, global?: boolean, passwordFile?: string }) => {
     const scope = options.global ? 'global' as const : undefined;
     // Batch mode: `set a=1 b=2 c=3`
     if (key.includes('=')) {
@@ -131,7 +132,7 @@ codexCLI
     const resolvedKey = resolveKey(key);
     await withCliInstrumentation(
       { tool: 'codex_set', key: resolvedKey, rawKey: key, scope, writeValue: value, params: { key: resolvedKey, value: value ?? '' } },
-      () => commands.setEntry(resolvedKey, value, options.force, options.encrypt, options.alias, options.confirm, options.global)
+      () => commands.setEntry(resolvedKey, value, options.force, options.encrypt, options.alias, options.confirm, options.global, options.passwordFile)
     );
     if (options.clear) {
       process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
@@ -147,6 +148,7 @@ codexCLI
   .option('-p, --plain', 'Output plain text without colors (for scripting)')
   .option('-s, --source', 'Show stored value before interpolation')
   .option('-d, --decrypt', 'Decrypt an encrypted value (prompts for password)')
+  .option('--password-file <path>', 'Read decryption password from the first line of a file (chmod 600)')
   .option('-c, --copy', 'Copy value to clipboard')
   .addOption(new Option('-a, --aliases', 'Show aliases only — use `alias list` instead').hideHelp())
   .option('-v, --values', 'Include values in output')
@@ -154,7 +156,7 @@ codexCLI
   .option('-j, --json', 'Output as JSON (for scripting)')
   .option('-G, --global', 'Target global data store')
   .option('-A, --all', 'Show entries from all scopes (project + global)')
-  .action(async (key: string | undefined, options: { tree?: boolean, plain?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean }) => {
+  .action(async (key: string | undefined, options: { tree?: boolean, plain?: boolean, source?: boolean, decrypt?: boolean, copy?: boolean, aliases?: boolean, values?: boolean, depth?: number, json?: boolean, global?: boolean, all?: boolean, passwordFile?: string }) => {
     if (options.aliases) console.error(color.yellow('Deprecation: use `alias list` instead of `get -a`.'));
     const scope = options.global ? 'global' as const : undefined;
     const resolvedKey = key ? resolveKey(key) : undefined;
@@ -172,11 +174,12 @@ codexCLI
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry', 'Print the command without executing')
   .option('-d, --decrypt', 'Decrypt an encrypted command before running')
+  .option('--password-file <path>', 'Read decryption password from the first line of a file (chmod 600)')
   .option('-c, --capture', 'Capture output for piping (instead of inheriting stdio)')
   .option('--source', 'Output command to stdout for shell eval (used by shell wrapper)')
   .option('--chain', 'Treat stored value as space-separated key references to resolve and chain')
   .option('-G, --global', 'Target global data store')
-  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, chain?: boolean, global?: boolean }) => {
+  .action(async (keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, capture?: boolean, source?: boolean, chain?: boolean, global?: boolean, passwordFile?: string }) => {
     const scope = options.global ? 'global' as const : undefined;
     const resolvedKey = keys[0] ? resolveKey(keys[0], scope) : undefined;
     await withCliInstrumentation(
@@ -230,8 +233,9 @@ codexCLI
   .alias('e')
   .description('Open an entry in $EDITOR for editing')
   .option('-d, --decrypt', 'Decrypt an encrypted value before editing')
+  .option('--password-file <path>', 'Read decryption password from the first line of a file (chmod 600)')
   .option('-G, --global', 'Target global data store')
-  .action(async (key: string, options: { decrypt?: boolean, global?: boolean }) => {
+  .action(async (key: string, options: { decrypt?: boolean, global?: boolean, passwordFile?: string }) => {
     const resolvedKey = resolveKey(key);
     await withCliInstrumentation(
       { tool: 'codex_set', key: resolvedKey, rawKey: key, scope: options.global ? 'global' as const : undefined, params: { key: resolvedKey } },

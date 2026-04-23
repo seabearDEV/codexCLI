@@ -24,7 +24,7 @@ function toScope(global?: boolean  ): Scope | undefined {
   return global ? 'global' : undefined;
 }
 
-export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean, capture?: boolean, chain?: boolean, global?: boolean }): Promise<void> {
+export async function runCommand(keys: string[], options: { yes?: boolean, dry?: boolean, decrypt?: boolean, source?: boolean, capture?: boolean, chain?: boolean, global?: boolean, passwordFile?: string }): Promise<void> {
   debug('runCommand called', { keys, options });
   const scope = toScope(options.global);
   try {
@@ -91,7 +91,13 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
             process.exitCode = 1;
             return;
           }
-          const password = await askPassword('Password: ');
+          let password: string;
+          try {
+            password = await askPassword('Password: ', { passwordFile: options.passwordFile });
+          } catch (err) {
+            printError(err instanceof Error ? err.message : String(err));
+            return;
+          }
           try {
             value = decryptValue(value, password);
           } catch {
@@ -165,8 +171,20 @@ export async function runCommand(keys: string[], options: { yes?: boolean, dry?:
   }
 }
 
-async function promptAndEncrypt(value: string): Promise<string | null> {
-  const password = await askPassword('Password: ');
+async function promptAndEncrypt(value: string, passwordFile?: string): Promise<string | null> {
+  let password: string;
+  try {
+    password = await askPassword('Password: ', { passwordFile });
+  } catch (err) {
+    printError(err instanceof Error ? err.message : String(err));
+    return null;
+  }
+  // Non-interactive sources (env var, --password-file) read the same value
+  // twice and would always match — no confirm step needed. Skip it when a
+  // non-interactive source is active so users don't see a redundant prompt.
+  if (passwordFile || process.env.CCLI_PASSWORD) {
+    return encryptValue(value, password);
+  }
   const confirmPw = await askPassword('Confirm password: ');
   const passwordBuf = Buffer.from(password);
   const confirmBuf = Buffer.from(confirmPw);
@@ -191,7 +209,7 @@ async function handlePostSetConfirm(key: string, confirm: boolean | undefined, s
   }
 }
 
-export async function setEntry(key: string, value: string | undefined, force = false, encrypt = false, alias?: string, confirm?: boolean, global?: boolean): Promise<void> {
+export async function setEntry(key: string, value: string | undefined, force = false, encrypt = false, alias?: string, confirm?: boolean, global?: boolean, passwordFile?: string): Promise<void> {
   debug('setEntry called', { key, force, encrypt, alias, confirm, global });
   const scope = toScope(global);
   try {
@@ -249,7 +267,7 @@ export async function setEntry(key: string, value: string | undefined, force = f
 
     let storedValue = value;
     if (encrypt) {
-      const encrypted = await promptAndEncrypt(value);
+      const encrypted = await promptAndEncrypt(value, passwordFile);
       if (encrypted === null) return;
       storedValue = encrypted;
     }
@@ -452,7 +470,13 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   const strValue = String(value);
 
   if (isEncrypted(strValue) && options.decrypt) {
-    const password = await askPassword('Password: ');
+    let password: string;
+    try {
+      password = await askPassword('Password: ', { passwordFile: options.passwordFile });
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+      return;
+    }
     let decrypted: string;
     try {
       decrypted = decryptValue(strValue, password);
@@ -524,7 +548,7 @@ export async function getEntry(key?: string, options: GetOptions = {}): Promise<
   }
 }
 
-export async function editEntry(key: string, options: { decrypt?: boolean, global?: boolean } = {}): Promise<void> {
+export async function editEntry(key: string, options: { decrypt?: boolean, global?: boolean, passwordFile?: string } = {}): Promise<void> {
   debug('editEntry called', { key, options });
   const scope = toScope(options.global);
   try {
@@ -556,7 +580,12 @@ export async function editEntry(key: string, options: { decrypt?: boolean, globa
         process.exitCode = 1;
         return;
       }
-      password = await askPassword('Password: ');
+      try {
+        password = await askPassword('Password: ', { passwordFile: options.passwordFile });
+      } catch (err) {
+        printError(err instanceof Error ? err.message : String(err));
+        return;
+      }
       try {
         value = decryptValue(value, password);
       } catch {

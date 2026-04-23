@@ -14,6 +14,7 @@ export interface GetOptions {
   depth?: number | undefined;
   global?: boolean | undefined;
   all?: boolean | undefined;
+  passwordFile?: string | undefined;
 }
 
 export interface SearchOptions {

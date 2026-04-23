@@ -152,7 +152,7 @@ describe('CLI Entry Point (index.ts)', () => {
 
   it('set command calls setEntry with joined value', async () => {
     await loadCLI('set', '--force', 'my.key', 'my', 'value');
-    expect(mockSetEntry).toHaveBeenCalledWith('my.key', 'my value', true, undefined, undefined, undefined, undefined);
+    expect(mockSetEntry).toHaveBeenCalledWith('my.key', 'my value', true, undefined, undefined, undefined, undefined, undefined);
   });
 
   it('get command resolves key via resolveKey before calling getEntry', async () => {
