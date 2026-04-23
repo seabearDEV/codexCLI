@@ -38,7 +38,6 @@ Make the knowledge base useful for teams, not just solo developers.
 
 ### Housekeeping
 
-- **Interpolation escape audit** — scan entries for unescaped syntax landmines ([#39](https://github.com/seabearDEV/codexCLI/issues/39))
 - **Rename `--raw` flag** — clarify that it means "no colors", not "no interpolation" ([#40](https://github.com/seabearDEV/codexCLI/issues/40))
 
 ### Long-term: Go Rewrite
@@ -48,6 +47,12 @@ A Go rewrite is planned for better performance and single-binary distribution wi
 ---
 
 ## Release History
+
+### v1.13.0 — Agent-First, Dataset-Driven
+Shaped by mining a 584-call, 15-day real-usage dataset (see `docs/dogfooding-real-usage.md`). Eleven issues closed: cross-session handoff banner in `codex_context` (#91), MCP tool description audit to cut agent tool-selection errors (#92), audit log data-quality cleanup (#93, #94), non-interactive password support for CI/scripting (#88), seed-quality lint heuristic (#82), co-occurrence topology command (#83), plus small cleanups and a CI runtime bump.
+
+### v1.12.x — Export/Import Integrity Chain
+Transactional multi-section imports, export integrity envelope with sha256, auto-backup project scope, encrypted-roundtrip preservation.
 
 ### v1.9.0 — Observed Token Savings
 Net token savings, miss-path tracking, self-calibrating exploration costs per namespace.
