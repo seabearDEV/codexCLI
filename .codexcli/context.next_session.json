@@ -1,0 +1,7 @@
+{
+  "value": "2026-04-28: Closed #96 with PR #98 — re-pinned action-gh-release@v3.0.0 + one-shot continue-on-error retry guard. v1.13.0 \"Error creating policy\" transient did not reproduce on debug-tag rerun, treated as transient API hiccup rather than v3 regression. Phase 4 CI for v1.14.0 is now empty. v1.14.0 Phase 1 soak continues — no code-side work expected until ~2026-05-14 Phase 2 theme pick. If v1.14.0 release fails the same way, see context.v113PolicyIncident for the recurrence playbook (check whether retry caught it; if not, run the debug-tag diagnostic with ACTIONS_STEP_DEBUG/RUNNER_DEBUG enabled — they're still set on the repo).",
+  "meta": {
+    "created": 1777392524252,
+    "updated": 1777392524252
+  }
+}
