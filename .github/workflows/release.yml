@@ -142,13 +142,25 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Pinned to v2.6.2 after v3.0.0 emitted a GitHub-API-side "Error
-      # creating policy" during upload on the v1.13.0 release run. Root
-      # cause is unclear (the string isn't in v3's source, so it surfaces
-      # from the GitHub API response). Revisit before 2026-06-02, the
-      # forced-Node-24 cutover — we have ~6 weeks to properly diagnose
-      # or wait for a v3 patch. Tracked in #95.
-      - uses: softprops/action-gh-release@v2.6.2
+      # v3 (Node 24-native) wrapped in a one-shot retry. v1.13.0 hit a
+      # transient "Error creating policy" from GitHub's storage API
+      # mid-upload, leaving the release in draft. A debug-tag rerun on
+      # v3 with ACTIONS_STEP_DEBUG enabled could not reproduce it, so
+      # we treat it as a transient API hiccup that v3's stream semantics
+      # may surface more visibly than v2 did. The retry is idempotent
+      # because v3 defaults overwrite_files: true. Tracked in #96.
+      - name: Create Release (attempt 1)
+        id: release
+        uses: softprops/action-gh-release@v3.0.0
+        continue-on-error: true
+        with:
+          generate_release_notes: true
+          prerelease: ${{ steps.prerelease.outputs.prerelease == 'true' }}
+          files: artifacts/*
+
+      - name: Create Release (retry on transient failure)
+        if: steps.release.outcome == 'failure'
+        uses: softprops/action-gh-release@v3.0.0
         with:
           generate_release_notes: true
           prerelease: ${{ steps.prerelease.outputs.prerelease == 'true' }}
